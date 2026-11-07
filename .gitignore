@@ -1,0 +1,14 @@
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+
+# Réglages personnels (créés par l'application)
+presets_utilisateur.json
+*.tmp
+
+# Exports et fichiers temporaires
+*_pochoirs.zip
+
+# Photos de test personnelles
+samples/2400x0.jpg

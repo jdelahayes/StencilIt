@@ -1,0 +1,1972 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StencilIt</title>
+<style>
+  :root {
+    --bg: #f4f2ee; --panel: #ffffff; --ink: #1f2328; --muted: #6b7280;
+    --line: #e2ded6; --accent: #c2410c; --accent-ink: #fff; --soft: #faf8f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16181b; --panel: #1f2226; --ink: #e8e6e3; --muted: #9aa0a6;
+            --line: #33373d; --accent: #f97316; --accent-ink: #111; --soft: #25292e; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* l'attribut hidden l'emporte sur les display: flex/grid */
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 18px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
+  header .status { margin-left: auto; color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: 330px minmax(0, 1fr) 290px; min-height: calc(100vh - 49px); }
+  /* Colonne des pochoirs, à droite de l'image */
+  .layercol { background: var(--panel); border-left: 1px solid var(--line); padding: 12px 12px 30px;
+              overflow-y: auto; max-height: calc(100vh - 49px); }
+  .layercol-head { display: flex; align-items: baseline; gap: 8px; }
+  .layercol h2 { font-size: 14px; margin: 0; }
+  .layercol .legend { margin: 6px 0 10px; gap: 6px 12px; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); padding: 12px 14px 40px;
+          overflow-y: auto; max-height: calc(100vh - 49px); }
+  section.view { padding: 14px 18px; overflow-y: auto; max-height: calc(100vh - 49px); }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 10px 10px; }
+  legend { font-weight: 600; padding: 0 4px; font-size: 13px; }
+  label.row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; margin: 6px 0; }
+  label.row span.v { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+  label.full { display: block; margin: 6px 0 2px; }
+  input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+  input[type=number], select { width: 100%; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px;
+          background: var(--soft); color: var(--ink); font: inherit; }
+  input[type=number] { width: 84px; }
+  .check { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+  .hint { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  .cut { background: var(--soft); border-radius: 6px; padding: 6px 8px; font-size: 12px; margin-top: 8px; }
+  .cut b { font-weight: 600; }
+  #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 16px; text-align: center;
+          cursor: pointer; color: var(--muted); margin-bottom: 12px; }
+  #drop.over { border-color: var(--accent); color: var(--ink); }
+  #drop img { max-width: 100%; max-height: 120px; display: block; margin: 0 auto 6px; border-radius: 4px; }
+  button { font: inherit; border-radius: 7px; border: 1px solid var(--line); background: var(--soft);
+           color: var(--ink); padding: 7px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+  .tabs button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .stage { background: repeating-conic-gradient(var(--soft) 0 25%, var(--panel) 0 50%) 0 0 / 20px 20px;
+           border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; justify-content: center; }
+  .stage img { max-width: 100%; max-height: 72vh; display: block; image-rendering: auto; }
+  .stage canvas.pv { max-width: 100%; max-height: 72vh; display: block; }
+  .compare { position: relative; display: inline-block; line-height: 0; }
+  .compare img.top { position: absolute; inset: 0; width: 100%; height: 100%; clip-path: inset(0 50% 0 0); }
+  .compare .split { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 3px rgba(0,0,0,.6); pointer-events: none; }
+  .compare .tag { position: absolute; top: 6px; font: 600 11px/1.4 system-ui, sans-serif; background: rgba(0,0,0,.55); color: #fff; padding: 1px 6px; border-radius: 4px; }
+  /* Barre d'outils de prévisualisation */
+  .viewtools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; font-size: 13px; }
+  .vt-label { color: var(--muted); }
+  .vt-toggles { display: flex; flex-wrap: wrap; gap: 4px; }
+  .ltog { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 4px; font-size: 12px; border-radius: 999px; }
+  .ltog .sw { width: 16px; height: 16px; font-size: 10px; }
+  .ltog[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
+  .vt-small { padding: 3px 8px; font-size: 12px; }
+  .vt-sim { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; cursor: pointer; }
+  /* Éditeur du masque des détails clés */
+  .maskwrap { position: relative; display: inline-block; line-height: 0; touch-action: none; user-select: none; cursor: none; }
+  .maskwrap img { max-width: 100%; max-height: 72vh; display: block; pointer-events: none; }
+  .maskwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; pointer-events: none; }
+  .maskwrap .cropguide { position: absolute; border: 1.5px dashed rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.4); pointer-events: none; }
+  .maskwrap .brush { position: absolute; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7);
+                     transform: translate(-50%, -50%); pointer-events: none; display: none; }
+  .maskwrap .brush.erase { border-style: dashed; }
+  .seg { display: inline-flex; }
+  .seg button { padding: 3px 10px; font-size: 12px; border-radius: 0; }
+  .seg button:first-child { border-radius: 7px 0 0 7px; } .seg button:last-child { border-radius: 0 7px 7px 0; border-left: none; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .vt-size { display: inline-flex; align-items: center; gap: 6px; }
+  .vt-size input { width: 120px; accent-color: var(--accent); }
+  .card .eye { margin-left: auto; padding: 1px 6px; font-size: 11px; border-radius: 999px; }
+  .card.hidden-layer img { opacity: .35; }
+  .compare input { position: absolute; left: 0; right: 0; bottom: -26px; width: 100%; }
+  .metrics { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0 6px; color: var(--muted); font-size: 13px; }
+  .metrics b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .palette { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .sw { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--line); display: inline-grid;
+        place-items: center; font-size: 11px; font-weight: 700; }
+  .layers { display: flex; flex-direction: column; gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; }
+  .card.sel { outline: 2px solid var(--accent); }
+  .card img { width: 100%; display: block; background: #ddd; }
+  .card .meta { padding: 8px 10px; font-size: 12px; color: var(--muted); }
+  .card .meta .t { display: flex; gap: 8px; align-items: center; color: var(--ink); font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  .empty { color: var(--muted); text-align: center; padding: 80px 20px; }
+  .reco { background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+          border-radius: 6px; padding: 7px 9px; font-size: 12px; margin: 4px 0 8px; }
+  .reco .head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .reco .head button { margin-left: auto; padding: 3px 9px; font-size: 12px; }
+  .reco .why { color: var(--muted); margin: 3px 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; cursor: pointer;
+          background: var(--panel); font-variant-numeric: tabular-nums; font-size: 11px; }
+  .chip.rec { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  .chip.cur { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .warn { background: #fef3c7; color: #78350f; border: 1px solid #fcd34d; border-radius: 8px;
+          padding: 7px 10px; margin-bottom: 8px; font-size: 13px; }
+  @media (prefers-color-scheme: dark) { .warn { background: #3a2e12; color: #fde68a; border-color: #854d0e; } }
+  .sw.pick { cursor: pointer; width: 20px; height: 20px; }
+  /* Éditeur de cadrage */
+  .cropwrap { position: relative; display: inline-block; overflow: hidden; user-select: none; touch-action: none; line-height: 0; }
+  .cropwrap img { max-width: 100%; max-height: 72vh; display: block; pointer-events: none; }
+  .croprect { position: absolute; border: 1.5px solid #fff; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move;
+              background-image: linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px);
+              background-size: 33.333% 33.333%; background-position: -1px -1px; }
+  .croprect .h { position: absolute; width: 14px; height: 14px; background: #fff; border: 1px solid #333; border-radius: 3px; }
+  .h.nw { left: -7px; top: -7px; cursor: nwse-resize; } .h.ne { right: -7px; top: -7px; cursor: nesw-resize; }
+  .h.sw { left: -7px; bottom: -7px; cursor: nesw-resize; } .h.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+  .h.n { left: calc(50% - 7px); top: -7px; cursor: ns-resize; } .h.s { left: calc(50% - 7px); bottom: -7px; cursor: ns-resize; }
+  .h.w { top: calc(50% - 7px); left: -7px; cursor: ew-resize; } .h.e { top: calc(50% - 7px); right: -7px; cursor: ew-resize; }
+  /* Sections repliables (accordéon) */
+  aside fieldset { padding-top: 0; }
+  aside fieldset > legend { width: 100%; padding: 0; }
+  aside fieldset.collapsed { padding-bottom: 0; }
+  aside fieldset.collapsed > :not(legend) { display: none !important; }
+  .acc { width: 100%; display: flex; align-items: center; gap: 6px; background: var(--panel); border: none;
+         padding: 4px 6px; font-weight: 600; font-size: 13px; text-align: left; color: var(--ink); border-radius: 6px; }
+  .acc:hover { background: var(--soft); }
+  .acc .chev { display: inline-block; width: 12px; color: var(--muted); transition: transform .15s; }
+  .acc[aria-expanded="true"] .chev { transform: rotate(90deg); }
+  .acc .sum { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted); white-space: nowrap;
+              overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+  .pbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
+  .pbtns button { padding: 4px 6px; font-size: 12px; }
+  .pbtns button[data-act="delete"].confirm { background: #dc2626; border-color: #dc2626; color: #fff; }
+  .nameform { display: flex; gap: 4px; margin-top: 6px; }
+  .nameform input { flex: 1; min-width: 0; }
+  .nameform button { padding: 4px 8px; font-size: 12px; }
+  .dirty { font-size: 11px; color: #d97706; white-space: nowrap; }
+  .saved { background: var(--soft); border: 1px dashed var(--line); border-radius: 6px; padding: 7px 8px; margin-bottom: 8px; }
+  input[type=text], textarea { width: 100%; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px;
+          background: var(--panel); color: var(--ink); font: inherit; }
+  textarea { resize: vertical; font-size: 12px; }
+  .cutgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 4px; }
+  .cutgrid label { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 4px; }
+  .projbar { margin: -6px 0 12px; text-align: center; }
+  .projbar button { font-size: 12px; padding: 4px 10px; }
+  header button.link { margin-left: 12px; background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 12px; }
+  .aligngrid { display: grid; grid-template-columns: repeat(3, 30px); gap: 3px; }
+  .aligngrid button, #alignH, #alignV { padding: 3px 0; width: 30px; font-size: 14px; line-height: 1.2; }
+  /* Éditeur de mise en page */
+  /* Option « Support dans toutes les vues » : cadre commun en mm */
+  .tabopt { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); margin-left: 6px; cursor: pointer; }
+  .sframe { position: relative; flex: none; overflow: hidden; }
+  .sframe .sf-sheet { position: absolute; border: 1px dashed rgba(127,127,127,.85); pointer-events: none; z-index: 4; }
+  .sframe .sf-sup { position: absolute; box-shadow: 0 1px 6px rgba(0,0,0,.35); pointer-events: none; }
+  .sframe .sf-edge { position: absolute; border: 1px solid rgba(255,255,255,.85); box-shadow: 0 0 0 1px rgba(0,0,0,.55);
+                     pointer-events: none; z-index: 3; }
+  .sframe .sf-item { position: absolute; }
+  .sframe .cropwrap img, .sframe .maskwrap img { width: 100%; height: 100%; max-width: none; max-height: none; }
+  .mat { position: absolute; border-radius: 3px; pointer-events: none; background-color: rgba(120,180,200,.16); }
+  .matedge { position: absolute; border: 1.5px solid rgba(90,170,195,.95); border-radius: 3px; pointer-events: none; z-index: 1; }
+  .matedge span { position: absolute; left: 0; top: 100%; margin-top: 2px; font-size: 10px; color: rgba(130,190,210,.95); white-space: nowrap; }
+  .matedge.over { border: 2px dashed #e0703a; }
+  .matedge.over span { color: #e0703a; }
+  .calage { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .calage h3 { margin: 0 0 6px; font-size: 13px; }
+  .calage table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .calage td, .calage th { padding: 2px 12px 2px 0; text-align: left; }
+  .calage th { color: var(--muted); font-weight: 500; }
+  .calage .off { color: #e0703a; }
+  .lay .regmark { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 2; }
+  .lay .regmark::before, .lay .regmark::after { content: ""; position: absolute; background: #1e88e5; }
+  .lay .regmark::before { left: -7px; top: -1px; width: 14px; height: 2px; }
+  .lay .regmark::after { left: -1px; top: -7px; width: 2px; height: 14px; }
+  .lay .regmark span { position: absolute; font-size: 10px; line-height: 1.15; color: #64b5f6; white-space: nowrap; }
+  .lay .regmark span.l { right: 8px; text-align: right; } .lay .regmark span.r { left: 8px; }
+  .lay .regmark span.t { bottom: 6px; } .lay .regmark span.b { top: 6px; }
+  .lay .regmark.off::before, .lay .regmark.off::after { background: #e0703a; }
+  .lay .regmark.off span { color: #e0703a; }
+  .lay .sheetol { position: absolute; border: 1px dashed rgba(127,127,127,.85); pointer-events: none; z-index: 1; }
+  .lay { position: relative; overflow: hidden; touch-action: none; user-select: none; }
+  .lay .sup { position: absolute; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+  .lay .pic { position: absolute; background-repeat: no-repeat; cursor: grab; }
+  .lay .ghost { opacity: .28; outline: 1px dashed #888; }
+  .lay .inner { position: absolute; border: 1px dashed rgba(127,127,127,.8); pointer-events: none; }
+  .lay .dim { position: absolute; font-size: 11px; color: var(--muted); }
+  .lay .rz { position: absolute; width: 14px; height: 14px; background: #fff; border: 1px solid #333; border-radius: 3px; cursor: nwse-resize; z-index: 2; }
+  .err { color: #dc2626; }
+  /* Écran moyen : la colonne des pochoirs passe sous l'image, en grille */
+  @media (max-width: 1150px) {
+    main { grid-template-columns: 330px minmax(0, 1fr); }
+    .layercol { grid-column: 2; border-left: none; border-top: 1px solid var(--line); max-height: none; }
+    .layers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  }
+  @media (max-width: 820px) {
+    main { grid-template-columns: 1fr; }
+    .layercol { grid-column: 1; }
+    aside, section.view { max-height: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>StencilIt</h1>
+  <span style="color:var(--muted)">pochoirs multicouches pour l'aérographe</span>
+  <span class="status" id="status">Chargez une image pour commencer</span>
+  <button type="button" class="link" id="resetAll" title="Oublier les derniers réglages utilisés (les réglages enregistrés sont conservés)">Réglages par défaut</button>
+</header>
+<main>
+<aside>
+  <div id="drop">
+    <div id="dropInner">Glissez une image ici<br>ou cliquez pour choisir</div>
+    <input type="file" id="file" accept="image/*" hidden>
+  </div>
+  <div class="projbar">
+    <button type="button" id="openProject" title="Rouvrir un zip exporté par StencilIt (image, masque et tous les réglages), ou seulement son fichier …_infos.json">Ouvrir un projet…</button>
+    <input type="file" id="projectFile" accept=".zip,.json,application/zip,application/json" hidden>
+  </div>
+
+  <fieldset>
+    <legend>Support à peindre</legend>
+    <div class="saved" id="supBar">
+      <div style="display:flex; gap:6px; align-items:center">
+        <select id="user_support" style="flex:1" aria-label="Support enregistré"></select>
+        <span class="dirty" hidden title="Les valeurs ont été modifiées depuis le dernier enregistrement">● modifié</span>
+      </div>
+      <div class="pbtns">
+        <button type="button" data-act="save" title="Enregistrer les valeurs actuelles dans le support sélectionné">Enregistrer</button>
+        <button type="button" data-act="saveas" title="Enregistrer sous un nouveau nom">Enregistrer sous…</button>
+        <button type="button" data-act="rename" title="Renommer le support sélectionné">Renommer…</button>
+        <button type="button" data-act="delete" title="Supprimer le support sélectionné">Supprimer</button>
+      </div>
+      <div class="nameform" hidden>
+        <input type="text" maxlength="60" placeholder="Nom (ex. Toile 30×40 kraft)" aria-label="Nom du support">
+        <button type="button" class="ok">OK</button>
+        <button type="button" class="cancel">Annuler</button>
+      </div>
+      <p class="hint">Format, couleur, marge intérieure, feuille du pochoir et repères de calage.</p>
+    </div>
+    <label class="full">Format</label>
+    <div style="display:flex; gap:6px">
+      <select id="support_preset" style="flex:1" title="Format du support (grand côté / petit côté selon l'orientation)">
+        <optgroup label="Papier ISO">
+          <option value="105x148">A6 — 105 × 148 mm</option>
+          <option value="148x210">A5 — 148 × 210 mm</option>
+          <option value="210x297" selected>A4 — 210 × 297 mm</option>
+          <option value="297x420">A3 — 297 × 420 mm</option>
+          <option value="420x594">A2 — 420 × 594 mm</option>
+          <option value="216x279">US Letter — 216 × 279 mm</option>
+        </optgroup>
+        <optgroup label="Toiles & cadres du commerce (cm)">
+          <option value="200x200">20 × 20 cm</option>
+          <option value="300x300">30 × 30 cm</option>
+          <option value="400x400">40 × 40 cm</option>
+          <option value="500x500">50 × 50 cm</option>
+          <option value="130x180">13 × 18 cm</option>
+          <option value="180x240">18 × 24 cm</option>
+          <option value="240x300">24 × 30 cm</option>
+          <option value="300x400">30 × 40 cm</option>
+          <option value="400x500">40 × 50 cm</option>
+          <option value="500x600">50 × 60 cm</option>
+          <option value="500x700">50 × 70 cm</option>
+          <option value="600x800">60 × 80 cm</option>
+          <option value="700x1000">70 × 100 cm</option>
+        </optgroup>
+        <optgroup label="Châssis français — Figure (F)">
+          <option value="140x180">0F — 18 × 14 cm</option>
+          <option value="160x220">1F — 22 × 16 cm</option>
+          <option value="190x240">2F — 24 × 19 cm</option>
+          <option value="220x270">3F — 27 × 22 cm</option>
+          <option value="240x330">4F — 33 × 24 cm</option>
+          <option value="270x350">5F — 35 × 27 cm</option>
+          <option value="330x410">6F — 41 × 33 cm</option>
+          <option value="380x460">8F — 46 × 38 cm</option>
+          <option value="460x550">10F — 55 × 46 cm</option>
+          <option value="500x610">12F — 61 × 50 cm</option>
+          <option value="540x650">15F — 65 × 54 cm</option>
+          <option value="600x730">20F — 73 × 60 cm</option>
+          <option value="650x810">25F — 81 × 65 cm</option>
+          <option value="730x920">30F — 92 × 73 cm</option>
+          <option value="810x1000">40F — 100 × 81 cm</option>
+          <option value="890x1160">50F — 116 × 89 cm</option>
+          <option value="970x1300">60F — 130 × 97 cm</option>
+          <option value="1140x1460">80F — 146 × 114 cm</option>
+          <option value="1300x1620">100F — 162 × 130 cm</option>
+          <option value="1300x1950">120F — 195 × 130 cm</option>
+        </optgroup>
+        <optgroup label="Châssis français — Paysage (P)">
+          <option value="140x220">1P — 22 × 14 cm</option>
+          <option value="160x240">2P — 24 × 16 cm</option>
+          <option value="190x270">3P — 27 × 19 cm</option>
+          <option value="220x330">4P — 33 × 22 cm</option>
+          <option value="240x350">5P — 35 × 24 cm</option>
+          <option value="270x410">6P — 41 × 27 cm</option>
+          <option value="330x460">8P — 46 × 33 cm</option>
+          <option value="380x550">10P — 55 × 38 cm</option>
+          <option value="460x610">12P — 61 × 46 cm</option>
+          <option value="500x650">15P — 65 × 50 cm</option>
+          <option value="540x730">20P — 73 × 54 cm</option>
+          <option value="600x810">25P — 81 × 60 cm</option>
+          <option value="650x920">30P — 92 × 65 cm</option>
+          <option value="730x1000">40P — 100 × 73 cm</option>
+          <option value="810x1160">50P — 116 × 81 cm</option>
+          <option value="890x1300">60P — 130 × 89 cm</option>
+          <option value="970x1460">80P — 146 × 97 cm</option>
+          <option value="1140x1620">100P — 162 × 114 cm</option>
+          <option value="1140x1950">120P — 195 × 114 cm</option>
+        </optgroup>
+        <optgroup label="Châssis français — Marine (M)">
+          <option value="120x220">1M — 22 × 12 cm</option>
+          <option value="140x240">2M — 24 × 14 cm</option>
+          <option value="160x270">3M — 27 × 16 cm</option>
+          <option value="190x330">4M — 33 × 19 cm</option>
+          <option value="220x350">5M — 35 × 22 cm</option>
+          <option value="240x410">6M — 41 × 24 cm</option>
+          <option value="270x460">8M — 46 × 27 cm</option>
+          <option value="330x550">10M — 55 × 33 cm</option>
+          <option value="380x610">12M — 61 × 38 cm</option>
+          <option value="460x650">15M — 65 × 46 cm</option>
+          <option value="500x730">20M — 73 × 50 cm</option>
+          <option value="540x810">25M — 81 × 54 cm</option>
+          <option value="600x920">30M — 92 × 60 cm</option>
+          <option value="650x1000">40M — 100 × 65 cm</option>
+          <option value="730x1160">50M — 116 × 73 cm</option>
+          <option value="810x1300">60M — 130 × 81 cm</option>
+          <option value="890x1460">80M — 146 × 89 cm</option>
+          <option value="970x1620">100M — 162 × 97 cm</option>
+          <option value="970x1950">120M — 195 × 97 cm</option>
+        </optgroup>
+        <optgroup label="Découpe">
+          <option value="275x275">27,5 × 27,5 cm (tapis 12″ avec 15 mm de marge)</option>
+        </optgroup>
+        <option value="custom">Personnalisé</option>
+      </select>
+      <select id="orientation" style="width:96px">
+        <option value="portrait">Portrait</option>
+        <option value="landscape">Paysage</option>
+      </select>
+    </div>
+    <label class="row">Largeur du support (mm) <input type="number" id="support_w_mm" value="210" min="20" max="3000" step="1"></label>
+    <label class="row">Hauteur du support (mm) <input type="number" id="support_h_mm" value="297" min="20" max="3000" step="1"></label>
+    <label class="row">Couleur du support <input type="color" id="support_color" value="#ffffff" style="width:84px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px"></label>
+    <div class="palette" id="supportSwatches" style="margin-bottom:6px"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Image : cadrage & taille</legend>
+    <label class="full">Recadrage <span class="hint">(onglet « Cadrage » pour tracer le cadre)</span></label>
+    <div style="display:flex; gap:6px">
+      <select id="crop_ratio" style="flex:1">
+        <option value="free">Libre</option>
+        <option value="support">Proportions du support</option>
+        <option value="1">Carré 1:1</option>
+        <option value="1.3333">4:3</option>
+        <option value="0.75">3:4</option>
+        <option value="1.7778">16:9</option>
+        <option value="0.5625">9:16</option>
+      </select>
+      <button type="button" id="cropReset">Tout</button>
+    </div>
+    <p class="hint" id="cropInfo"></p>
+    <label class="row">Taille (% de « ajusté ») <span class="v" id="image_scale_v"></span>
+      <input type="range" id="image_scale" min="5" max="500" step="0.01" value="100"></label>
+    <label class="row">Largeur de l'image (mm) <input type="number" id="img_width_mm" min="5" max="5000" step="1"></label>
+    <label class="row">Hauteur de l'image (mm) <input type="number" id="img_height_mm" min="5" max="5000" step="1"></label>
+    <div class="check"><input type="checkbox" id="keep_ratio" checked><label for="keep_ratio">Conserver les proportions</label></div>
+    <input type="hidden" id="image_height_factor" value="1">
+    <label class="full">Aligner sur le support</label>
+    <div style="display:flex; gap:10px; align-items:center">
+      <div class="aligngrid" id="alignGrid">
+        <button type="button" data-a="-1,-1" title="Coin haut-gauche">↖</button>
+        <button type="button" data-a="0,-1" title="Centré en haut">↑</button>
+        <button type="button" data-a="1,-1" title="Coin haut-droit">↗</button>
+        <button type="button" data-a="-1,0" title="Centré à gauche">←</button>
+        <button type="button" data-a="0,0" title="Centré">●</button>
+        <button type="button" data-a="1,0" title="Centré à droite">→</button>
+        <button type="button" data-a="-1,1" title="Coin bas-gauche">↙</button>
+        <button type="button" data-a="0,1" title="Centré en bas">↓</button>
+        <button type="button" data-a="1,1" title="Coin bas-droit">↘</button>
+      </div>
+      <div style="flex:1">
+        <label class="full" style="margin-top:0">Distance au bord (mm)</label>
+        <input type="number" id="align_margin_mm" value="10" min="-500" max="1000" step="1">
+        <div style="display:flex; gap:4px; margin-top:6px">
+          <button type="button" id="alignH" title="Centrer horizontalement">⇔</button>
+          <button type="button" id="alignV" title="Centrer verticalement">⇕</button>
+        </div>
+      </div>
+    </div>
+    <label class="row">Position horizontale (%) <span class="v" id="image_pos_x_v"></span>
+      <input type="range" id="image_pos_x" min="-50" max="150" step="0.01" value="50"></label>
+    <label class="row">Position verticale (%) <span class="v" id="image_pos_y_v"></span>
+      <input type="range" id="image_pos_y" min="-50" max="150" step="0.01" value="50"></label>
+    <div style="display:flex; gap:6px; margin:6px 0">
+      <button type="button" id="layFit" title="Image entière dans le support, marge intérieure comprise">Ajuster</button>
+      <button type="button" id="layFill" title="L'image couvre tout le support (bords rognés)">Remplir</button>
+      <button type="button" id="layCenter">Centrer</button>
+    </div>
+    <button type="button" id="layFitStencil" style="width:100%; margin-bottom:6px"
+      title="Agrandit ou réduit l'image au maximum que permet le pochoir : support (feuille autour du support), feuille de taille fixe ou tapis de découpe (feuille ajustée au motif), bordure comprise. Choisit au besoin l'orientation de la feuille ou du tapis qui donne la plus grande image.">Ajuster au mieux dans le pochoir</button>
+    <label class="row">Marge intérieure pour « Ajuster » (mm) <input type="number" id="inner_margin_mm" value="10" min="0" max="200" step="1"></label>
+    <p class="hint">Faites glisser l'image dans l'onglet « Mise en page » ; molette = taille.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Feuille du pochoir & calage</legend>
+    <label class="full" for="sheet_mode">Feuille du pochoir</label>
+    <select id="sheet_mode" style="width:100%">
+      <option value="around">Autour du support (support + marge)</option>
+      <option value="fit">Dans le support, ajustée au motif (+ bordure)</option>
+      <option value="fixed">Dans le support, taille fixe</option>
+    </select>
+    <div id="rowMargin"><label class="row">Marge autour du support (mm) <input type="number" id="margin_mm" value="15" min="0" max="80" step="1"></label></div>
+    <div id="rowBorder" hidden><label class="row">Bordure autour du motif (mm) <input type="number" id="sheet_border_mm" value="20" min="3" max="200" step="1"></label></div>
+    <div id="rowFixed" hidden>
+      <div style="display:flex; gap:6px; align-items:center">
+        <label class="row" style="flex:1">L <input type="number" id="sheet_w_mm" value="304.8" min="30" max="3000" step="0.1"></label>
+        <label class="row" style="flex:1">H <input type="number" id="sheet_h_mm" value="304.8" min="30" max="3000" step="0.1"></label>
+        <button type="button" id="sheetFromMat" class="vt-small" title="Prendre la taille du tapis de découpe">= tapis</button>
+      </div>
+    </div>
+    <div id="rowDims" hidden>
+      <label class="full"><input type="checkbox" id="reg_dims" checked> Cotes à la règle pour tracer les croix sur le support</label>
+    </div>
+    <p class="hint" id="sheetHint"></p>
+    <label class="full" for="machine">Machine de découpe</label>
+    <select id="machine" style="width:100%">
+      <option value="cameo4">Silhouette Cameo 4 (largeur de coupe 305 mm)</option>
+      <option value="cameo5">Silhouette Cameo 5 (largeur de coupe 305 mm)</option>
+      <option value="pro">Silhouette Cameo Pro (largeur de coupe 610 mm)</option>
+      <option value="custom">Autre machine</option>
+    </select>
+    <div id="rowMachineW" hidden><label class="row" id="machineWLabel">Largeur de coupe (mm) <input type="number" id="machine_max_mm" value="305" min="100" max="2000" step="1"></label></div>
+    <label class="full" for="mat_preset">Tapis de découpe</label>
+    <div style="display:flex; gap:6px">
+    <select id="mat_preset" style="flex:1; min-width:0">
+      <option value="304.8x304.8">Tapis standard 12 × 12″ (304,8 × 304,8 mm)</option>
+      <option value="304.8x609.6">Tapis long 12 × 24″ (304,8 × 609,6 mm)</option>
+      <option value="609.6x609.6">Tapis Cameo Pro 24 × 24″ (609,6 × 609,6 mm)</option>
+      <option value="custom">Personnalisé</option>
+      <option value="none">Sans tapis (matière en rouleau)</option>
+    </select>
+    <select id="mat_orient" style="width:96px" title="Orientation du tapis par rapport au support (paysage = tapis tourné d'un quart de tour ; tournez le dessin de même dans Silhouette Studio)">
+      <option value="portrait">Portrait</option>
+      <option value="landscape">Paysage</option>
+    </select>
+    </div>
+    <div id="matDims" style="display:flex; gap:6px; margin-top:4px">
+      <label class="row" style="flex:1">L <input type="number" id="mat_w_mm" value="304.8" min="50" max="3000" step="0.1"></label>
+      <label class="row" style="flex:1">H <input type="number" id="mat_h_mm" value="304.8" min="50" max="3000" step="0.1"></label>
+    </div>
+    <p class="hint" id="matHint"></p>
+    <label class="full">Repères d'alignement</label>
+    <div style="display:flex; gap:6px">
+      <select id="reg_corners" style="flex:1">
+        <option value="3">3 coins (détrompeur)</option>
+        <option value="4">4 coins</option>
+        <option value="0">Aucun</option>
+      </select>
+      <select id="reg_shape" style="flex:1">
+        <option value="equerre">Équerres sur les angles du support</option>
+        <option value="croix">Croix de repérage</option>
+        <option value="rond">Trous pour pions</option>
+      </select>
+    </div>
+    <label class="row">Taille des repères (mm) <input type="number" id="reg_size_mm" value="10" min="2" max="40" step="0.5"></label>
+    <p class="hint" id="regHint"></p>
+    <div class="check"><input type="checkbox" id="layer_notches" checked><label for="layer_notches">Encoches = numéro de couche</label></div>
+    <div class="check"><input type="checkbox" id="sheet_outline" checked><label for="sheet_outline">Découper le contour de la feuille</label></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Simplification</legend>
+    <label class="row">Nombre de pochoirs <span class="v" id="n_layers_v"></span>
+      <input type="range" id="n_layers" min="1" max="8" value="3"></label>
+    <div class="reco" id="reco" hidden></div>
+    <label class="row">Niveau de détail <span class="v" id="detail_v"></span>
+      <input type="range" id="detail" min="0" max="100" value="50"></label>
+    <label class="full">Mode</label>
+    <select id="color_mode">
+      <option value="auto">Automatique</option>
+      <option value="color">Couleur</option>
+      <option value="gray">Noir & blanc / niveaux de gris</option>
+    </select>
+    <label class="full">Superposition des couches</label>
+    <select id="layering">
+      <option value="cumulative">Cumulative (du clair au foncé, chevauchement)</option>
+      <option value="exclusive">Exclusive (chaque couleur seule)</option>
+    </select>
+    <div class="check"><input type="checkbox" id="skip_support" checked><label for="skip_support">La teinte la plus proche du support reste nue (pas de pochoir)</label></div>
+    <p class="hint">Cumulatif : chaque pochoir ouvre sa couleur + les plus foncées. Moins de pièces fragiles et pas de liseré entre couleurs.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Contours des détails clés</legend>
+    <div class="check"><input type="checkbox" id="outline"><label for="outline">Ajouter un pochoir de contours (peint en dernier)</label></div>
+    <p class="hint">Détecte automatiquement les détails nets de l'image que la simplification et le flou de l'aérographe estompent (yeux, traits fins, mèches…) et les redessine d'un trait fin, au-dessus de toutes les couches.</p>
+    <p class="hint">Pour limiter la recherche à certaines zones (visage, yeux…), peignez-les dans l'onglet <b>« Masque contours »</b>.</p>
+    <label class="row">Sensibilité <span class="v" id="outline_sensitivity_v"></span>
+      <input type="range" id="outline_sensitivity" min="0" max="100" step="1" value="50"></label>
+    <p class="hint" style="margin-top:-2px">Bas : seulement les détails les plus marqués · haut : beaucoup de détails.</p>
+    <label class="row">Largeur du trait (mm) <input type="number" id="outline_width_mm" value="0.8" min="0.2" max="10" step="0.1"></label>
+    <label class="row">Longueur mini d'un trait (mm) <input type="number" id="outline_min_length_mm" value="4" min="0" max="200" step="0.5"></label>
+    <p class="hint" style="margin-top:-2px">Le trait n'est jamais plus fin que l'ouverture mini du matériau.</p>
+    <label class="full">Couleur du trait</label>
+    <div class="check"><input type="checkbox" id="outline_auto_color" checked><label for="outline_auto_color">Automatique (teinte la plus contrastée avec le support)</label></div>
+    <div style="display:flex; gap:8px; align-items:center">
+      <input type="color" id="outline_color" value="#1e1e1e" aria-label="Couleur du trait" style="width:84px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px" disabled>
+      <div class="palette" id="outlineSwatches"></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Matériau & découpe</legend>
+    <select id="material"></select>
+    <label class="row">Ouverture mini (mm) <input type="number" id="min_opening_mm" step="0.1" min="0" max="10"></label>
+    <label class="row">Bande de matière mini (mm) <input type="number" id="min_strip_mm" step="0.1" min="0" max="10"></label>
+    <label class="row">Surface mini d'une pièce (mm²) <input type="number" id="min_area_mm2" step="0.5" min="0" max="500"></label>
+    <div class="check"><input type="checkbox" id="bridges" checked><label for="bridges">Ponts automatiques (îlots)</label></div>
+    <label class="row">Largeur des ponts (mm) <input type="number" id="bridge_width_mm" step="0.1" min="0.3" max="10"></label>
+    <label class="row">Ponts minimum par îlot
+      <select id="min_bridges" style="width:84px">
+        <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+      </select></label>
+    <label class="row">2 ponts au-delà de (mm²) <input type="number" id="double_bridge_area_mm2" step="50" min="0" max="100000"></label>
+    <p class="hint">Les ponts d'un même îlot sont répartis tout autour. Plus de ponts = îlots mieux tenus (papier, grands îlots), mais plus de traces à retoucher.</p>
+    <div class="cut">
+      <b>Réglages de la machine</b>
+      <div class="cutgrid">
+        <label>Lame <input type="text" id="cut_blade" maxlength="20"></label>
+        <label>Force <input type="text" id="cut_force" maxlength="20"></label>
+        <label>Vitesse <input type="text" id="cut_speed" maxlength="20"></label>
+        <label>Passes <input type="text" id="cut_passes" maxlength="20"></label>
+      </div>
+      <label class="full">Notes</label>
+      <textarea id="cut_notes" rows="2" maxlength="400"></textarea>
+      <p class="hint" style="margin-top:2px"><i>Faites toujours un test de coupe.</i> Ces valeurs sont reprises en commentaire dans les SVG exportés.</p>
+    </div>
+    <div class="saved" id="matBar" style="margin-top:8px">
+      <div style="display:flex; gap:6px; align-items:center">
+        <span style="flex:1; font-size:12px">Matériau & réglages de découpe</span>
+        <span class="dirty" hidden title="Les valeurs ont été modifiées depuis le dernier enregistrement">● modifié</span>
+      </div>
+      <div class="pbtns">
+        <button type="button" data-act="save" title="Enregistrer les valeurs actuelles dans le matériau ★ sélectionné">Enregistrer</button>
+        <button type="button" data-act="saveas" title="Enregistrer sous un nouveau nom">Enregistrer sous…</button>
+        <button type="button" data-act="rename" title="Renommer le matériau ★ sélectionné">Renommer…</button>
+        <button type="button" data-act="delete" title="Supprimer le matériau ★ sélectionné">Supprimer</button>
+      </div>
+      <div class="nameform" hidden>
+        <input type="text" maxlength="60" placeholder="Nom (ex. Mylar 0,125 Cameo 4)" aria-label="Nom du matériau">
+        <button type="button" class="ok">OK</button>
+        <button type="button" class="cancel">Annuler</button>
+      </div>
+      <p class="hint">Vos matériaux apparaissent avec ★ dans la liste en haut de la section. Les matériaux fournis ne sont pas modifiables : « Enregistrer » crée alors une copie.</p>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Vectorisation & aperçu</legend>
+    <label class="row">Tolérance des tracés (mm) <span class="v" id="tolerance_mm_v"></span>
+      <input type="range" id="tolerance_mm" min="0.03" max="0.6" step="0.01" value="0.12"></label>
+    <div class="check"><input type="checkbox" id="smooth_curves" checked><label for="smooth_curves">Courbes lisses (Bézier)</label></div>
+    <label class="row">Flou de pulvérisation (mm) <span class="v" id="spray_mm_v"></span>
+      <input type="range" id="spray_mm" min="0" max="3" step="0.1" value="0.4"></label>
+    <label class="row">Résolution de calcul (px/mm) <span class="v" id="px_per_mm_v"></span>
+      <input type="range" id="px_per_mm" min="3" max="12" step="1" value="6"></label>
+    <p class="hint">Plus haut = plus précis mais plus lent.</p>
+  </fieldset>
+
+  <button class="primary" id="export" disabled style="width:100%" title="Pochoirs SVG + projet rechargeable (image d'origine, masque, réglages)">Exporter les SVG + projet (.zip)</button>
+</aside>
+
+<section class="view">
+  <div class="tabs" id="tabs">
+    <button data-v="crop">Cadrage</button>
+    <button data-v="layout">Mise en page</button>
+    <button data-v="mask" title="Peindre les zones où chercher les détails clés du pochoir de contours">Masque contours</button>
+    <button data-v="preview" class="on">Prévisualisation</button>
+    <button data-v="compare">Comparer à l'original</button>
+    <button data-v="reference">Original</button>
+    <label class="tabopt" title="Affiche le support (et la feuille du pochoir en pointillés) dans toutes les vues, à la même échelle"><input type="checkbox" id="show_support"> Support dans toutes les vues</label>
+    <label class="tabopt" title="Affiche le tapis de découpe (feuille posée dans son coin) dans toutes les vues, à la même échelle"><input type="checkbox" id="show_mat"> Tapis dans toutes les vues</label>
+    <span style="margin-left:auto" class="palette" id="palette"></span>
+  </div>
+  <div id="warnings"></div>
+  <div class="viewtools" id="viewtools" hidden>
+    <span class="vt-label">Couches</span>
+    <span id="layerToggles" class="vt-toggles"></span>
+    <button type="button" id="showAll" class="vt-small">Tout afficher</button>
+    <label class="vt-sim"><input type="checkbox" id="preview_sim"> Rendu simulé <span class="hint">(flou de l'aérographe)</span></label>
+  </div>
+  <div class="viewtools" id="masktools" hidden>
+    <div class="seg" role="group" aria-label="Outil">
+      <button type="button" id="mBrush" aria-pressed="true" title="Peindre une zone (B)">Pinceau</button>
+      <button type="button" id="mErase" aria-pressed="false" title="Effacer (E)">Gomme</button>
+    </div>
+    <label class="vt-size">Taille <input type="range" id="mSize" min="4" max="160" value="40" aria-label="Taille du pinceau"> <span id="mSizeV">40</span> px</label>
+    <label class="vt-sim" style="margin-left:0"><input type="checkbox" id="mShow" checked> Afficher le masque</label>
+    <button type="button" id="mClear" class="vt-small">Tout effacer</button>
+    <span class="hint" id="mInfo"></span>
+  </div>
+  <div class="stage" id="stage"><div class="empty">Aucune image chargée.</div></div>
+  <div class="metrics" id="metrics"></div>
+  <div class="calage" id="calage" hidden></div>
+</section>
+<div class="layercol" aria-label="Pochoirs">
+  <div class="layercol-head">
+    <h2>Pochoirs</h2>
+    <span class="hint" id="layerCount"></span>
+  </div>
+  <div class="legend">
+    <span><i style="background:#dcd3c3"></i>matière</span>
+    <span><i style="background:#e6a98b"></i>ouverture</span>
+    <span><i style="background:#e62828"></i>pont</span>
+    <span><i style="background:#ff8c00"></i>détail supprimé</span>
+  </div>
+  <div class="layers" id="layers"><p class="hint">Les pochoirs apparaîtront ici, dans l'ordre de pulvérisation.</p></div>
+</div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let SID = null, MATS = {}, LAST = null, VIEW = "preview", SEL = null, timer = null, busy = false, again = false;
+
+const MAT_FIELDS = ["min_opening_mm", "min_strip_mm", "bridge_width_mm", "min_area_mm2", "double_bridge_area_mm2", "min_bridges", "bridges"];
+const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_mm",
+  "image_scale", "image_height_factor", "image_pos_x", "image_pos_y", "margin_mm", "sheet_mode", "sheet_border_mm", "sheet_w_mm", "sheet_h_mm", "reg_dims", "machine_max_mm", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline",
+  "n_layers", "detail", "color_mode", "layering", "skip_support",
+  "outline", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_auto_color", "outline_color",
+  ...MAT_FIELDS,
+  "tolerance_mm", "smooth_curves", "spray_mm", "px_per_mm"];
+const SUPPORT_COLORS = [["Blanc", "#ffffff"], ["Ivoire", "#f3ecd9"], ["Kraft", "#c8a26e"], ["Gris", "#9a9a9a"], ["Noir", "#1e1e1e"]];
+const REG_DEFAULT = { equerre: 10, croix: 8, rond: 5 };
+const REG_HINT = {
+  equerre: "Fentes en L à l'extérieur des angles du support : le pochoir est en place quand chaque angle du support affleure le coin intérieur du L.",
+  croix: "À la 1re couche, reportez les croix au crayon (ou sur un adhésif) ; alignez ensuite chaque couche sur ces croix.",
+  rond: "Trous pour pions ou punaises de calage (diamètre = taille). Fixez les pions sur la planche à travers la 1re couche."
+};
+
+function applyPreset() {
+  const v = $("support_preset").value;
+  if (v === "custom") return;
+  const [a, b] = v.split("x").map(Number);
+  const land = $("orientation").value === "landscape";
+  $("support_w_mm").value = land ? Math.max(a, b) : Math.min(a, b);
+  $("support_h_mm").value = land ? Math.min(a, b) : Math.max(a, b);
+}
+function syncPresetFromSize() {
+  const w = val("support_w_mm"), h = val("support_h_mm");
+  const k = `${Math.min(w, h)}x${Math.max(w, h)}`;
+  const opt = [...$("support_preset").options].find(o => o.value === k);
+  $("support_preset").value = opt ? k : "custom";
+  if (w !== h) $("orientation").value = w > h ? "landscape" : "portrait";
+}
+
+// ---------------- Tapis de découpe ----------------
+// Préréglage -> dimensions ; « Sans tapis » envoie 0 × 0 (le moteur ne vérifie alors que la largeur).
+// ---------------- Machine de découpe ----------------
+const MACHINES = { cameo4: 305, cameo5: 305, pro: 610 };
+function applyMachine() {
+  const w = MACHINES[$("machine").value];
+  if (w) $("machine_max_mm").value = w;
+  syncMat();
+}
+// Ancien réglage sans choix de machine : on la déduit de la largeur enregistrée
+function machineFromWidth() {
+  const w = val("machine_max_mm");
+  $("machine").value = Math.abs(w - 610) < 1 ? "pro" : Math.abs(w - 305) < 1 ? "cameo4" : "custom";
+}
+function applyMatPreset() {
+  const v = $("mat_preset").value;
+  if (v.includes("x")) { const [w, h] = v.split("x").map(Number); $("mat_w_mm").value = w; $("mat_h_mm").value = h; }
+  syncMat();
+}
+// Feuille du pochoir dans le repère du support (mm) — même règle que pipeline.sheet_rect
+function sheetInside() { return $("sheet_mode").value !== "around"; }
+function sheetRectMM(L = layoutCalc()) {
+  const mode = $("sheet_mode").value;
+  if (mode === "around") { const m = val("margin_mm"); return { x0: -m, y0: -m, x1: L.SW + m, y1: L.SH + m }; }
+  const vx0 = Math.max(0, L.x), vy0 = Math.max(0, L.y), vx1 = Math.min(L.SW, L.x + L.w), vy1 = Math.min(L.SH, L.y + L.h);
+  if (mode === "fit") { const b = Math.max(3, val("sheet_border_mm")); return { x0: vx0 - b, y0: vy0 - b, x1: vx1 + b, y1: vy1 + b }; }
+  const cx = (vx0 + vx1) / 2, cy = (vy0 + vy1) / 2, w = val("sheet_w_mm"), h = val("sheet_h_mm");
+  return { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
+}
+function syncSheetMode() {
+  const mode = $("sheet_mode").value, inside = mode !== "around";
+  $("rowMargin").hidden = inside;
+  $("rowBorder").hidden = !inside;
+  $("rowFixed").hidden = mode !== "fixed";
+  $("rowDims").hidden = !inside;
+  // les équerres visent les angles du support : impossible quand la feuille est posée dedans
+  const eq = $("reg_shape").querySelector('option[value="equerre"]');
+  eq.disabled = inside;
+  if (inside && $("reg_shape").value === "equerre") { $("reg_shape").value = "croix"; regHint(); }
+  $("sheetHint").textContent = inside
+    ? "Feuille posée sur le support : tracez au crayon les croix aux cotes indiquées, puis alignez chaque couche dessus."
+    : "Le pochoir déborde du support ; calage sur les angles du support (équerres) ou croix dans la marge.";
+}
+function syncMat() {
+  const v = $("mat_preset").value, none = v === "none", custom = $("machine").value === "custom";
+  const mmax = val("machine_max_mm");
+  // largeur de coupe : saisie seulement pour une autre machine ; utile seule sans tapis (rouleau)
+  $("rowMachineW").hidden = !custom;
+  $("machine_max_mm").disabled = !custom;
+  // tapis plus larges que la machine : non proposés
+  [...$("mat_preset").options].forEach(o => {
+    if (!o.value.includes("x")) return;
+    o.disabled = Number(o.value.split("x")[0]) > mmax + 1;
+  });
+  if ($("mat_preset").selectedOptions[0] && $("mat_preset").selectedOptions[0].disabled) {
+    $("mat_preset").value = "304.8x304.8"; return applyMatPreset();
+  }
+  $("mat_w_mm").disabled = $("mat_h_mm").disabled = none || v !== "custom";
+  $("matDims").hidden = none;
+  $("mat_orient").hidden = none;
+  const sr = sheetRectMM(), sw = sr.x1 - sr.x0, sh = sr.y1 - sr.y0;
+  if (none) {
+    const ok = Math.min(sw, sh) <= mmax + 1e-6;
+    $("matHint").textContent = `Rouleau : largeur de coupe ${Math.round(mmax)} mm, longueur libre. Feuille ${Math.round(sw)} × ${Math.round(sh)} mm : ` +
+      (ok ? (sw <= mmax + 1e-6 ? "passe ✓" : "passe tournée d'un quart de tour") : "trop large ✗");
+    return;
+  }
+  const mat = cutMat();
+  if (!mat) { $("matHint").textContent = ""; return; }
+  const fits = sw <= mat.w + 1e-6 && sh <= mat.h + 1e-6, rot = sh <= mat.w + 1e-6 && sw <= mat.h + 1e-6;
+  $("matHint").textContent = (mat.pw > mmax + 1 ? `⚠ Tapis plus large que la machine (${Math.round(mmax)} mm). ` : "") +
+    `Feuille ${Math.round(sw)} × ${Math.round(sh)} mm : ` +
+    (fits ? "tient sur le tapis ✓" : rot ? `tient avec le tapis en ${mat.land ? "portrait" : "paysage"}` : "dépasse du tapis ✗");
+}
+function cutMat() {             // tapis courant (mm) ou null (« Sans tapis »)
+  const v = $("mat_preset").value;
+  if (v === "none") return null;
+  const pw = val("mat_w_mm"), ph = val("mat_h_mm");      // dimensions physiques (largeur = sens machine)
+  if (!(pw > 0 && ph > 0)) return null;
+  const land = $("mat_orient").value === "landscape";
+  const w = land ? ph : pw, h = land ? pw : ph;          // dimensions telles que posées sous le support
+  const inch = x => Math.abs(x / 25.4 - Math.round(x / 25.4)) < 0.01 ? `${Math.round(x / 25.4)}″` : null;
+  const label = (inch(pw) && inch(ph) ? `Tapis ${inch(pw)} × ${inch(ph)}` : `Tapis ${pw} × ${ph} mm`) + (land ? " (paysage)" : "");
+  return { w, h, pw, ph, land, label };
+}
+function matParams(p) {           // « Sans tapis » : pas de contrôle de tapis
+  if ($("mat_preset").value === "none") { p.mat_w_mm = 0; p.mat_h_mm = 0; }
+  return p;
+}
+function val(id) { const e = $(id); return e.type === "checkbox" ? e.checked : (e.type === "number" || e.type === "range") ? parseFloat(e.value) : e.value; }
+function params() {
+  const p = {}; PARAMS.forEach(k => p[k] = val(k));
+  p.crop_x = CROP.x; p.crop_y = CROP.y; p.crop_w = CROP.w; p.crop_h = CROP.h;
+  return matParams(p);
+}
+
+// ---------------- Recadrage & mise en page ----------------
+let IMG = null;                        // {w, h, src}
+let DRAGGING = false;
+let CROP = { x: 0, y: 0, w: 1, h: 1 }; // fractions de l'image source
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+function cropRatio() {
+  const v = $("crop_ratio").value;
+  if (v === "free") return null;
+  if (v === "support") return val("support_w_mm") / val("support_h_mm");
+  return parseFloat(v);
+}
+function applyCropRatio() {
+  const r = cropRatio();
+  if (!r || !IMG) return;
+  // plus grand cadre de ce ratio, centré sur le cadre actuel, dans l'image
+  const cxp = (CROP.x + CROP.w / 2) * IMG.w, cyp = (CROP.y + CROP.h / 2) * IMG.h;
+  let wp = CROP.w * IMG.w, hp = wp / r;
+  if (hp > CROP.h * IMG.h) { hp = CROP.h * IMG.h; wp = hp * r; }
+  let x = clamp(cxp - wp / 2, 0, IMG.w - wp), y = clamp(cyp - hp / 2, 0, IMG.h - hp);
+  CROP = { x: x / IMG.w, y: y / IMG.h, w: wp / IMG.w, h: hp / IMG.h };
+}
+function cropInfo() {
+  if (!IMG) { $("cropInfo").textContent = ""; return; }
+  const full = CROP.x < 0.001 && CROP.y < 0.001 && CROP.w > 0.999 && CROP.h > 0.999;
+  $("cropInfo").textContent = full ? `Image entière (${IMG.w} × ${IMG.h} px)` :
+    `Recadré : ${Math.round(CROP.w * IMG.w)} × ${Math.round(CROP.h * IMG.h)} px sur ${IMG.w} × ${IMG.h}`;
+}
+function cropChanged() { cropInfo(); syncWidth(); if (editorFollowsLayout()) render(); recommend(false); schedule(); }
+
+// ---------------- Option « Support dans toutes les vues » ----------------
+// Toutes les vues partagent alors un même cadre en mm (support au centre, feuille du pochoir en
+// pointillés, image source entière placée selon le recadrage et la mise en page), à la même échelle.
+function showSup() { return $("show_support").checked || $("show_mat").checked; }
+function showMatAll() { return $("show_mat").checked && !!cutMat(); }
+// Les éditeurs dont l'affichage dépend du recadrage / de la mise en page / du support
+function editorFollowsLayout() { return VIEW === "layout" || (showSup() && (VIEW === "crop" || VIEW === "mask")); }
+// Emprise (mm, origine = coin haut-gauche du support) de l'image source ENTIÈRE, recadrage compris
+function fullImageRect(L) {
+  const w = L.w / CROP.w, h = L.h / CROP.h;
+  return { x: L.x - CROP.x * w, y: L.y - CROP.y * h, w, h };
+}
+function supportWorld(st, withMat = false) {
+  const L = layoutCalc(), m = val("margin_mm"), room = 0.18, sr = sheetRectMM(L);
+  let x0 = Math.min(-L.SW * room, sr.x0 - 2), y0 = Math.min(-L.SH * room, sr.y0 - 2),
+      x1 = Math.max(L.SW * (1 + room), sr.x1 + 2), y1 = Math.max(L.SH * (1 + room), sr.y1 + 2);
+  const mat = (withMat || showMatAll()) && cutMat();
+  if (mat) { x0 = Math.min(x0, sr.x0 - 4); y0 = Math.min(y0, sr.y0 - 4); x1 = Math.max(x1, sr.x0 + mat.w + 4); y1 = Math.max(y1, sr.y0 + mat.h + 4); }
+  if (IMG) {
+    const F = fullImageRect(L);
+    x0 = Math.min(x0, F.x); y0 = Math.min(y0, F.y); x1 = Math.max(x1, F.x + F.w); y1 = Math.max(y1, F.y + F.h);
+  }
+  const cs = getComputedStyle(st);
+  const aw = Math.max(200, st.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+  const ah = Math.max(240, window.innerHeight * 0.72);
+  const k = Math.min(aw / (x1 - x0), ah / (y1 - y0));
+  return { L, m, sr, k, W: (x1 - x0) * k, H: (y1 - y0) * k, px: x => (x - x0) * k, py: y => (y - y0) * k };
+}
+function supportFrame(st) {
+  const w = supportWorld(st), { L, sr, k } = w;
+  const fr = document.createElement("div");
+  fr.className = "sframe";
+  Object.assign(fr.style, { width: w.W + "px", height: w.H + "px" });
+  const box = (x, y, bw, bh) => `left:${w.px(x)}px;top:${w.py(y)}px;width:${bw * k}px;height:${bh * k}px`;
+  fr.innerHTML = `<div class="sf-sheet" title="Feuille du pochoir" style="${box(sr.x0, sr.y0, sr.x1 - sr.x0, sr.y1 - sr.y0)}"></div>
+    <div class="sf-sup" style="${box(0, 0, L.SW, L.SH)};background:${val("support_color")}"></div>`;
+  const mat = showMatAll() && cutMat();
+  if (mat) {   // tapis : quadrillage sous le support, contour et nom au-dessus de tout
+    const sw = sr.x1 - sr.x0, sh = sr.y1 - sr.y0, over = sw > mat.w + 1e-6 || sh > mat.h + 1e-6, g = 25.4 * k;
+    fr.insertAdjacentHTML("afterbegin", `<div class="mat" style="${box(sr.x0, sr.y0, mat.w, mat.h)};` +
+      `background-image:linear-gradient(rgba(120,180,200,.22) 1px, transparent 1px),linear-gradient(90deg, rgba(120,180,200,.22) 1px, transparent 1px);background-size:${g}px ${g}px"></div>`);
+    w.matEdge = `<div class="matedge${over ? " over" : ""}" title="${mat.label}" style="${box(sr.x0, sr.y0, mat.w, mat.h)};z-index:5">` +
+      `<span>${mat.label}${over ? " — la feuille dépasse !" : ""}</span></div>`;
+  }
+  w.frame = fr;
+  w.place = (el, x, y, bw, bh) => {
+    el.classList.add("sf-item");
+    Object.assign(el.style, { left: w.px(x) + "px", top: w.py(y) + "px", width: bw * k + "px", height: bh * k + "px" });
+    fr.append(el);
+  };
+  // contour du support au-dessus de tout (repère, ne capte pas la souris)
+  w.edge = () => fr.insertAdjacentHTML("beforeend", `<div class="sf-edge" title="Bord du support" style="${box(0, 0, L.SW, L.SH)}"></div>` + (w.matEdge || ""));
+  return w;
+}
+// Éditeurs « Cadrage » et « Masque » : image source entière posée sur le support
+function frameSource(st, wrap) {
+  if (!showSup()) return;
+  st.style.minHeight = ""; st.style.alignItems = "";
+  const w = supportFrame(st), F = fullImageRect(w.L);
+  w.place(wrap, F.x, F.y, F.w, F.h);
+  w.edge();
+  st.replaceChildren(w.frame);
+}
+// Vues calculées (prévisualisation, comparaison, original, pochoir) posées dans le cadre commun
+function frameView(st) {
+  const top = st.firstElementChild, dm = st.querySelector("[data-mm]");
+  if (!top || !dm || top.classList.contains("sframe")) return;
+  st.style.minHeight = ""; st.style.alignItems = "";
+  const w = supportFrame(st), [wm, hm] = dm.dataset.mm.split(",").map(Number);
+  const [sx, sy] = dm.dataset.at === "sheet" ? LAST.sheet_rect_mm : [0, 0];
+  Object.assign(dm.style, { width: wm * w.k + "px", height: hm * w.k + "px", maxWidth: "none", maxHeight: "none" });
+  w.place(top, sx, sy, wm, hm);
+  w.edge();
+  st.replaceChildren(w.frame);
+}
+
+function layoutCalc() {
+  const SW = val("support_w_mm"), SH = val("support_h_mm"), im = val("inner_margin_mm");
+  const ar = IMG ? (CROP.h * IMG.h) / (CROP.w * IMG.w) : 1;
+  const fitW = Math.min(Math.max(5, SW - 2 * im), Math.max(5, SH - 2 * im) / ar);
+  const hf = parseFloat($("image_height_factor").value) || 1;
+  const w = fitW * val("image_scale") / 100, h = w * ar * hf;
+  return { SW, SH, im, ar, hf, fitW, w, h, x: val("image_pos_x") / 100 * SW - w / 2, y: val("image_pos_y") / 100 * SH - h / 2 };
+}
+function syncWidth() {
+  if (!IMG) return;
+  const L = layoutCalc();
+  $("img_width_mm").value = Math.round(L.w);
+  $("img_height_mm").value = Math.round(L.h);
+  updateSummaries();
+  syncMat();   // la feuille ajustée au motif change avec la taille de l'image
+}
+function setHF(v) { $("image_height_factor").value = Math.min(10, Math.max(0.1, v)); }
+// Redimensionnement au mm près (largeur ou hauteur), proportionnel ou non
+function resizeTo(wmm, hmm) {
+  const L = layoutCalc();
+  if ($("keep_ratio").checked) {
+    const w = wmm != null ? wmm : hmm / (L.ar * L.hf);
+    setLayout(w / L.fitW * 100);
+  } else {
+    const w = wmm != null ? wmm : L.w;
+    const h = hmm != null ? hmm : L.h;
+    setHF(h / (w * L.ar));
+    setLayout(w / L.fitW * 100);
+  }
+}
+// Aligne l'image sur un bord / coin / centre du support (hx, vy ∈ {-1, 0, 1}, null = inchangé)
+function alignTo(hx, vy) {
+  const L = layoutCalc(), m = val("align_margin_mm");
+  const px = hx == null ? null : hx < 0 ? (m + L.w / 2) / L.SW * 100 : hx > 0 ? (L.SW - m - L.w / 2) / L.SW * 100 : 50;
+  const py = vy == null ? null : vy < 0 ? (m + L.h / 2) / L.SH * 100 : vy > 0 ? (L.SH - m - L.h / 2) / L.SH * 100 : 50;
+  setLayout(null, px, py);
+}
+// Plus grande image possible dans le pochoir, selon le mode de feuille :
+//  autour du support -> le support (marge intérieure comprise) ;
+//  taille fixe       -> la feuille moins sa bordure ;
+//  ajustée au motif  -> le tapis (ou la largeur de coupe sans tapis) moins la bordure.
+// Dans les deux derniers cas, l'orientation (feuille ou tapis) donnant la plus grande image est retenue,
+// et l'image reste entièrement sur le support.
+function fitToStencil() {
+  if (!IMG) return status("Chargez d'abord une image", true);
+  const L = layoutCalc(), mode = $("sheet_mode").value, k = L.ar * L.hf;   // hauteur = largeur × k
+  const b = Math.max(3, val("sheet_border_mm"));
+  const widthIn = (TW, TH) => Math.max(5, Math.min(TW, TH / k));
+  if (mode === "around") {
+    const w = widthIn(L.SW - 2 * L.im, L.SH - 2 * L.im);
+    setLayout(w / L.fitW * 100, 50, 50);
+    return status(`Image ajustée au support : ${Math.round(w)} × ${Math.round(w * k)} mm`);
+  }
+  let boxes, what;
+  if (mode === "fixed") {
+    const sw = val("sheet_w_mm"), sh = val("sheet_h_mm");
+    boxes = [[sw, sh, false], [sh, sw, true]]; what = "à la feuille";
+  } else {
+    const mat = cutMat();
+    if (mat) { boxes = [[mat.w, mat.h, false], [mat.h, mat.w, true]]; what = "au tapis"; }
+    else { const mw = val("machine_max_mm"); boxes = [[mw, 1e5, false], [1e5, mw, true]]; what = "à la largeur de coupe"; }
+  }
+  let best = null;
+  for (const [BW, BH, swap] of boxes) {
+    // la feuille (image + bordure) doit aussi rester sur le support
+    const w = widthIn(Math.min(BW, L.SW) - 2 * b, Math.min(BH, L.SH) - 2 * b);
+    if (!best || w > best.w + 0.5) best = { w, swap };
+  }
+  let turned = "";
+  if (best.swap) {
+    if (mode === "fixed") {
+      const sw = $("sheet_w_mm").value; $("sheet_w_mm").value = $("sheet_h_mm").value; $("sheet_h_mm").value = sw;
+      turned = " (feuille tournée d'un quart de tour)";
+    } else if (cutMat()) {
+      $("mat_orient").value = $("mat_orient").value === "landscape" ? "portrait" : "landscape";
+      turned = ` (tapis passé en ${$("mat_orient").value === "landscape" ? "paysage" : "portrait"})`;
+    }
+    syncSheetMode(); syncMat();
+  }
+  const w = Math.max(5, best.w - 0.2), h = w * k;     // 0,2 mm de jeu : l'arrondi de l'échelle ne doit pas rogner
+  // on garde le centre actuel, ramené pour que l'image tienne entièrement sur le support
+  const cx = clamp(L.x + L.w / 2, w / 2 + b, L.SW - w / 2 - b), cy = clamp(L.y + L.h / 2, h / 2 + b, L.SH - h / 2 - b);
+  setLayout(w / L.fitW * 100, cx / L.SW * 100, cy / L.SH * 100);
+  status(`Image ajustée ${what}, bordure comprise : ${Math.round(w)} × ${Math.round(h)} mm${turned}`);
+}
+function setLayout(scale, px, py) {
+  if (scale != null) $("image_scale").value = Math.ceil(clamp(scale, 5, 500) * 100) / 100;
+  if (px != null) $("image_pos_x").value = clamp(px, -50, 150);
+  if (py != null) $("image_pos_y").value = clamp(py, -50, 150);
+  showValues(); syncWidth();
+  if (editorFollowsLayout()) render();
+  schedule();
+}
+
+function cropEditor(st) {
+  st.innerHTML = `<div class="cropwrap" id="cropwrap"><img src="${IMG.src}" alt="Image source" draggable="false">
+    <div class="croprect" id="croprect">${["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(h => `<span class="h ${h}" data-h="${h}"></span>`).join("")}</div></div>`;
+  const wrap = $("cropwrap"), rect = $("croprect");
+  frameSource(st, wrap);
+  const draw = () => Object.assign(rect.style, { left: CROP.x * 100 + "%", top: CROP.y * 100 + "%", width: CROP.w * 100 + "%", height: CROP.h * 100 + "%" });
+  draw();
+  let drag = null;
+  rect.onpointerdown = e => {
+    e.preventDefault();
+    DRAGGING = true;
+    drag = { h: e.target.dataset.h || "move", sx: e.clientX, sy: e.clientY, c: { ...CROP }, r: wrap.getBoundingClientRect() };
+    rect.setPointerCapture(e.pointerId);
+  };
+  rect.onpointermove = e => {
+    if (!drag) return;
+    const dx = (e.clientX - drag.sx) / drag.r.width, dy = (e.clientY - drag.sy) / drag.r.height;
+    let { x, y, w, h } = drag.c; const H = drag.h;
+    if (H === "move") { x = clamp(x + dx, 0, 1 - w); y = clamp(y + dy, 0, 1 - h); }
+    else {
+      let x1 = x + w, y1 = y + h;
+      if (H.includes("w")) x = clamp(x + dx, 0, x1 - 0.02);
+      if (H.includes("e")) x1 = clamp(x1 + dx, x + 0.02, 1);
+      if (H.includes("n")) y = clamp(y + dy, 0, y1 - 0.02);
+      if (H.includes("s")) y1 = clamp(y1 + dy, y + 0.02, 1);
+      w = x1 - x; h = y1 - y;
+      const r = cropRatio();
+      if (r) {
+        if (H === "n" || H === "s") w = h * IMG.h * r / IMG.w; else h = w * IMG.w / (r * IMG.h);
+        if (H.includes("n")) y = y1 - h;
+        if (H.includes("w")) x = x1 - w;
+        if (x < -1e-6 || y < -1e-6 || x + w > 1 + 1e-6 || y + h > 1 + 1e-6) return;
+      }
+    }
+    CROP = { x, y, w, h }; draw(); cropInfo();
+  };
+  rect.onpointerup = rect.onpointercancel = () => { DRAGGING = false; if (drag) { drag = null; cropChanged(); } };
+}
+
+function layoutEditor(st) {
+  const L0 = layoutCalc();
+  const mat = cutMat(), sr = sheetRectMM(L0);
+  let totW, totH, k, ox, oy;
+  if (showSup()) {   // même cadre et même échelle que les autres vues
+    st.style.minHeight = ""; st.style.alignItems = "";
+    const w = supportWorld(st, true);
+    k = w.k; totW = w.W / k; totH = w.H / k; ox = w.px(0); oy = w.py(0);
+  } else {
+    // espace autour du support pour voir ce qui dépasse, agrandi au besoin pour montrer tout le tapis
+    const room = 0.18;
+    let x0 = Math.min(-L0.SW * room, sr.x0 - 2), y0 = Math.min(-L0.SH * room, sr.y0 - 2),
+        x1 = Math.max(L0.SW * (1 + room), sr.x1 + 2), y1 = Math.max(L0.SH * (1 + room), sr.y1 + 2);
+    if (mat) { x0 = Math.min(x0, sr.x0 - 4); y0 = Math.min(y0, sr.y0 - 4); x1 = Math.max(x1, sr.x0 + mat.w + 4); y1 = Math.max(y1, sr.y0 + mat.h + 4); }
+    totW = x1 - x0; totH = y1 - y0;
+    const availW = Math.max(200, st.clientWidth - 24), availH = Math.max(240, window.innerHeight * 0.72);
+    k = Math.min(availW / totW, availH / totH);
+    ox = -x0 * k; oy = -y0 * k;
+  }
+  // Tapis de découpe (feuille posée dans son coin haut-gauche, comme dans Silhouette Studio) + feuille
+  let sheet = "", mattop = "";
+  if (mat) {
+    const sw = sr.x1 - sr.x0, sh = sr.y1 - sr.y0, over = sw > mat.w + 1e-6 || sh > mat.h + 1e-6;
+    const g = 25.4 * k;     // quadrillage au pouce, comme sur les tapis Silhouette
+    const box = `left:${ox + sr.x0 * k}px;top:${oy + sr.y0 * k}px;width:${mat.w * k}px;height:${mat.h * k}px`;
+    sheet += `<div class="mat" style="${box};` +
+      `background-image:linear-gradient(rgba(120,180,200,.22) 1px, transparent 1px),linear-gradient(90deg, rgba(120,180,200,.22) 1px, transparent 1px);background-size:${g}px ${g}px"></div>`;
+    // contour du tapis au-dessus du support : on voit où s'arrête la zone de coupe
+    mattop = `<div class="matedge${over ? " over" : ""}" title="${mat.label}" style="${box}"><span>${mat.label}${over ? " — la feuille dépasse !" : ""}</span></div>`;
+  }
+  // feuille du pochoir (au-dessus du support quand elle est posée dedans) + croix cotées du dernier calcul
+  mattop += `<div class="sheetol" title="Feuille du pochoir" style="left:${ox + sr.x0 * k}px;top:${oy + sr.y0 * k}px;width:${(sr.x1 - sr.x0) * k}px;height:${(sr.y1 - sr.y0) * k}px"></div>`;
+  const pos = LAST && LAST.positioning;
+  if (sheetInside() && pos && pos.mode !== "around" && val("reg_dims")) {
+    pos.reperes.forEach(r => {
+      const left = r.coin.endsWith("gauche");
+      mattop += `<div class="regmark${r.sur_support ? "" : " off"}" style="left:${ox + r.x * k}px;top:${oy + r.y * k}px" title="Croix ${r.coin}">` +
+        `<span class="${left ? "l" : "r"} ${r.coin.startsWith("haut") ? "t" : "b"}">x ${fmtMM(r.x)}<br>y ${fmtMM(r.y)}</span></div>`;
+    });
+  }
+  st.innerHTML = `<div class="lay" id="lay" style="width:${totW * k}px;height:${totH * k}px">${sheet}
+      <div class="pic ghost"></div>
+      <div class="sup" style="left:${ox}px;top:${oy}px;width:${L0.SW * k}px;height:${L0.SH * k}px;background:${val("support_color")}">
+        <div class="pic inpic"></div>
+        <div class="inner" style="left:${L0.im * k}px;top:${L0.im * k}px;right:${L0.im * k}px;bottom:${L0.im * k}px"></div>
+      </div>
+      ${mattop}
+      <div class="rz" title="Redimensionner (Maj = proportions libres)"></div>
+      <div class="dim" style="left:${ox}px;top:${oy + L0.SH * k + 4}px"></div>
+    </div>`;
+  const lay = $("lay"), ghost = lay.querySelector(".ghost"), inpic = lay.querySelector(".inpic"),
+        rz = lay.querySelector(".rz"), dim = lay.querySelector(".dim");
+  function paint() {
+    const L = layoutCalc();
+    const bgW = L.w * k / CROP.w, bgH = L.h * k / CROP.h;
+    for (const [el, bx, by] of [[ghost, ox, oy], [inpic, 0, 0]]) {
+      Object.assign(el.style, {
+        left: bx + L.x * k + "px", top: by + L.y * k + "px", width: L.w * k + "px", height: L.h * k + "px",
+        backgroundImage: `url(${IMG.src})`, backgroundSize: `${bgW}px ${bgH}px`,
+        backgroundPosition: `${-CROP.x * bgW}px ${-CROP.y * bgH}px`
+      });
+    }
+    Object.assign(rz.style, { left: ox + (L.x + L.w) * k - 7 + "px", top: oy + (L.y + L.h) * k - 7 + "px" });
+    dim.textContent = `Support ${L.SW} × ${L.SH} mm · image ${Math.round(L.w)} × ${Math.round(L.h)} mm`
+      + ` · à ${Math.round(L.x)} mm du bord gauche, ${Math.round(L.y)} mm du haut`;
+  }
+  paint();
+  let drag = null;
+  lay.onpointerdown = e => {
+    const isRz = e.target === rz;
+    if (!isRz && !e.target.classList.contains("pic")) return;
+    e.preventDefault();
+    DRAGGING = true;
+    drag = { rz: isRz, sx: e.clientX, sy: e.clientY, px: val("image_pos_x"), py: val("image_pos_y"), L: layoutCalc() };
+    lay.setPointerCapture(e.pointerId);
+  };
+  lay.onpointermove = e => {
+    if (!drag) return;
+    const dx = (e.clientX - drag.sx) / k, dy = (e.clientY - drag.sy) / k, L = drag.L;
+    if (drag.rz) {
+      // coin haut-gauche fixe
+      const w = Math.max(5, L.w + dx);
+      let h = w * L.ar * L.hf;
+      if (!$("keep_ratio").checked || e.shiftKey) {
+        h = Math.max(5, L.h + dy);
+        setHF(h / (w * L.ar));
+        if (e.shiftKey) $("keep_ratio").checked = false;
+      }
+      $("image_scale").value = w / L.fitW * 100;
+      $("image_pos_x").value = (L.x + w / 2) / L.SW * 100;
+      $("image_pos_y").value = (L.y + h / 2) / L.SH * 100;
+    } else {
+      $("image_pos_x").value = clamp(drag.px + dx / L.SW * 100, -50, 150);
+      $("image_pos_y").value = clamp(drag.py + dy / L.SH * 100, -50, 150);
+    }
+    showValues(); syncWidth(); paint();
+  };
+  lay.onpointerup = lay.onpointercancel = () => { DRAGGING = false; if (drag) { drag = null; syncWidth(); schedule(); } };
+  lay.onwheel = e => { e.preventDefault(); setLayout(val("image_scale") * (e.deltaY < 0 ? 1.05 : 1 / 1.05)); };
+}
+const CUT_FIELDS = ["blade", "force", "speed", "passes", "notes"];
+function material() {
+  const k = $("material").value;
+  const base = MATS[k] ? structuredClone(MATS[k]) : { label: "Personnalisé", sheet_color: "#cfd6dc" };
+  MAT_FIELDS.forEach(f => base[f] = val(f));
+  base.cut = {};
+  CUT_FIELDS.forEach(f => base.cut[f] = $("cut_" + f).value);
+  return base;
+}
+
+// ---------------- Réglages enregistrés (fichier presets_utilisateur.json côté serveur) ----------------
+let UP = { support: {}, material: {} };
+const SUPPORT_FIELDS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_mm",
+  "margin_mm", "sheet_mode", "sheet_border_mm", "sheet_w_mm", "sheet_h_mm", "reg_dims", "mat_preset", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline"];
+function setVals(o) {
+  for (const [k, v] of Object.entries(o || {})) {
+    const e = $(k); if (!e) continue;
+    if (e.type === "checkbox") e.checked = !!v; else e.value = v;
+  }
+  syncSheetMode(); syncMat();   // état des champs, feuille et tapis de découpe
+}
+async function presetCall(method, url, body) {
+  try {
+    const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json();
+    if (!r.ok) { status(j.error || "Erreur", true); return false; }
+    UP = j; return true;
+  } catch (e) { status("Serveur injoignable : " + e.message, true); return false; }
+}
+function refreshUserPresets() {
+  // Supports
+  const us = $("user_support"), cur = us.value;
+  us.innerHTML = "";
+  const names = Object.keys(UP.support).sort((a, b) => a.localeCompare(b, "fr"));
+  us.add(new Option(names.length ? "— Choisir un support enregistré —" : "(aucun support enregistré)", ""));
+  names.forEach(n => us.add(new Option(n, n)));
+  us.value = names.includes(cur) ? cur : "";
+  // Matériaux : options « user:<nom> » insérées avant « Personnalisé »
+  const sel = $("material"), curM = sel.value;
+  Object.keys(MATS).filter(k => k.startsWith("user:")).forEach(k => delete MATS[k]);
+  sel.querySelectorAll("optgroup").forEach(g => g.remove());
+  const mnames = Object.keys(UP.material).sort((a, b) => a.localeCompare(b, "fr"));
+  if (mnames.length) {
+    const g = document.createElement("optgroup"); g.label = "Mes matériaux";
+    mnames.forEach(n => { MATS["user:" + n] = { ...UP.material[n], label: "★ " + n }; g.appendChild(new Option("★ " + n, "user:" + n)); });
+    sel.insertBefore(g, sel.querySelector('option[value="custom"]'));
+  }
+  sel.value = [...sel.options].some(o => o.value === curM) ? curM : "custom";
+  SUPBAR?.update(); MATBAR?.update();
+}
+function applyUserSupport(name) {
+  const v = UP.support[name]; if (!v) return;
+  setVals(v);
+  syncPresetFromSize(); regHint(); syncWidth();
+  if (VIEW === "layout") render();
+  schedule();
+}
+
+// Barre « Enregistrer / Enregistrer sous… / Renommer… / Supprimer » (commune aux supports et matériaux)
+let SUPBAR = null, MATBAR = null;
+function makePresetBar(cfg) {
+  const bar = $(cfg.bar), form = bar.querySelector(".nameform"), input = form.querySelector("input"),
+        ok = form.querySelector(".ok"), cancel = form.querySelector(".cancel"), dirty = bar.querySelector(".dirty");
+  const btn = a => bar.querySelector(`[data-act="${a}"]`);
+  let mode = null, delTimer = null;
+  const exists = n => Object.prototype.hasOwnProperty.call(UP[cfg.kind], n);
+  function resetDel() {
+    clearTimeout(delTimer);
+    const d = btn("delete"); d.classList.remove("confirm"); d.textContent = "Supprimer";
+  }
+  function checkName() {
+    const n = input.value.trim();
+    const clash = n && exists(n) && !(mode === "rename" && n === cfg.selected());
+    ok.textContent = clash ? "Remplacer" : "OK";
+    ok.title = clash ? `« ${n} » existe déjà : il sera remplacé` : "";
+    ok.disabled = !n;
+  }
+  function openForm(m, initial) {
+    mode = m; form.hidden = false;
+    input.placeholder = m === "rename" ? "Nouveau nom" : input.placeholder;
+    input.value = initial || ""; checkName(); input.focus(); input.select();
+  }
+  function closeForm() { mode = null; form.hidden = true; }
+  async function save(name) {
+    if (!(await presetCall("POST", `/api/presets/${cfg.kind}`, { name, values: cfg.collect() }))) return false;
+    refreshUserPresets(); cfg.select(name); api.setDirty(false); api.update();
+    status(`${cfg.label} « ${name} » enregistré`); rememberSettings();
+    return true;
+  }
+  const api = {
+    update() {
+      const s = cfg.selected();
+      btn("rename").disabled = !s; btn("delete").disabled = !s;
+      if (!s) dirty.hidden = true;
+      resetDel();
+    },
+    setDirty(v) { dirty.hidden = !(v && cfg.selected()); },
+  };
+  btn("save").onclick = () => { const s = cfg.selected(); if (s) save(s); else openForm("saveas", cfg.suggest()); };
+  btn("saveas").onclick = () => { const s = cfg.selected(); openForm("saveas", s ? `${s} (copie)` : cfg.suggest()); };
+  btn("rename").onclick = () => { const s = cfg.selected(); if (s) openForm("rename", s); };
+  btn("delete").onclick = async () => {
+    const s = cfg.selected(); if (!s) return;
+    const d = btn("delete");
+    if (!d.classList.contains("confirm")) {   // confirmation en 2 clics, sans boîte de dialogue
+      d.classList.add("confirm"); d.textContent = "Confirmer ?";
+      delTimer = setTimeout(resetDel, 3000);
+      return;
+    }
+    resetDel(); closeForm();
+    if (await presetCall("DELETE", `/api/presets/${cfg.kind}/` + encodeURIComponent(s))) {
+      cfg.afterDelete(); refreshUserPresets(); api.update();
+      status(`${cfg.label} « ${s} » supprimé`); rememberSettings();
+    }
+  };
+  ok.onclick = async () => {
+    const n = input.value.trim(); if (!n) return;
+    if (mode === "saveas") { if (await save(n)) closeForm(); return; }
+    if (mode === "rename") {
+      const s = cfg.selected();
+      if (n === s) { closeForm(); return; }
+      if (await presetCall("POST", `/api/presets/${cfg.kind}/rename`, { old: s, new: n, overwrite: true })) {
+        refreshUserPresets(); cfg.select(n); api.update(); closeForm();
+        status(`${cfg.label} « ${s} » renommé en « ${n} »`); rememberSettings();
+      }
+    }
+  };
+  cancel.onclick = closeForm;
+  input.addEventListener("input", checkName);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); ok.click(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeForm(); }
+  });
+  api.update();
+  return api;
+}
+
+// ---------------- Mémorisation automatique des derniers réglages (navigateur) ----------------
+const LS_KEY = "stencilit.derniers_reglages";
+const NOT_REMEMBERED = new Set(["image_scale", "image_height_factor", "image_pos_x", "image_pos_y"]); // propres à chaque image
+let NO_REMEMBER = false;
+function rememberSettings() {
+  if (NO_REMEMBER) return;
+  try {
+    const s = {};
+    PARAMS.filter(k => !NOT_REMEMBERED.has(k)).forEach(k => s[k] = val(k));
+    CUT_FIELDS.forEach(f => s["cut_" + f] = $("cut_" + f).value);
+    ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine"].forEach(k => s[k] = val(k));
+    localStorage.setItem(LS_KEY, JSON.stringify(s));
+  } catch (e) { /* stockage indisponible : on ignore */ }
+}
+function restoreSettings() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) { s = null; }
+  if (!s) return false;
+  const mat = s.material;
+  if (mat && [...$("material").options].some(o => o.value === mat)) $("material").value = mat;
+  delete s.material;
+  if (s.user_support && !UP.support[s.user_support]) delete s.user_support;
+  setVals(s);
+  if (!("machine" in s)) { machineFromWidth(); syncMat(); }
+  return true;
+}
+function showValues() {
+  ["n_layers", "detail", "tolerance_mm", "spray_mm", "px_per_mm", "image_scale", "image_pos_x", "image_pos_y", "outline_sensitivity"].forEach(k => {
+    const o = $(k + "_v");
+    if (o) o.textContent = k.startsWith("image_") ? (+$(k).value).toFixed(1) : $(k).value;
+  });
+}
+function cutInfo() {
+  // Les réglages machine sont des champs éditables (voir applyMaterial) ; on met à jour la barre d'enregistrement
+  MATBAR?.update();
+}
+function applyMaterial(k) {
+  const m = MATS[k]; if (!m) return;
+  MAT_FIELDS.forEach(f => { const e = $(f); if (m[f] === undefined) return; if (e.type === "checkbox") e.checked = !!m[f]; else e.value = m[f]; });
+  CUT_FIELDS.forEach(f => $("cut_" + f).value = (m.cut || {})[f] || "");
+  cutInfo();
+}
+
+// ---------------- Sections repliables du panneau ----------------
+// Toutes repliées au départ ; en ouvrir une referme les autres.
+const SECTION_SUMMARY = {
+  "Support à peindre": () => `${val("support_w_mm")} × ${val("support_h_mm")} mm`,
+  "Image : cadrage & taille": () => IMG ? `${$("img_width_mm").value} × ${$("img_height_mm").value} mm` : "",
+  "Feuille du pochoir & calage": () => `${$("reg_corners").selectedOptions[0].text.split(" ")[0]} coins · ${$("reg_shape").selectedOptions[0].text.split(" ")[0].toLowerCase()}`,
+  "Simplification": () => `${val("n_layers")} pochoir${val("n_layers") > 1 ? "s" : ""} · détail ${val("detail")}`,
+  "Contours des détails clés": () => val("outline") ? `activé · ${MASK_EMPTY ? "toute l'image" : "masque"} · sens. ${val("outline_sensitivity")}` : "désactivé",
+  "Matériau & découpe": () => $("material").selectedOptions[0] ? $("material").selectedOptions[0].text : "",
+  "Vectorisation & aperçu": () => `tol. ${val("tolerance_mm")} mm`,
+};
+function setupAccordion() {
+  const sets = [...document.querySelectorAll("aside fieldset")];
+  sets.forEach(fs => {
+    const lg = fs.querySelector("legend");
+    const title = lg.textContent.trim();
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "acc"; btn.dataset.title = title;
+    btn.setAttribute("aria-expanded", "false");
+    btn.innerHTML = `<span class="chev" aria-hidden="true">▸</span><span>${title}</span><span class="sum"></span>`;
+    lg.textContent = ""; lg.appendChild(btn);
+    fs.classList.add("collapsed");
+    btn.onclick = () => toggleSection(fs, fs.classList.contains("collapsed"));
+  });
+  updateSummaries();
+}
+function toggleSection(fs, open) {
+  document.querySelectorAll("aside fieldset").forEach(o => {
+    o.classList.add("collapsed");
+    o.querySelector(".acc").setAttribute("aria-expanded", "false");
+  });
+  if (open) {
+    fs.classList.remove("collapsed");
+    fs.querySelector(".acc").setAttribute("aria-expanded", "true");
+    fs.scrollIntoView({ block: "nearest" });
+  }
+  updateSummaries();
+}
+function openSectionOf(el) {
+  const fs = el.closest("fieldset");
+  if (fs && fs.classList.contains("collapsed")) toggleSection(fs, true);
+}
+function updateSummaries() {
+  document.querySelectorAll("aside .acc").forEach(b => {
+    const f = SECTION_SUMMARY[b.dataset.title];
+    try { b.querySelector(".sum").textContent = f ? f() : ""; } catch (e) { /* champ pas encore prêt */ }
+  });
+}
+
+async function init() {
+  setupAccordion();
+  document.querySelector("aside").addEventListener("change", updateSummaries);
+  document.querySelector("aside").addEventListener("input", updateSummaries);
+  MATS = await (await fetch("/api/materials")).json();
+  const sel = $("material");
+  Object.entries(MATS).forEach(([k, m]) => sel.add(new Option(m.label, k)));
+  sel.add(new Option("Personnalisé", "custom"));
+  sel.value = "mylar"; applyMaterial("mylar");
+  try { UP = await (await fetch("/api/presets")).json(); } catch (e) { /* pas de réglages enregistrés */ }
+  refreshUserPresets();
+  if (restoreSettings()) {
+    syncPresetFromSize(); status("Derniers réglages restaurés — chargez une image");
+  }
+  showValues();
+
+  sel.addEventListener("change", () => { applyMaterial(sel.value); cutInfo(); schedule(); });
+  // Modifier un champ : un matériau fourni bascule en « Personnalisé » ; un matériau ★ reste sélectionné
+  // (marqué « modifié ») pour pouvoir l'écraser avec « Enregistrer ».
+  const MAT_EDIT_FIELDS = [...MAT_FIELDS, "cut_blade", "cut_force", "cut_speed", "cut_passes", "cut_notes"];
+  MAT_EDIT_FIELDS.forEach(f => $(f).addEventListener("input", () => {
+    const k = $("material").value;
+    if (k.startsWith("user:")) MATBAR.setDirty(true);
+    else if (k !== "custom") { $("material").value = "custom"; cutInfo(); }
+  }));
+  ["cut_blade", "cut_force", "cut_speed", "cut_passes", "cut_notes"].forEach(f => $(f).addEventListener("change", rememberSettings));
+
+  // Réglages enregistrés : barres Enregistrer / Enregistrer sous… / Renommer… / Supprimer
+  SUPBAR = makePresetBar({
+    kind: "support", bar: "supBar", label: "Support",
+    selected: () => $("user_support").value || null,
+    select: n => { $("user_support").value = n; },
+    collect: () => { const v = {}; SUPPORT_FIELDS.forEach(f => v[f] = val(f)); return v; },
+    suggest: () => `Support ${val("support_w_mm")}×${val("support_h_mm")}`,
+    afterDelete: () => { $("user_support").value = ""; },
+  });
+  MATBAR = makePresetBar({
+    kind: "material", bar: "matBar", label: "Matériau",
+    selected: () => { const k = $("material").value; return k.startsWith("user:") ? k.slice(5) : null; },
+    select: n => { $("material").value = "user:" + n; },
+    collect: () => { const m = material(); delete m.label; return m; },
+    suggest: () => { const m = MATS[$("material").value]; return (m ? m.label.replace(/^★ /, "") : "Mon matériau") + " (perso)"; },
+    afterDelete: () => { $("material").value = "custom"; },
+  });
+  $("user_support").addEventListener("change", () => {
+    applyUserSupport($("user_support").value); SUPBAR.setDirty(false); SUPBAR.update();
+  });
+  sel.addEventListener("change", () => MATBAR.setDirty(false));
+  // Modifier un champ du support marque le support enregistré sélectionné comme « modifié »
+  [...SUPPORT_FIELDS, "support_preset", "orientation"].forEach(f => $(f).addEventListener("input", () => SUPBAR.setDirty(true)));
+  ["support_preset", "orientation", "reg_corners", "reg_shape"].forEach(f => $(f).addEventListener("change", () => SUPBAR.setDirty(true)));
+  $("supportSwatches").addEventListener("click", () => SUPBAR.setDirty(true));
+  $("resetAll").onclick = () => {
+    NO_REMEMBER = true; // sinon « beforeunload » réenregistrerait les réglages actuels
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
+    location.reload();
+  };
+  window.addEventListener("beforeunload", rememberSettings);
+  PARAMS.forEach(k => $(k).addEventListener(($(k).type === "range") ? "input" : "change", () => { showValues(); schedule(); }));
+  ["margin_mm", ...MAT_FIELDS].forEach(k => $(k).addEventListener("input", schedule));
+  $("n_layers").addEventListener("input", renderReco);
+  ["color_mode", "skip_support"].forEach(k => $(k).addEventListener("change", () => recommend(false)));
+
+  // Support
+  $("support_preset").addEventListener("change", () => { applyPreset(); schedule(); });
+  $("orientation").addEventListener("change", () => {
+    const w = val("support_w_mm"), h = val("support_h_mm");
+    const land = $("orientation").value === "landscape";
+    if ((land && w < h) || (!land && w > h)) { $("support_w_mm").value = h; $("support_h_mm").value = w; }
+    schedule();
+  });
+  ["support_w_mm", "support_h_mm"].forEach(k => $(k).addEventListener("input", syncPresetFromSize));
+  ["support_w_mm", "support_h_mm", "inner_margin_mm", "machine_max_mm", "reg_size_mm"].forEach(k => $(k).addEventListener("input", schedule));
+  $("mat_preset").addEventListener("change", () => { applyMatPreset(); if (VIEW === "layout" || showMatAll()) render(); schedule(); });
+  $("machine").addEventListener("change", () => { applyMachine(); if (VIEW === "layout" || showMatAll()) render(); schedule(); });
+  $("mat_orient").addEventListener("change", () => { syncMat(); if (VIEW === "layout" || showMatAll()) render(); schedule(); });
+  $("show_mat").addEventListener("change", () => { render(); rememberSettings(); });
+  $("machine_max_mm").addEventListener("input", syncMat);
+  const sheetChanged = () => { syncSheetMode(); syncMat(); if (VIEW === "layout" || (showSup() && editorFollowsLayout())) render(); schedule(); };
+  $("sheet_mode").addEventListener("change", sheetChanged);
+  ["sheet_border_mm", "sheet_w_mm", "sheet_h_mm"].forEach(k => $(k).addEventListener("input", sheetChanged));
+  $("reg_dims").addEventListener("change", () => { renderCalage(); if (VIEW === "layout") render(); schedule(); });
+  $("sheetFromMat").onclick = () => {
+    const mat = cutMat();
+    if (!mat) return status("Choisissez d'abord un tapis de découpe", true);
+    $("sheet_w_mm").value = mat.w; $("sheet_h_mm").value = mat.h; sheetChanged();
+  };
+  syncSheetMode();
+  ["mat_w_mm", "mat_h_mm"].forEach(k => $(k).addEventListener("input", () => { syncMat(); if (VIEW === "layout") render(); schedule(); }));
+  ["support_w_mm", "support_h_mm", "margin_mm", "support_preset", "orientation"].forEach(k => $(k).addEventListener("change", syncMat));
+  ["support_w_mm", "support_h_mm", "margin_mm"].forEach(k => $(k).addEventListener("input", syncMat));
+  syncMat();
+  $("supportSwatches").innerHTML = SUPPORT_COLORS.map(([n, c]) =>
+    `<span class="sw pick" title="${n}" data-c="${c}" style="background:${c}"></span>`).join("");
+  $("supportSwatches").querySelectorAll(".sw").forEach(s => s.onclick = () => { $("support_color").value = s.dataset.c; schedule(); });
+  $("support_color").addEventListener("input", schedule);
+  // Cadrage & mise en page
+  $("crop_ratio").addEventListener("change", () => { applyCropRatio(); if (VIEW === "crop") render(); cropChanged(); });
+  $("cropReset").onclick = () => { $("crop_ratio").value = "free"; CROP = { x: 0, y: 0, w: 1, h: 1 }; if (VIEW === "crop") render(); cropChanged(); };
+  ["image_scale", "image_pos_x", "image_pos_y"].forEach(k => $(k).addEventListener("input", () => { syncWidth(); if (VIEW === "layout") render(); }));
+  ["support_w_mm", "support_h_mm", "inner_margin_mm", "support_color"].forEach(k => $(k).addEventListener("input", () => { syncWidth(); if (editorFollowsLayout()) render(); }));
+  $("margin_mm").addEventListener("input", () => { if (VIEW === "layout" || (showSup() && editorFollowsLayout())) render(); });
+  $("show_support").addEventListener("change", () => { render(); rememberSettings(); });
+  $("support_preset").addEventListener("change", () => { syncWidth(); if (VIEW === "layout") render(); });
+  $("orientation").addEventListener("change", () => { syncWidth(); if (VIEW === "layout") render(); });
+  $("img_width_mm").addEventListener("change", () => resizeTo(val("img_width_mm"), null));
+  $("img_height_mm").addEventListener("change", () => resizeTo(null, val("img_height_mm")));
+  $("keep_ratio").addEventListener("change", () => {
+    if ($("keep_ratio").checked && Math.abs(layoutCalc().hf - 1) > 1e-3) { setHF(1); setLayout(null); }
+  });
+  $("layFit").onclick = () => {
+    const L = layoutCalc();
+    const w = Math.min(Math.max(5, L.SW - 2 * L.im), Math.max(5, L.SH - 2 * L.im) / (L.ar * L.hf));
+    setLayout(w / L.fitW * 100, 50, 50);
+  };
+  $("layCenter").onclick = () => setLayout(null, 50, 50);
+  $("layFitStencil").onclick = fitToStencil;
+  $("layFill").onclick = () => { const L = layoutCalc(); setLayout(Math.max(L.SW, L.SH / (L.ar * L.hf)) / L.fitW * 100 + 0.1, 50, 50); };
+  $("alignGrid").querySelectorAll("button").forEach(b => b.onclick = () => { const [h, v] = b.dataset.a.split(",").map(Number); alignTo(h, v); });
+  $("alignH").onclick = () => alignTo(0, null);
+  $("alignV").onclick = () => alignTo(null, 0);
+  window.addEventListener("resize", () => { if (VIEW === "layout" || VIEW === "crop" || showSup()) render(); else fitStage(); });
+  $("reg_shape").addEventListener("change", () => { $("reg_size_mm").value = REG_DEFAULT[val("reg_shape")]; regHint(); schedule(); });
+  $("reg_corners").addEventListener("change", regHint);
+  regHint();
+  // Masque des détails clés
+  $("mBrush").onclick = () => setMaskTool("brush");
+  $("mErase").onclick = () => setMaskTool("erase");
+  $("mSize").addEventListener("input", () => { $("mSizeV").textContent = $("mSize").value; });
+  $("mShow").addEventListener("change", () => { if (MASK) MASK.style.display = $("mShow").checked ? "" : "none"; });
+  $("mClear").onclick = () => { if (!MASK) return; MASK.getContext("2d").clearRect(0, 0, MASK.width, MASK.height); sendMask(); };
+  document.addEventListener("keydown", e => {
+    if (VIEW !== "mask" || e.target.closest("input, textarea, select")) return;
+    if (e.key === "b" || e.key === "B") setMaskTool("brush");
+    else if (e.key === "e" || e.key === "E") setMaskTool("erase");
+    else if (e.key === "[" || e.key === "]") {
+      $("mSize").value = Math.max(4, Math.min(160, val("mSize") + (e.key === "]" ? 8 : -8)));
+      $("mSizeV").textContent = $("mSize").value;
+    }
+  });
+  // Prévisualisation : rendu simulé et visibilité des couches (sans recalcul serveur)
+  $("preview_sim").addEventListener("change", () => { refreshPreviewOnly(); rememberSettings(); });
+  $("showAll").onclick = () => { HIDDEN.clear(); refreshPreviewOnly(); };
+  // Pochoir de contours : couleur automatique ou choisie
+  $("outline_auto_color").addEventListener("change", () => { $("outline_color").disabled = $("outline_auto_color").checked; });
+  $("outline_color").addEventListener("input", schedule);
+  ["outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("input", schedule));
+  $("outline_color").disabled = $("outline_auto_color").checked;
+  renderOutlineSwatches();
+
+  const drop = $("drop");
+  drop.onclick = () => $("file").click();
+  $("file").onchange = e => e.target.files[0] && upload(e.target.files[0]);
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = e => {
+    e.preventDefault(); drop.classList.remove("over");
+    const f = e.dataTransfer.files[0];
+    if (f) (/\.(zip|json)$/i.test(f.name) ? openProject(f) : upload(f));
+  };
+  $("openProject").onclick = () => $("projectFile").click();
+  $("projectFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; f && openProject(f); };
+
+  $("tabs").querySelectorAll("button").forEach(b => b.onclick = () => { VIEW = b.dataset.v; SEL = null; render(); });
+  $("export").onclick = () => { if (SID) location.href = "/api/export/" + SID; };
+}
+
+async function upload(file) {
+  status("Chargement…");
+  const fd = new FormData(); fd.append("image", file);
+  const r = await fetch("/api/upload", { method: "POST", body: fd });
+  const j = await r.json();
+  if (!r.ok) return status(j.error, true);
+  setSession(j, file.name);
+  if (PENDING_PROJECT) {            // réglages d'un projet (.json) ouverts avant l'image
+    applyProjectSettings(PENDING_PROJECT);
+    PENDING_PROJECT = null;
+    status("Image chargée — réglages du projet appliqués");
+    await recommend(false);
+  } else {
+    if ($("support_preset").value !== "custom") {
+      $("orientation").value = j.width > j.height ? "landscape" : "portrait";
+      applyPreset();
+    }
+    syncWidth();
+    await recommend(true);
+  }
+  render();
+  process();
+}
+function setSession(j, name) {
+  SID = j.id;
+  IMG = { w: j.width, h: j.height, src: j.original };
+  CROP = { x: 0, y: 0, w: 1, h: 1 };
+  createMask();
+  $("crop_ratio").value = "free";
+  $("image_scale").value = 100; $("image_pos_x").value = 50; $("image_pos_y").value = 50;
+  setHF(1); $("keep_ratio").checked = true;
+  showValues(); cropInfo();
+  $("dropInner").innerHTML = `<img src="${j.original}"><b>${name}</b><br>${j.width}×${j.height} px · ${j.gray ? "noir & blanc" : "couleur"}`;
+}
+
+// ---------------- Projet : export / réouverture ----------------
+// L'état complet de l'interface part avec chaque calcul ; l'export l'écrit dans …_infos.json
+// (clé « projet »), avec l'image d'origine et le masque. « Ouvrir un projet » relit le zip
+// (tout est restauré) ou seulement le .json (réglages ; l'image est demandée ensuite).
+const UI_EXTRA = ["material", "support_preset", "orientation", "crop_ratio", "keep_ratio", "align_margin_mm",
+  "preview_sim", "show_support", "show_mat", "mat_preset", "machine"];
+let PENDING_PROJECT = null;
+function uiState() {
+  const values = {};
+  [...PARAMS, ...UI_EXTRA].forEach(k => values[k] = val(k));
+  CUT_FIELDS.forEach(f => values["cut_" + f] = $("cut_" + f).value);
+  return { version: 1, values, crop: { ...CROP }, hidden_layers: [...HIDDEN] };
+}
+function applyProjectSettings(info) {
+  const ui = info && info.projet && info.projet.interface;
+  let vals = {}, crop = null;
+  if (ui && ui.values) {
+    vals = { ...ui.values }; crop = ui.crop;
+  } else {                          // export d'une version antérieure : paramètres du moteur
+    const p = (info && info.parametres) || {}, m = (info && info.materiau) || {};
+    PARAMS.forEach(k => { if (p[k] !== undefined) vals[k] = p[k]; });
+    CUT_FIELDS.forEach(f => { if (m.cut && m.cut[f] != null) vals["cut_" + f] = m.cut[f]; });
+    if (p.crop_w) crop = { x: p.crop_x, y: p.crop_y, w: p.crop_w, h: p.crop_h };
+  }
+  const mat = vals.material; delete vals.material;
+  if (mat && [...$("material").options].some(o => o.value === mat)) $("material").value = mat;
+  setVals(vals);
+  if (!("machine" in vals)) { machineFromWidth(); syncMat(); }
+  if (crop && crop.w > 0 && crop.h > 0) CROP = { x: +crop.x, y: +crop.y, w: +crop.w, h: +crop.h };
+  HIDDEN.clear();
+  ((ui && ui.hidden_layers) || []).forEach(i => HIDDEN.add(i));
+  $("outline_color").disabled = $("outline_auto_color").checked;
+  showValues(); cutInfo(); regHint(); cropInfo(); syncWidth(); updateSummaries(); renderOutlineSwatches();
+}
+function loadMaskImage(src, coverage) {
+  return new Promise(done => {
+    const im = new Image();
+    im.onload = () => {
+      createMask();
+      const c = MASK.getContext("2d");
+      c.drawImage(im, 0, 0, MASK.width, MASK.height);
+      const d = c.getImageData(0, 0, MASK.width, MASK.height);
+      for (let i = 0; i < d.data.length; i += 4) {      // gris 0/255 -> rouge transparent
+        const on = d.data[i] > 127;
+        d.data[i] = 0xe6; d.data[i + 1] = 0x1e; d.data[i + 2] = 0x1e; d.data[i + 3] = on ? 255 : 0;
+      }
+      c.putImageData(d, 0, 0);
+      MASK_EMPTY = !(coverage > 0);
+      maskInfo(coverage);
+      done();
+    };
+    im.onerror = () => done();
+    im.src = src;
+  });
+}
+async function openProject(file) {
+  if (/\.json$/i.test(file.name)) {
+    let info;
+    try { info = JSON.parse(await file.text()); } catch (e) { return status("Fichier JSON illisible", true); }
+    if (!info.projet && !info.parametres) return status("Ce JSON n'est pas un fichier …_infos.json de StencilIt", true);
+    if (SID) {
+      applyProjectSettings(info);
+      status("Réglages du projet appliqués à l'image chargée");
+      render(); recommend(false); process();
+    } else {
+      PENDING_PROJECT = info;
+      status("Réglages du projet chargés — chargez maintenant l'image d'origine");
+    }
+    return;
+  }
+  status("Ouverture du projet…");
+  const fd = new FormData(); fd.append("project", file);
+  let j;
+  try {
+    const r = await fetch("/api/project", { method: "POST", body: fd });
+    j = await r.json();
+    if (!r.ok) return status(j.error || "Projet illisible", true);
+  } catch (e) { return status("Serveur injoignable : " + e.message, true); }
+  PENDING_PROJECT = null;
+  setSession(j, `${file.name} (projet)`);
+  applyProjectSettings(j.info);
+  if (j.mask) await loadMaskImage(j.mask, j.mask_coverage);
+  status(`Projet ouvert : ${file.name}`);
+  render();
+  await recommend(false);
+  process();
+}
+
+let RECO = null;
+async function recommend(apply) {
+  if (!SID) return;
+  const r = await fetch("/api/recommend", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: SID, color_mode: val("color_mode"), skip_support: val("skip_support"),
+      crop: { crop_x: CROP.x, crop_y: CROP.y, crop_w: CROP.w, crop_h: CROP.h } }) });
+  if (!r.ok) return;
+  RECO = await r.json();
+  if (apply) setLayers(RECO.layers, false);
+  renderReco();
+}
+function setLayers(n, run = true) {
+  $("n_layers").value = n; showValues(); renderReco(); updateSummaries();
+  if (run) schedule();
+}
+function renderReco() {
+  const box = $("reco");
+  if (!RECO) { box.hidden = true; return; }
+  const cur = +$("n_layers").value;
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="head">Recommandé : <b>${RECO.layers} pochoir${RECO.layers > 1 ? "s" : ""}</b>
+      ${cur !== RECO.layers ? `<button type="button" id="recoApply">Appliquer</button>` : ""}</div>
+    <div class="why">${RECO.distinct_colors} teinte${RECO.distinct_colors > 1 ? "s" : ""} bien distincte${RECO.distinct_colors > 1 ? "s" : ""} détectée${RECO.distinct_colors > 1 ? "s" : ""} ;
+      ${RECO.colors} teintes retenues${$("skip_support").checked ? " (dont celle laissée au support)" : ""} : ${RECO.reason}.</div>
+    <div class="why" style="margin-bottom:3px">Écart à l'original (ΔE) selon le nombre de pochoirs :</div>
+    <div class="chips">${RECO.curve.map(c => `<span class="chip ${c.layers === RECO.layers ? "rec" : ""} ${c.layers === cur ? "cur" : ""}"
+      data-n="${c.layers}" title="${c.layers} pochoir(s) : ΔE ${c.delta_e}">${c.layers} · ${c.delta_e}</span>`).join("")}</div>`;
+  const b = $("recoApply"); if (b) b.onclick = () => setLayers(RECO.layers);
+  box.querySelectorAll(".chip").forEach(c => c.onclick = () => setLayers(+c.dataset.n));
+}
+
+function schedule() { if (!SID) return; clearTimeout(timer); timer = setTimeout(process, 350); }
+
+async function process() {
+  if (!SID) return;
+  if (busy) { again = true; return; }
+  busy = true; status("Calcul en cours…");
+  try {
+    const r = await fetch("/api/process", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: SID, params: params(), material: material(), ui: uiState() }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Erreur");
+    IMG_CACHE = new Map(); LAST = j; render(); rememberSettings(); updateSummaries();
+    status(`Calculé en ${j.seconds} s`);
+    $("export").disabled = false;
+  } catch (e) { status(e.message, true); }
+  busy = false;
+  if (again) { again = false; process(); }
+}
+
+function status(t, err) { const s = $("status"); s.textContent = t; s.className = "status" + (err ? " err" : ""); }
+
+// ---------------- Masque des détails clés (pochoir de contours) ----------------
+// Calque peint par l'utilisateur, à la taille de l'aperçu de l'image source (donc indépendant du
+// recadrage et de la mise en page). Les zones peintes, en rouge transparent, limitent la recherche
+// des détails clés ; sans zone peinte, la recherche porte sur toute l'image.
+let MASK = null, MASK_TOOL = "brush", MASK_EMPTY = true, MASK_SENDING = null;
+function createMask() {
+  const s = Math.min(1, 1100 / Math.max(IMG.w, IMG.h));   // même taille que l'aperçu envoyé par le serveur
+  MASK = document.createElement("canvas");
+  MASK.width = Math.max(1, Math.round(IMG.w * s));
+  MASK.height = Math.max(1, Math.round(IMG.h * s));
+  MASK.setAttribute("aria-hidden", "true");
+  MASK_EMPTY = true;
+  maskInfo(0);
+}
+function maskInfo(coverage) {
+  $("mInfo").textContent = MASK_EMPTY
+    ? "Aucune zone peinte : les détails clés sont cherchés sur toute l'image."
+    : `Zones peintes : ${coverage} % de l'image — les détails clés ne sont cherchés que dedans.`;
+}
+function setMaskTool(t) {
+  MASK_TOOL = t;
+  $("mBrush").setAttribute("aria-pressed", String(t === "brush"));
+  $("mErase").setAttribute("aria-pressed", String(t === "erase"));
+}
+function maskIsEmpty() {
+  const d = MASK.getContext("2d").getImageData(0, 0, MASK.width, MASK.height).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i]) return false;
+  return true;
+}
+async function sendMask() {
+  if (!SID || !MASK) return;
+  MASK_EMPTY = maskIsEmpty();
+  const png = MASK_EMPTY ? null : MASK.toDataURL("image/png");
+  const req = fetch("/api/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png }) });
+  MASK_SENDING = req;
+  try {
+    const r = await req, j = await r.json();
+    if (!r.ok) { status(j.error || "Erreur du masque", true); return; }
+    if (MASK_SENDING !== req) return;                 // un envoi plus récent est en cours
+    maskInfo(j.coverage);
+    if (!MASK_EMPTY && !$("outline").checked) {       // peindre un masque n'a de sens qu'avec le pochoir de contours
+      $("outline").checked = true; updateSummaries();
+      status("Pochoir de contours activé (masque peint)");
+    }
+    if ($("outline").checked) schedule();
+  } catch (e) { status("Serveur injoignable : " + e.message, true); }
+}
+function maskEditor(st) {
+  if (!MASK) createMask();
+  const wrap = document.createElement("div");
+  wrap.className = "maskwrap";
+  wrap.innerHTML = `<img src="${IMG.src}" alt="Image source — peignez les zones à détailler" draggable="false">
+    <div class="cropguide" title="Partie de l'image utilisée (recadrage)"></div><div class="brush"></div>`;
+  wrap.insertBefore(MASK, wrap.querySelector(".cropguide"));
+  MASK.style.display = $("mShow").checked ? "" : "none";
+  Object.assign(wrap.querySelector(".cropguide").style, {
+    left: CROP.x * 100 + "%", top: CROP.y * 100 + "%", width: CROP.w * 100 + "%", height: CROP.h * 100 + "%",
+    display: (CROP.w > 0.999 && CROP.h > 0.999) ? "none" : ""
+  });
+  st.replaceChildren(wrap);
+  frameSource(st, wrap);
+  const brush = wrap.querySelector(".brush"), ctx = MASK.getContext("2d");
+  let last = null;
+  const toMask = e => {
+    const r = wrap.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * MASK.width / r.width, y: (e.clientY - r.top) * MASK.height / r.height, k: MASK.width / r.width,
+             sx: e.clientX - r.left, sy: e.clientY - r.top };
+  };
+  const moveBrush = e => {
+    const q = toMask(e), size = val("mSize");
+    Object.assign(brush.style, { display: "block", left: q.sx + "px", top: q.sy + "px", width: size + "px", height: size + "px" });
+    brush.classList.toggle("erase", MASK_TOOL === "erase");
+  };
+  const paint = q => {
+    ctx.globalCompositeOperation = MASK_TOOL === "erase" ? "destination-out" : "source-over";
+    ctx.strokeStyle = ctx.fillStyle = "#e61e1e";
+    ctx.lineWidth = val("mSize") * q.k; ctx.lineCap = ctx.lineJoin = "round";
+    ctx.beginPath();
+    if (last) { ctx.moveTo(last.x, last.y); ctx.lineTo(q.x, q.y); ctx.stroke(); }
+    else { ctx.arc(q.x, q.y, ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill(); }
+    last = q;
+  };
+  wrap.onpointerdown = e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    DRAGGING = true; last = null;
+    if (!$("mShow").checked) { $("mShow").checked = true; MASK.style.display = ""; }
+    wrap.setPointerCapture(e.pointerId);
+    paint(toMask(e));
+  };
+  wrap.onpointermove = e => { moveBrush(e); if (DRAGGING && last) paint(toMask(e)); };
+  wrap.onpointerup = wrap.onpointercancel = () => { if (DRAGGING) { DRAGGING = false; last = null; sendMask(); } };
+  wrap.onpointerleave = () => { if (!DRAGGING) brush.style.display = "none"; };
+}
+
+// ---------------- Prévisualisation composée dans le navigateur ----------------
+// Chaque couche arrive sous forme de calque PNG transparent (net et flouté) ; on les superpose
+// sur la couleur du support, dans l'ordre de pulvérisation, en sautant les couches masquées.
+const HIDDEN = new Set();       // numéros des couches masquées
+let IMG_CACHE = new Map(), RENDER_TOKEN = 0, COMPARE_POS = 50;
+function loadImg(src) {
+  if (!IMG_CACHE.has(src)) IMG_CACHE.set(src, new Promise((ok, ko) => {
+    const im = new Image(); im.onload = () => ok(im); im.onerror = ko; im.src = src;
+  }));
+  return IMG_CACHE.get(src);
+}
+async function composeCanvas() {
+  const [w, h] = LAST.preview_size;
+  const cv = document.createElement("canvas");
+  cv.width = w; cv.height = h; cv.className = "pv";
+  cv.dataset.mm = LAST.support_mm.join(",");
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = LAST.base; ctx.fillRect(0, 0, w, h);
+  const sim = $("preview_sim").checked;
+  const imgs = await Promise.all(LAST.layers.map(L => HIDDEN.has(L.index) ? null : loadImg(sim ? L.mask_sim : L.mask_flat)));
+  imgs.forEach(im => im && ctx.drawImage(im, 0, 0, w, h));
+  const hidden = LAST.layers.filter(L => HIDDEN.has(L.index)).length;
+  cv.setAttribute("role", "img");
+  cv.setAttribute("aria-label", `Prévisualisation ${sim ? "avec rendu simulé" : "nette"}${hidden ? `, ${hidden} couche(s) masquée(s)` : ""}`);
+  return cv;
+}
+async function renderPreview(st) {
+  const tok = ++RENDER_TOKEN;
+  const view = VIEW;
+  let cv;
+  try { cv = await composeCanvas(); } catch (e) { return; }
+  if (tok !== RENDER_TOKEN || VIEW !== view || SEL !== null) return;   // un rendu plus récent a pris la main
+  if (view === "compare") {
+    const wrap = document.createElement("div");
+    wrap.className = "compare";
+    wrap.append(cv);
+    wrap.insertAdjacentHTML("beforeend", `<img class="top" src="${LAST.reference}" alt="Original">
+      <div class="split"></div><span class="tag" style="left:6px">Original</span>
+      <span class="tag" style="right:6px">${$("preview_sim").checked ? "Rendu simulé" : "Prévisualisation"}</span>
+      <input type="range" min="0" max="100" value="${COMPARE_POS}" aria-label="Position de la comparaison">`);
+    const top = wrap.querySelector("img.top"), split = wrap.querySelector(".split");
+    const apply = v => { top.style.clipPath = `inset(0 ${100 - v}% 0 0)`; split.style.left = `calc(${v}% - 1px)`; };
+    wrap.querySelector("input").oninput = e => { COMPARE_POS = +e.target.value; apply(COMPARE_POS); };
+    apply(COMPARE_POS);
+    st.replaceChildren(wrap);
+  } else {
+    st.replaceChildren(cv);
+  }
+  fitStage();
+}
+// Même échelle (px par mm) pour toutes les vues : la zone d'affichage est calculée pour la feuille
+// entière (support + marge), la plus grande. La prévisualisation (support seul) et la vue d'un pochoir
+// (feuille entière) gardent ainsi la même taille de support à l'écran, et la zone ne change pas de hauteur.
+function fitStage() {
+  const st = $("stage");
+  if (showSup() && LAST) { frameView(st); return; }
+  const el = st.querySelector("[data-mm]");
+  if (!el || !LAST) { st.style.minHeight = ""; st.style.alignItems = ""; return; }
+  const cs = getComputedStyle(st);
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+  const aw = st.clientWidth - padX, ah = window.innerHeight * 0.72;
+  const r = LAST.sheet_rect_mm, [SWs, SHs] = LAST.support_mm;
+  const UW = Math.max(r[2], SWs) - Math.min(r[0], 0), UH = Math.max(r[3], SHs) - Math.min(r[1], 0);
+  const k = Math.min(aw / UW, ah / UH);
+  const [w, h] = el.dataset.mm.split(",").map(Number);
+  Object.assign(el.style, { width: `${w * k}px`, height: `${h * k}px`, maxWidth: "none", maxHeight: "none" });
+  st.style.minHeight = `${UH * k + padY}px`;
+  st.style.alignItems = "center";
+}
+function renderToolbar() {
+  const show = !!LAST && SEL === null && (VIEW === "preview" || VIEW === "compare");
+  // Pochoir sélectionné : la barre est gardée invisible pour que l'image ne remonte pas
+  const reserve = !!LAST && SEL !== null;
+  $("viewtools").hidden = !(show || reserve);
+  $("viewtools").style.visibility = reserve ? "hidden" : "";
+  if (!LAST) return;
+  // oublier les couches qui n'existent plus
+  [...HIDDEN].forEach(i => { if (!LAST.layers.some(L => L.index === i)) HIDDEN.delete(i); });
+  $("layerToggles").innerHTML = LAST.layers.map(L => {
+    const vis = !HIDDEN.has(L.index), lbl = L.kind === "outline" ? "✎ contours" : String(L.index);
+    return `<button type="button" class="ltog" data-i="${L.index}" aria-pressed="${vis}"
+      title="${vis ? "Masquer" : "Afficher"} la couche ${L.index}${L.kind === "outline" ? " (contours)" : ""}">
+      <span class="sw" style="background:${L.color}"></span>${lbl}</button>`;
+  }).join("");
+  $("layerToggles").querySelectorAll(".ltog").forEach(b => b.onclick = () => toggleLayer(+b.dataset.i));
+  $("showAll").disabled = HIDDEN.size === 0;
+}
+function toggleLayer(i) {
+  if (HIDDEN.has(i)) HIDDEN.delete(i); else HIDDEN.add(i);
+  refreshPreviewOnly();
+}
+function refreshPreviewOnly() {
+  renderToolbar();
+  document.querySelectorAll("#layers .card").forEach(c => {
+    const i = +c.dataset.idx, hid = HIDDEN.has(i);
+    c.classList.toggle("hidden-layer", hid);
+    const eye = c.querySelector(".eye");
+    if (eye) { eye.textContent = hid ? "masquée" : "visible"; eye.setAttribute("aria-pressed", String(!hid)); }
+  });
+  if (SEL === null && (VIEW === "preview" || VIEW === "compare")) renderPreview($("stage"));
+}
+
+function render() {
+  $("tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === VIEW && SEL === null));
+  const st = $("stage");
+  $("masktools").hidden = !(IMG && SEL === null && VIEW === "mask");
+  const editor = SEL === null && (VIEW === "crop" || VIEW === "layout" || VIEW === "mask");
+  if (editor) {
+    if (IMG && !DRAGGING) { st.style.minHeight = ""; st.style.alignItems = "";
+      (VIEW === "crop" ? cropEditor : VIEW === "layout" ? layoutEditor : maskEditor)(st); }
+    if (!LAST) return;
+  } else if (!LAST) {
+    return;
+  } else if (SEL !== null) {
+    const L = LAST.layers[SEL];
+    st.innerHTML = `<img src="${L.image}" alt="Pochoir ${L.index}" data-mm="${LAST.sheet_mm.join(",")}" data-at="sheet">`;
+    fitStage();
+  } else if (VIEW === "reference") {
+    st.innerHTML = `<img src="${LAST.reference}" alt="Image d'origine sur le support" data-mm="${LAST.support_mm.join(",")}">`;
+    fitStage();
+  } else {
+    renderPreview(st);   // « preview » et « compare » : composition des couches dans le navigateur
+  }
+  renderToolbar();
+
+  const warns = [...(LAST.warnings || [])];
+  if (LAST.support_tone && lum(LAST.base) < 90 && LAST.layers.length)
+    warns.push("Support foncé : les zones sombres laissées au support deviennent des îlots dans les couches claires, et leurs ponts resteront visibles. Pour des aplats foncés sans pont, décochez « La teinte la plus proche du support reste nue ».");
+  if (val("outline") && !LAST.layers.some(L => L.kind === "outline"))
+    warns.push(`Pochoir de contours : aucun détail clé trouvé${MASK_EMPTY ? "" : " dans les zones peintes du masque"}. Augmentez la sensibilité (actuellement ${val("outline_sensitivity")}) ou réduisez la longueur mini d'un trait.`);
+  $("warnings").innerHTML = warns.map(w => `<div class="warn">⚠ ${w}</div>`).join("");
+
+  const pal = [];
+  pal.push(`<span class="sw" title="Support ${LAST.base}${LAST.support_tone ? " (remplace la teinte " + LAST.support_tone + ")" : ""}" style="background:${LAST.base};outline:2px dashed var(--muted);outline-offset:1px"></span>`);
+  LAST.layers.forEach(L => pal.push(`<span class="sw" title="Couche ${L.index}${L.kind === "outline" ? " (contours)" : ""} ${L.color}" style="background:${L.color};color:${lum(L.color) > 140 ? '#000' : '#fff'}">${L.kind === "outline" ? "✎" : L.index}</span>`));
+  renderOutlineSwatches();
+  $("palette").innerHTML = pal.join("");
+
+  const tot = LAST.layers.reduce((a, L) => ({ b: a.b + L.bridges, c: a.c + L.cut_length_m }), { b: 0, c: 0 });
+  $("metrics").innerHTML = `
+    <span>Support : <b>${LAST.support_mm[0]} × ${LAST.support_mm[1]} mm</b></span>
+    <span>Feuille du pochoir : <b>${LAST.sheet_mm[0]} × ${LAST.sheet_mm[1]} mm</b></span>
+    <span>Image : <b>${LAST.image_mm[0]} × ${LAST.image_mm[1]} mm</b></span>
+    <span>Écart à l'original (ΔE moyen) : <b>${LAST.delta_e}</b> <small>(plus bas = plus fidèle)</small></span>
+    <span>Ponts : <b>${tot.b}</b></span>
+    <span>Longueur de coupe totale : <b>${tot.c.toFixed(2)} m</b></span>`;
+
+  renderCalage();
+
+  $("layers").innerHTML = LAST.layers.map((L, i) => `
+    <div class="card ${SEL === i ? "sel" : ""} ${HIDDEN.has(L.index) ? "hidden-layer" : ""}" data-i="${i}" data-idx="${L.index}">
+      <img src="${L.image}" alt="Pochoir ${L.index}">
+      <div class="meta">
+        <div class="t"><span class="sw" style="background:${L.color}"></span>Couche ${L.index}${L.kind === "outline" ? " — contours ✎" : ""} — ${L.color}
+          <button type="button" class="eye" aria-pressed="${!HIDDEN.has(L.index)}" title="Afficher / masquer dans la prévisualisation">${HIDDEN.has(L.index) ? "masquée" : "visible"}</button></div>
+        ${L.paths} tracés · ${L.nodes} nœuds · ${L.islands} îlot${L.islands > 1 ? "s" : ""} · ${L.bridges} ponts<br>
+        ${L.short_islands ? `<span style="color:#d97706">⚠ ${L.short_islands} îlot(s) sans place pour ${val("min_bridges")} ponts</span><br>` : ""}
+        Coupe : ${L.cut_length_m} m · détails supprimés : ${L.lost_pct} %
+      </div>
+    </div>`).join("");
+  const nOut = LAST.layers.filter(L => L.kind === "outline").length;
+  $("layerCount").textContent = `${LAST.layers.length - nOut} couche${LAST.layers.length - nOut > 1 ? "s" : ""}${nOut ? " + contours" : ""} · dans l'ordre`;
+  $("layers").querySelectorAll(".card").forEach(c => c.onclick = e => {
+    if (e.target.closest(".eye")) { toggleLayer(+c.dataset.idx); return; }
+    const i = +c.dataset.i; SEL = (SEL === i) ? null : i; render();
+  });
+}
+// Teintes proposées pour le trait de contour : noir, blanc et les couleurs de la palette calculée
+const fmtMM = v => `${(Math.round(v * 10) / 10).toString().replace(".", ",")} mm`;
+// Cotes à la règle : où tracer les croix sur le support (feuille posée dans le support)
+function renderCalage() {
+  const box = $("calage"), pos = LAST && LAST.positioning;
+  if (!pos || pos.mode === "around" || !val("reg_dims") || !pos.reperes.length) { box.hidden = true; return; }
+  const f = pos.feuille;
+  box.hidden = false;
+  box.innerHTML = `<h3>Calage à la règle — depuis le coin haut-gauche du support</h3>
+    <p class="hint" style="margin:0 0 6px">Tracez au crayon une croix à chaque cote, puis posez chaque couche en alignant ses fenêtres en croix sur les traits.</p>
+    <table><tr><th>Croix</th><th>depuis la gauche</th><th>depuis le haut</th><th>depuis la droite</th><th>depuis le bas</th></tr>
+    ${pos.reperes.map(r => `<tr class="${r.sur_support ? "" : "off"}"><td>${r.coin}${r.sur_support ? "" : " (hors du support)"}</td>
+      <td><b>${fmtMM(r.x)}</b></td><td><b>${fmtMM(r.y)}</b></td><td>${fmtMM(r.depuis_droite)}</td><td>${fmtMM(r.depuis_bas)}</td></tr>`).join("")}
+    </table>
+    <p class="hint" style="margin:6px 0 0">Bords de la feuille (${fmtMM(f.largeur)} × ${fmtMM(f.hauteur)}) : à ${fmtMM(f.gauche)} du bord gauche,
+      ${fmtMM(f.haut)} du haut, ${fmtMM(f.droite)} de la droite, ${fmtMM(f.bas)} du bas.</p>`;
+}
+function renderOutlineSwatches() {
+  const cols = ["#1e1e1e", "#ffffff"];
+  if (LAST) LAST.layers.filter(L => L.kind !== "outline").forEach(L => { if (!cols.includes(L.color)) cols.push(L.color); });
+  $("outlineSwatches").innerHTML = cols.map(c => `<span class="sw pick" title="${c}" data-c="${c}" style="background:${c}"></span>`).join("");
+  $("outlineSwatches").querySelectorAll(".sw").forEach(sw => sw.onclick = () => {
+    $("outline_auto_color").checked = false; $("outline_color").disabled = false;
+    $("outline_color").value = sw.dataset.c; updateSummaries(); schedule();
+  });
+  // En mode automatique, on affiche la couleur effectivement choisie
+  const ol = LAST && LAST.layers.find(L => L.kind === "outline");
+  if (ol && $("outline_auto_color").checked) $("outline_color").value = ol.color;
+}
+function regHint() { $("regHint").textContent = REG_HINT[val("reg_shape")] + (val("reg_corners") === "3" ? " Le coin bas-droit sans repère sert de détrompeur." : ""); }
+function lum(h) { const n = parseInt(h.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255); }
+
+init();
+</script>
+</body>
+</html>

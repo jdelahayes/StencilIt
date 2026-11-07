@@ -1,0 +1,56 @@
+{
+  "papier_epais": {
+    "label": "Papier épais / carte (160-300 g/m²)",
+    "min_opening_mm": 1.0,
+    "min_strip_mm": 1.5,
+    "bridge_width_mm": 2.0,
+    "min_area_mm2": 4.0,
+    "double_bridge_area_mm2": 300,
+    "min_bridges": 2,
+    "bridges": true,
+    "sheet_color": "#e9dfc8",
+    "cut": {
+      "blade": "3-4",
+      "force": "20-28",
+      "speed": "3",
+      "passes": "1-2",
+      "notes": "Le papier se déchire facilement : préférez des ponts larges et des bandes de matière généreuses."
+    }
+  },
+  "vinyle": {
+    "label": "Vinyle adhésif",
+    "min_opening_mm": 0.6,
+    "min_strip_mm": 0.8,
+    "bridge_width_mm": 1.0,
+    "min_area_mm2": 1.5,
+    "double_bridge_area_mm2": 600,
+    "min_bridges": 1,
+    "bridges": true,
+    "sheet_color": "#d9dde2",
+    "cut": {
+      "blade": "1-2",
+      "force": "8-12",
+      "speed": "5",
+      "passes": "1",
+      "notes": "Avec un tapis de transfert, les îlots peuvent être repositionnés : vous pouvez désactiver les ponts."
+    }
+  },
+  "mylar": {
+    "label": "Mylar (0,1-0,19 mm)",
+    "min_opening_mm": 0.8,
+    "min_strip_mm": 1.0,
+    "bridge_width_mm": 1.5,
+    "min_area_mm2": 2.5,
+    "double_bridge_area_mm2": 400,
+    "min_bridges": 1,
+    "bridges": true,
+    "sheet_color": "#cfe0e6",
+    "cut": {
+      "blade": "3-5",
+      "force": "25-33",
+      "speed": "2",
+      "passes": "2",
+      "notes": "Au-delà de 0,15 mm, utilisez la lame profonde et faites un test de coupe."
+    }
+  }
+}
