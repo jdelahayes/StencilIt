@@ -405,3 +405,9 @@ StencilIt/
 ├── docs/screenshots/      images of this README
 └── tools/                 maintenance scripts (string and comment inventories)
 ```
+
+---
+
+## License
+
+StencilIt is released under the [MIT License](LICENSE).
