@@ -1,1 +1,1 @@
-"""StencilIt : génération de pochoirs multicouches pour l'aérographe."""
+"""StencilIt: multi-layer airbrush stencil generation."""

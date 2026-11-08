@@ -1,12 +1,13 @@
-"""Chaîne de traitement : image -> couches de pochoir découpables.
+"""Processing pipeline: image -> cuttable stencil layers.
 
-Toutes les grandeurs physiques sont en millimètres ; le calcul se fait sur une
-grille raster de `px_per_mm` pixels par millimètre puis les contours sont
-vectorisés en mm.
+All physical quantities are in millimetres; the computation runs on a raster
+grid of `px_per_mm` pixels per millimetre, then the outlines are vectorised
+in mm.
 """
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, fields, replace
 
 import cv2
@@ -15,67 +16,79 @@ import numpy as np
 
 @dataclass
 class Params:
-    # Support (surface peinte)
+    # Support (painted surface)
     support_w_mm: float = 210.0
     support_h_mm: float = 297.0
     support_color: str = "#ffffff"
-    inner_margin_mm: float = 10.0  # marge de référence pour « ajuster au support »
-    # Recadrage de l'image source (fractions 0..1)
+    inner_margin_mm: float = 10.0  # reference margin for "fit to support"
+    # Crop of the source image (fractions 0..1)
     crop_x: float = 0.0
     crop_y: float = 0.0
     crop_w: float = 1.0
     crop_h: float = 1.0
-    # Mise en page sur le support
-    image_scale: float = 100.0     # % de la taille « ajustée au support »
-    image_height_factor: float = 1.0  # étirement vertical (1 = proportions d'origine)
-    image_pos_x: float = 50.0      # centre de l'image, en % de la largeur du support
-    image_pos_y: float = 50.0      # centre de l'image, en % de la hauteur du support
+    # Layout on the support
+    image_scale: float = 100.0     # % of the "fit to support" size
+    image_height_factor: float = 1.0  # vertical stretch (1 = original proportions)
+    image_pos_x: float = 50.0      # image centre, as % of the support width
+    image_pos_y: float = 50.0      # image centre, as % of the support height
     px_per_mm: float = 6.0
+    # Image preprocessing (before simplification)
+    pre_auto_levels: bool = False  # automatic levels stretch (luminance)
+    pre_clahe: float = 0.0         # local contrast (CLAHE), 0..100
+    pre_gamma: float = 1.0         # midtones: > 1 lightens, < 1 darkens
+    pre_saturation: float = 100.0  # colour saturation, % (100 = unchanged)
+    pre_sharpen: float = 0.0       # sharpness (unsharp mask), 0..100
+    pre_remove_bg: bool = False    # removed background ("subject" mask + GrabCut): left as bare support
+    manual_thresholds: bool = False  # luminance thresholds chosen by hand between tones
+    thresholds: str = ""           # L* thresholds (0..100) separated by commas
     # Simplification
-    n_layers: int = 3              # nombre de pochoirs
+    n_layers: int = 3              # number of stencils
     color_mode: str = "auto"       # auto | color | gray
-    detail: float = 50.0           # 0 (très simplifié) .. 100 (très détaillé)
+    detail: float = 50.0           # 0 (very simplified) .. 100 (very detailed)
     layering: str = "cumulative"   # cumulative | exclusive
-    skip_support: bool = True      # la teinte la plus proche du support n'a pas de pochoir
-    # Pochoir de contours (détails clés estompés par le flou de l'aérographe)
+    skip_support: bool = True      # the tone closest to the support gets no stencil
+    # Outline stencil (key details faded by the airbrush blur)
     outline: bool = False
-    outline_sensitivity: float = 50.0   # 0 = seulement les détails les plus marqués .. 100 = beaucoup de détails
-    outline_width_mm: float = 0.8       # largeur du trait (au moins l'ouverture mini du matériau)
-    outline_min_length_mm: float = 4.0  # longueur mini d'un trait
-    outline_auto_color: bool = True     # couleur auto = teinte la plus contrastée avec le support
+    outline_sensitivity: float = 50.0   # 0 = only the strongest details .. 100 = many details
+    outline_width_mm: float = 0.8       # line width (at least the material's minimum opening)
+    outline_min_length_mm: float = 4.0  # minimum line length
+    outline_auto_color: bool = True     # auto colour = tone with the most contrast against the support
     outline_color: str = "#1e1e1e"
-    # Contraintes du matériau
-    min_opening_mm: float = 0.8    # largeur mini d'une ouverture
-    min_strip_mm: float = 1.0      # largeur mini d'une bande de matière
+    # Paint colours chosen for the layers: "1=#rrggbb;3=#rrggbb" (layer number -> colour).
+    # Layers not listed keep their computed tone.
+    layer_colors: str = ""
+    # Material constraints
+    min_opening_mm: float = 0.8    # minimum width of an opening
+    min_strip_mm: float = 1.0      # minimum width of a material strip
     bridge_width_mm: float = 1.5
     min_area_mm2: float = 2.5
     double_bridge_area_mm2: float = 400.0
-    min_bridges: int = 1           # nombre minimum de ponts par îlot (1 à 4)
+    min_bridges: int = 1           # minimum number of bridges per island (1 to 4)
     bridges: bool = True
     # Vectorisation
     tolerance_mm: float = 0.12
     smooth_curves: bool = True
-    # Feuille du pochoir :
-    #   around = support + marge tout autour (calage sur les angles du support)
-    #   fit    = dans le support, ajustée au motif + bordure (calage sur croix tracées sur le support)
-    #   fixed  = dans le support, taille fixe centrée sur le motif
+    # Stencil sheet:
+    #   around = support + margin all around (registered on the support corners)
+    #   fit    = inside the support, fitted to the design + border (registered on crosses drawn on the support)
+    #   fixed  = inside the support, fixed size centred on the design
     sheet_mode: str = "around"
     margin_mm: float = 15.0
     sheet_border_mm: float = 20.0
     sheet_w_mm: float = 304.8
     sheet_h_mm: float = 304.8
-    reg_dims: bool = True          # cotes à la règle des croix (feuille dans le support)
+    reg_dims: bool = True          # ruler dimensions of the crosses (sheet inside the support)
     sheet_outline: bool = True
-    machine_max_mm: float = 305.0  # largeur de coupe utile de la machine
-    mat_w_mm: float = 304.8        # tapis de découpe (0 = sans tapis : seule la largeur compte)
+    machine_max_mm: float = 305.0  # usable cutting width of the machine
+    mat_w_mm: float = 304.8        # cutting mat (0 = no mat: only the width matters)
     mat_h_mm: float = 304.8
-    mat_orient: str = "portrait"   # portrait = sens d'entrée dans la machine ; paysage = tapis tourné d'1/4 de tour
-    # Calage
-    reg_corners: int = 4           # 0, 3 (détrompeur) ou 4
+    mat_orient: str = "portrait"   # portrait = feed direction into the machine; landscape = mat turned a quarter turn
+    # Registration
+    reg_corners: int = 4           # 0, 3 (keyed) or 4
     reg_shape: str = "equerre"     # equerre | croix | rond
     reg_size_mm: float = 10.0
-    layer_notches: bool = True     # encoches indiquant le n° de couche
-    # Aperçu
+    layer_notches: bool = True     # notches giving the layer number
+    # Preview
     spray_mm: float = 0.4
 
     @classmethod
@@ -117,6 +130,10 @@ class Params:
         if not p.outline_color.startswith("#") or len(p.outline_color) != 7:
             p.outline_color = "#1e1e1e"
         p.outline_sensitivity = float(np.clip(p.outline_sensitivity, 0, 100))
+        p.pre_clahe = float(np.clip(p.pre_clahe, 0, 100))
+        p.pre_gamma = float(np.clip(p.pre_gamma, 0.3, 3.0))
+        p.pre_saturation = float(np.clip(p.pre_saturation, 0, 300))
+        p.pre_sharpen = float(np.clip(p.pre_sharpen, 0, 100))
         p.outline_width_mm = float(np.clip(p.outline_width_mm, 0.2, 10))
         p.outline_min_length_mm = float(np.clip(p.outline_min_length_mm, 0, 200))
         return p
@@ -124,15 +141,15 @@ class Params:
 
 @dataclass
 class Layout:
-    src_rect: tuple    # (x0, y0, x1, y1) pixels de l'image source réellement utilisés
-    img_mm: tuple      # (largeur, hauteur) de l'image entière (après recadrage) sur le support
-    pos_mm: tuple      # (x, y) coin haut-gauche de l'image entière dans le support
-    vis_mm: tuple      # (x0, y0, x1, y1) partie visible (dans le support)
-    sheet_mm: tuple = (0.0, 0.0, 0.0, 0.0)  # (x0, y0, x1, y1) feuille du pochoir, repère du support
+    src_rect: tuple    # (x0, y0, x1, y1) source image pixels actually used
+    img_mm: tuple      # (width, height) of the whole image (after crop) on the support
+    pos_mm: tuple      # (x, y) top-left corner of the whole image on the support
+    vis_mm: tuple      # (x0, y0, x1, y1) visible part (inside the support)
+    sheet_mm: tuple = (0.0, 0.0, 0.0, 0.0)  # (x0, y0, x1, y1) stencil sheet, support coordinates
 
 
 def sheet_rect(p: Params, vis_mm: tuple) -> tuple[float, float, float, float]:
-    """Feuille du pochoir dans le repère du support (mm), selon le mode choisi."""
+    """Stencil sheet in support coordinates (mm), according to the chosen mode."""
     SW, SH = p.support_w_mm, p.support_h_mm
     if p.sheet_mode == "around":
         m = p.margin_mm
@@ -155,10 +172,10 @@ def crop_rect(p: Params, img_shape) -> tuple[int, int, int, int]:
 
 
 def resolve_layout(p: Params, img_shape) -> tuple[Layout, list[str]]:
-    """Place l'image recadrée sur le support.
+    """Places the cropped image on the support.
 
-    Taille de référence (100 %) = image ajustée dans le support moins la marge intérieure.
-    Les parties qui dépassent du support sont rognées.
+    Reference size (100 %) = image fitted in the support minus the inner margin.
+    Parts overflowing the support are cropped.
     """
     cx0, cy0, cx1, cy1 = crop_rect(p, img_shape)
     ar = (cy1 - cy0) / (cx1 - cx0)
@@ -180,7 +197,7 @@ def resolve_layout(p: Params, img_shape) -> tuple[Layout, list[str]]:
         vx1, vy1 = min(SW, x0 + img_w), min(SH, y0 + img_h)
     if (vx0 > x0 + 0.05) or (vy0 > y0 + 0.05) or (vx1 < x0 + img_w - 0.05) or (vy1 < y0 + img_h - 0.05):
         warnings.append("L'image dépasse du support : elle est rognée à ses bords (impression à fond perdu).")
-    # Feuille du pochoir ; en taille fixe, le motif est limité à l'intérieur de la feuille (moins la bordure)
+    # Stencil sheet; at fixed size, the design is limited to the inside of the sheet (minus the border)
     sh_rect = sheet_rect(p, (vx0, vy0, vx1, vy1))
     if p.sheet_mode == "fixed":
         b = min(p.sheet_border_mm, (sh_rect[2] - sh_rect[0]) / 2 - 2, (sh_rect[3] - sh_rect[1]) / 2 - 2)
@@ -190,7 +207,7 @@ def resolve_layout(p: Params, img_shape) -> tuple[Layout, list[str]]:
             warnings.append(f"Le motif est plus grand que la feuille ({p.sheet_w_mm:.0f} × {p.sheet_h_mm:.0f} mm, "
                             f"bordure {b:.0f} mm comprise) : il est rogné aux bords de la feuille.")
         vx0, vy0, vx1, vy1 = nvx0, nvy0, max(nvx1, nvx0 + 2), max(nvy1, nvy0 + 2)
-    # partie de la source correspondant à la zone visible
+    # part of the source matching the visible area
     sx = (cx1 - cx0) / img_w
     sy = (cy1 - cy0) / img_h
     src = (int(round(cx0 + (vx0 - x0) * sx)), int(round(cy0 + (vy0 - y0) * sy)),
@@ -208,7 +225,7 @@ def resolve_layout(p: Params, img_shape) -> tuple[Layout, list[str]]:
                             "à cheval sur le bord ; les croix hors du support ne pourront pas y être tracées.")
     if p.mat_w_mm > 0 and p.mat_h_mm > 0:
         land = p.mat_orient == "landscape"
-        # dimensions physiques (largeur = sens de la machine) puis orientées comme sur le support
+        # physical dimensions (width = machine direction), then oriented as on the support
         mw, mh = (p.mat_h_mm, p.mat_w_mm) if land else (p.mat_w_mm, p.mat_h_mm)
         mat = (f"tapis de {p.mat_w_mm:g} × {p.mat_h_mm:g} mm".replace(".", ",")
                + (" (en paysage)" if land else ""))
@@ -241,11 +258,11 @@ def hex_to_bgr(h: str) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-# Utilitaires
+# Utilities
 # --------------------------------------------------------------------------
 
 def decode_image(data: bytes) -> np.ndarray:
-    """Décode une image (avec gestion de la transparence -> fond blanc)."""
+    """Decodes an image (transparency handled -> white background)."""
     arr = np.frombuffer(data, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
     if img is None:
@@ -257,7 +274,7 @@ def decode_image(data: bytes) -> np.ndarray:
     elif img.shape[2] == 4:
         a = img[..., 3:4].astype(np.float32) / 255.0
         img = (img[..., :3].astype(np.float32) * a + 255 * (1 - a)).astype(np.uint8)
-    # limite raisonnable pour la mémoire
+    # reasonable limit for memory
     h, w = img.shape[:2]
     s = 4000 / max(h, w)
     if s < 1:
@@ -277,7 +294,7 @@ def disk(r: float) -> np.ndarray:
 
 
 def remove_small(mask: np.ndarray, min_px: int, keep_border: bool = False) -> np.ndarray:
-    """Supprime les composantes (blanches) de surface < min_px."""
+    """Removes (white) components with an area < min_px."""
     n, lab, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
     if n <= 1:
         return mask
@@ -303,19 +320,124 @@ def bgr_hex(c) -> str:
 
 
 # --------------------------------------------------------------------------
-# 1-2. Prétraitement + quantification
+# 1-2. Preprocessing + quantisation
 # --------------------------------------------------------------------------
 
 @dataclass
 class Prepared:
-    resized: np.ndarray      # image redimensionnée (référence)
-    labels: np.ndarray       # carte d'étiquettes, triées du plus clair (0) au plus foncé
-    palette: np.ndarray      # couleurs BGR triées clair -> foncé
+    resized: np.ndarray      # resized and preprocessed image (simplification reference)
+    labels: np.ndarray       # label map, sorted from lightest (0) to darkest
+    palette: np.ndarray      # BGR colours sorted light -> dark
     gray: bool
-    off_px: tuple = (0, 0)   # position de la partie visible dans le support (px)
+    off_px: tuple = (0, 0)   # position of the visible part on the support (px)
+    raw: np.ndarray | None = None   # same area, original image without preprocessing
+    hist: list = None        # L* luminance histogram (100 bins, 0..1) of the smoothed image
+    auto_thresholds: list = None    # L* thresholds the automatic computation would have chosen
+    thresholds_used: list = None    # thresholds actually applied (manual) or None
+    fg: np.ndarray | None = None    # subject (True) / removed background (False), computed image size
 
 
-def prepare(img: np.ndarray, p: Params, lay: Layout) -> Prepared:
+def preprocess_active(p: Params) -> bool:
+    return bool(p.pre_auto_levels or p.pre_clahe > 0 or abs(p.pre_gamma - 1) > 1e-3
+                or abs(p.pre_saturation - 100) > 1e-3 or p.pre_sharpen > 0)
+
+
+def preprocess_image(img: np.ndarray, p: Params, px_per_mm: float | None = None) -> np.ndarray:
+    """Auto levels, local contrast (CLAHE), gamma and sharpening on the luminance (Lab);
+    saturation on the a, b colour channels. `px_per_mm`: image scale (sharpening radius)."""
+    if not preprocess_active(p):
+        return img
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    L = lab[..., 0]
+    if p.pre_auto_levels:
+        lo, hi = np.percentile(L, (0.5, 99.5))
+        if hi - lo > 5:
+            L = np.clip((L.astype(np.float32) - lo) * 255.0 / (hi - lo), 0, 255).astype(np.uint8)
+    if p.pre_clahe > 0:
+        clahe = cv2.createCLAHE(clipLimit=1.0 + p.pre_clahe / 100.0 * 4.0, tileGridSize=(8, 8))
+        L = clahe.apply(L)
+    if abs(p.pre_gamma - 1) > 1e-3:
+        lut = np.clip(((np.arange(256) / 255.0) ** (1.0 / p.pre_gamma)) * 255 + 0.5, 0, 255).astype(np.uint8)
+        L = lut[L]
+    if p.pre_sharpen > 0:
+        # unsharp mask: radius ~0.3 mm at stencil scale (1.5 px on the source image)
+        sig = max(0.8, 0.3 * px_per_mm) if px_per_mm else 1.5
+        Lf = L.astype(np.float32)
+        L = np.clip(Lf + (Lf - cv2.GaussianBlur(Lf, (0, 0), sig)) * (p.pre_sharpen / 100.0 * 1.5),
+                    0, 255).astype(np.uint8)
+    lab[..., 0] = L
+    if abs(p.pre_saturation - 100) > 1e-3:
+        ab = lab[..., 1:].astype(np.float32) - 128.0
+        lab[..., 1:] = np.clip(ab * (p.pre_saturation / 100.0) + 128.0, 0, 255).astype(np.uint8)
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+
+def grabcut_subject(img: np.ndarray, painted: np.ndarray, max_side: int = 700) -> np.ndarray:
+    """Cuts out the subject: `painted` (0/255, image size) = area roughly painted around the subject.
+
+    Outside the painted area = sure background; inside = probable subject, refined by GrabCut on a
+    downscaled copy, then brought back to the image size. Returns a boolean mask (True = subject).
+    """
+    h, w = img.shape[:2]
+    s = min(1.0, max_side / max(h, w))
+    sw, sh = max(1, round(w * s)), max(1, round(h * s))
+    small = cv2.resize(img, (sw, sh), interpolation=cv2.INTER_AREA)
+    pm = cv2.resize(painted, (sw, sh), interpolation=cv2.INTER_NEAREST) > 0
+    if not pm.any():
+        return np.ones((h, w), bool)
+    if pm.all():                      # no background designated: nothing to remove
+        return np.ones((h, w), bool)
+    mask = np.where(pm, cv2.GC_PR_FGD, cv2.GC_BGD).astype(np.uint8)
+    # the core of the painted area (more than ~5 % of the image size from its edge) is surely the
+    # subject: GrabCut cannot remove it, it only adjusts the band near the stroke
+    r = max(3, int(round(0.05 * min(sw, sh))))
+    core = cv2.erode(pm.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))) > 0
+    mask[core] = cv2.GC_FGD
+    bgd, fgd = np.zeros((1, 65), np.float64), np.zeros((1, 65), np.float64)
+    try:
+        cv2.grabCut(small, mask, None, bgd, fgd, 6, cv2.GC_INIT_WITH_MASK)
+        fg = (mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD)
+    except cv2.error:
+        fg = pm
+    # cleanup: small crumbs removed, small holes filled
+    k = np.ones((3, 3), np.uint8)
+    fg8 = cv2.morphologyEx(fg.astype(np.uint8) * 255, cv2.MORPH_OPEN, k)
+    fg8 = cv2.morphologyEx(fg8, cv2.MORPH_CLOSE, k)
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(fg8, connectivity=8)
+    if n > 2:                          # keep the non-negligible pieces (>= 1 % of the largest)
+        big = stats[1:, cv2.CC_STAT_AREA].max()
+        keep = np.zeros(n, bool)
+        keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= 0.01 * big
+        fg8 = np.where(keep[lab], 255, 0).astype(np.uint8)
+    full = cv2.resize(fg8, (w, h), interpolation=cv2.INTER_LINEAR)
+    return full > 127
+
+
+def parse_layer_colors(txt: str) -> dict[int, np.ndarray]:
+    out = {}
+    for part in str(txt or "").replace(",", ";").split(";"):
+        k, _, v = part.partition("=")
+        v = v.strip()
+        try:
+            if len(v) == 7 and v.startswith("#"):
+                out[int(k)] = hex_to_bgr(v).astype(np.uint8)
+        except ValueError:
+            pass
+    return out
+
+
+def parse_thresholds(txt: str) -> list[float]:
+    out = []
+    for t in str(txt or "").replace(";", ",").split(","):
+        try:
+            out.append(float(np.clip(float(t), 0.5, 99.5)))
+        except ValueError:
+            pass
+    return sorted(out)
+
+
+def prepare(img: np.ndarray, p: Params, lay: Layout, fg_src: np.ndarray | None = None) -> Prepared:
+    """`fg_src`: subject mask at the size of the source image (removed background), or None."""
     ppm = p.px_per_mm
     sx0, sy0, sx1, sy1 = lay.src_rect
     src = img[sy0:sy1, sx0:sx1]
@@ -327,12 +449,19 @@ def prepare(img: np.ndarray, p: Params, lay: Layout) -> Prepared:
     H = max(4, min(SH - oy, int(round((vy1 - vy0) * ppm))))
     h0, w0 = src.shape[:2]
     interp = cv2.INTER_AREA if W < w0 else cv2.INTER_CUBIC
-    resized = cv2.resize(src, (W, H), interpolation=interp)
+    raw = cv2.resize(src, (W, H), interpolation=interp)
+    resized = preprocess_image(raw, p, ppm)
+    fg = None
+    if p.pre_remove_bg and fg_src is not None:
+        fg = cv2.resize(fg_src[sy0:sy1, sx0:sx1].astype(np.uint8) * 255, (W, H),
+                        interpolation=cv2.INTER_LINEAR) > 127
+        if not fg.any() or fg.all():
+            fg = None
 
     gray = is_grayscale(src) if p.color_mode == "auto" else p.color_mode == "gray"
     d = p.detail / 100.0
 
-    # Lissage préservant les contours, plus fort quand le détail est bas
+    # Edge-preserving smoothing, stronger when detail is low
     sm = resized.copy()
     iters = 1 + int(round((1 - d) * 3))
     for _ in range(iters):
@@ -343,51 +472,76 @@ def prepare(img: np.ndarray, p: Params, lay: Layout) -> Prepared:
     feat = lab[..., :1] if gray else lab
     X = feat.reshape(-1, feat.shape[-1])
 
+    # tones learnt on the subject only when the background is removed
+    pool = np.flatnonzero(fg.ravel()) if fg is not None else np.arange(len(X))
     rng = np.random.default_rng(0)
-    idx = rng.choice(len(X), size=min(len(X), 60000), replace=False)
+    idx = pool[rng.choice(len(pool), size=min(len(pool), 60000), replace=False)]
     cv2.setRNGSeed(0)
     k_eff = int(min(k, len(np.unique(X[idx].round(), axis=0))))
     k_eff = max(1, k_eff)
     crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 60, 0.2)
     _, _, centers = cv2.kmeans(X[idx], k_eff, None, crit, 3, cv2.KMEANS_PP_CENTERS)
 
-    # Affectation de tous les pixels
-    best = np.full(len(X), np.inf, np.float32)
-    labels = np.zeros(len(X), np.int32)
-    for i, c in enumerate(centers):
-        dist = ((X - c) ** 2).sum(axis=1)
-        upd = dist < best
-        best[upd] = dist[upd]
-        labels[upd] = i
-    labels = labels.reshape(H, W)
+    # L* luminance (0..100) of the smoothed image: histogram and equivalent automatic thresholds
+    L100 = lab[..., 0] * (100.0 / 255.0)
+    Lh = L100[fg] if fg is not None else L100.ravel()
+    hist = np.bincount(np.clip(Lh, 0, 99.999).astype(np.int32), minlength=100).astype(np.float64)
+    hist = (hist / max(1.0, hist.max())).round(4).tolist()
+    cl = np.sort(centers[:, 0] * (100.0 / 255.0))
+    auto_thr = [round(float((a + b) / 2), 1) for a, b in zip(cl[:-1], cl[1:])]
 
-    # Filtre majoritaire (simplification des formes)
+    thr = parse_thresholds(p.thresholds) if p.manual_thresholds else []
+    if thr and len(thr) == k - 1:
+        # Manual thresholds: each tone = a luminance range (controlled posterisation)
+        labels = np.digitize(L100, thr).astype(np.int32)
+        n_lab = k
+    else:
+        thr = []
+        # Assign every pixel to the nearest centre
+        best = np.full(len(X), np.inf, np.float32)
+        labels = np.zeros(len(X), np.int32)
+        for i, c in enumerate(centers):
+            dist = ((X - c) ** 2).sum(axis=1)
+            upd = dist < best
+            best[upd] = dist[upd]
+            labels[upd] = i
+        labels = labels.reshape(H, W)
+        n_lab = len(centers)
+
+    # Majority filter (shape simplification)
     r = (0.15 + (1 - d) * 1.6) * p.px_per_mm
-    labels = majority_filter(labels, len(centers), r)
+    labels = majority_filter(labels, n_lab, r)
 
-    # Couleurs moyennes réelles (sur l'image lissée) et tri clair -> foncé
+    # Actual mean colours (on the smoothed image), sorted light -> dark
     lab_full = lab.reshape(H, W, 3)
-    used = [i for i in range(len(centers)) if np.any(labels == i)]
-    means = np.array([lab_full[labels == i].mean(axis=0) for i in used], np.float32)
+    inside = fg if fg is not None else np.ones((H, W), bool)
+    used = [i for i in range(n_lab) if np.any((labels == i) & inside)]
+    if not used:
+        used, inside = [i for i in range(n_lab) if np.any(labels == i)], np.ones((H, W), bool)
+    means = np.array([lab_full[(labels == i) & inside].mean(axis=0) for i in used], np.float32)
     if gray:
         means[:, 1:] = 128
     order = np.argsort(-means[:, 0])
-    remap = np.zeros(len(centers), np.int32)
+    remap = np.zeros(n_lab, np.int32)
+    for i in range(n_lab):            # labels absent from the subject: attached to the nearest one
+        if i not in used:
+            remap[i] = int(np.argmin(np.abs(means[order][:, 0] - (centers[i, 0] if i < len(centers) else 128))))
     for new, old_pos in enumerate(order):
         remap[used[old_pos]] = new
     labels = remap[labels]
     palette = lab_to_bgr(means[order])
-    return Prepared(resized=resized, labels=labels, palette=palette, gray=gray, off_px=(ox, oy))
+    return Prepared(resized=resized, labels=labels, palette=palette, gray=gray, off_px=(ox, oy),
+                    raw=raw, hist=hist, auto_thresholds=auto_thr, thresholds_used=thr or None, fg=fg)
 
 
 def recommend_layers(img: np.ndarray, gray: bool, skip_lightest: bool, max_colors: int = 9) -> dict:
-    """Recommande un nombre de pochoirs pour une image.
+    """Recommends a number of stencils for an image.
 
-    On quantifie l'image (réduite) avec k = 1..max_colors teintes et on mesure l'écart
-    moyen (ΔE) à l'image. On s'arrête au plus petit k qui :
-      - atteint un écart jugé « bon » (ΔE <= cible), ou
-      - n'est presque plus amélioré par une teinte de plus (coude de la courbe), ou
-      - dont la teinte suivante ne couvrirait qu'une surface négligeable.
+    The (downscaled) image is quantised with k = 1..max_colors tones and the mean difference
+    (ΔE) to the image is measured. We stop at the smallest k that:
+      - reaches a difference judged "good" (ΔE <= target), or
+      - is hardly improved by one more tone (elbow of the curve), or
+      - whose next tone would only cover a negligible area.
     """
     h, w = img.shape[:2]
     s = 240 / max(h, w)
@@ -399,7 +553,7 @@ def recommend_layers(img: np.ndarray, gray: bool, skip_lightest: bool, max_color
     crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 50, 0.1)
     uniq = len(np.unique(X.round(1), axis=0))
 
-    curve = []  # (k, ΔE, part de la plus petite teinte)
+    curve = []  # (k, ΔE, share of the smallest tone)
     for k in range(1, min(max_colors, uniq) + 1):
         cv2.setRNGSeed(0)
         _, lab_k, centers = cv2.kmeans(X, k, None, crit, 3, cv2.KMEANS_PP_CENTERS)
@@ -408,7 +562,7 @@ def recommend_layers(img: np.ndarray, gray: bool, skip_lightest: bool, max_color
         share = float(np.bincount(lab_k, minlength=k).min() / len(lab_k))
         curve.append((k, err, share))
 
-    # Teintes vraiment distinctes : centres de k max fusionnés s'ils sont proches (ΔE < 12)
+    # Truly distinct tones: centres of k max merged when close (ΔE < 12)
     k_max, _, _ = curve[-1]
     cv2.setRNGSeed(0)
     _, lab_k, centers = cv2.kmeans(X, k_max, None, crit, 3, cv2.KMEANS_PP_CENTERS)
@@ -460,7 +614,7 @@ def majority_filter(labels: np.ndarray, k: int, r: float) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-# 3-4. Couches + contraintes de découpe
+# 3-4. Layers + cutting constraints
 # --------------------------------------------------------------------------
 
 def clean_mask(mask: np.ndarray, p: Params, extra_area_mm2: float = 0.0) -> np.ndarray:
@@ -480,22 +634,24 @@ def clean_mask(mask: np.ndarray, p: Params, extra_area_mm2: float = 0.0) -> np.n
 
 
 def add_bridges(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None) -> list[tuple]:
-    """Relie chaque îlot de matière au cadre. Modifie `opening` en place.
+    """Connects every material island to the frame. Modifies `opening` in place.
 
-    `hidden` : masque des zones qui seront repeintes par une couche suivante ;
-    un pont qui y passe sera invisible sur le résultat final -> privilégié.
-    Renvoie la liste des ponts [(x1, y1, x2, y2)] en pixels.
+    `hidden`: mask of the areas repainted by a later layer;
+    a bridge running there will be invisible in the final result -> preferred.
+    Returns the list of bridges [(x1, y1, x2, y2)] in pixels.
     """
     ppm = p.px_per_mm
     bw = max(1, int(round(p.bridge_width_mm * ppm)))
     bridges = []
     double_px = p.double_bridge_area_mm2 * ppm * ppm
     n_islands = None
-    short_islands = 0  # îlots qui n'ont pas pu recevoir le nombre de ponts demandé
+    short_islands = 0  # islands that could not get the requested number of bridges
 
     for _ in range(2000):
-        # Composantes recalculées à chaque tour : un pont peut s'arrêter sur un autre îlot
-        # (chaîne d'îlots), le groupe formé est alors relié au cadre au tour suivant.
+        # One pass = components and distance map computed ONCE, then all pending islands
+        # processed from nearest to farthest from the frame (much faster than recomputing
+        # everything after each island). A bridge may stop on another island (chain): both
+        # then form a group, linked to the frame in the next pass.
         material = (opening == 0).astype(np.uint8)
         n, lab, stats, cents = cv2.connectedComponentsWithStats(material, connectivity=4)
         main = lab[0, 0]
@@ -506,56 +662,68 @@ def add_bridges(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None
             break
         is_main = lab == main
         src = np.where(is_main, 0, 255).astype(np.uint8)
-        dist = cv2.distanceTransform(src, cv2.DIST_L2, 5)
-        best = None
+        # distance to the frame + nearest frame point of every pixel (a single pass)
+        dist, near_lbl = cv2.distanceTransformWithLabels(src, cv2.DIST_L2, 5, labelType=cv2.DIST_LABEL_PIXEL)
+        zy, zx = np.nonzero(src == 0)
+        near = NearestMain(is_main, near_lbl, zx, zy)
+        order = []
         for i in pending:
             x, y, w, h, _a = stats[i]
-            sub_lab = lab[y:y + h, x:x + w]
-            sub = np.where(sub_lab == i, dist[y:y + h, x:x + w], np.inf)
+            sub = np.where(lab[y:y + h, x:x + w] == i, dist[y:y + h, x:x + w], np.inf)
             j = int(np.argmin(sub))
-            dv = float(sub.flat[j])
-            if best is None or dv < best[0]:
-                best = (dv, i, x + j % w, y + j // w)
-        dv, i, px, py = best
-        want = max(p.min_bridges, 2 if stats[i, cv2.CC_STAT_AREA] > double_px else 1)
-        cands = _candidates(lab, i, stats[i], cents[i], dist, is_main, hidden, dv, ppm,
-                            wide=want > 1, bw=bw)
-        if not cands or min(c[0] for c in cands) >= 1e6:
-            # aucun pont propre près de l'îlot : on cherche sur tout son pourtour, sans limite de longueur
-            far = _candidates(lab, i, stats[i], cents[i], dist, is_main, hidden, dv, ppm,
-                              wide=want > 1, bw=bw, unlimited=True)
-            if far and min(c[0] for c in far) < 1e6:
-                cands = far
-        if not cands:
-            q = _nearest(is_main, px, py, dv)
-            if q:
-                c = _clip_bridge(lab, i, px, py, q, bw)
-                q = c[0] if c else q
-            cands = [(dv, (px, py), q, 0.0)] if q else []
-        chosen = _spread(cands, want)
-        if len(chosen) < want:
-            short_islands += 1
+            order.append((float(sub.flat[j]), i, x + j % w, y + j // w))
+        order.sort()
+        # only islands close to the frame are processed in this pass: farther ones wait
+        # for their neighbours to be connected (shorter, chained bridges)
+        reach = order[0][0] * 1.5 + 4 * ppm
+        touched = set()              # islands already connected to another one during this pass
         drawn = False
-        for _s, (ax, ay), q, _a in chosen:
-            if q is not None and (ax, ay) != q:
-                cv2.line(opening, (ax, ay), q, 0, thickness=bw, lineType=cv2.LINE_8)
-                bridges.append((ax, ay, q[0], q[1]))
-                drawn = True
-        if not drawn:   # sécurité : rien n'a changé, on éviterait une boucle sans fin
+        for dv, i, px, py in order:
+            if dv > reach:
+                break
+            if i in touched:
+                continue
+            want = max(p.min_bridges, 2 if stats[i, cv2.CC_STAT_AREA] > double_px else 1)
+            cands = _candidates(lab, i, stats[i], cents[i], dist, near, hidden, dv, ppm,
+                                wide=want > 1, bw=bw)
+            if not cands or min(c[0] for c in cands) >= 1e6:
+                # no clean bridge near the island: search its whole outline, with no length limit
+                far = _candidates(lab, i, stats[i], cents[i], dist, near, hidden, dv, ppm,
+                                  wide=want > 1, bw=bw, unlimited=True)
+                if far and min(c[0] for c in far) < 1e6:
+                    cands = far
+            if not cands:
+                q = near(px, py, dv)
+                if q:
+                    c = _clip_bridge(lab, i, px, py, q, bw)
+                    q = c[0] if c else q
+                cands = [(dv, (px, py), q, 0.0)] if q else []
+            chosen = _spread(cands, want)
+            if len(chosen) < want:
+                short_islands += 1
+            for _s, (ax, ay), q, _a in chosen:
+                if q is not None and (ax, ay) != q:
+                    cv2.line(opening, (ax, ay), q, 0, thickness=bw, lineType=cv2.LINE_8)
+                    bridges.append((ax, ay, q[0], q[1]))
+                    drawn = True
+                    other = int(lab[q[1], q[0]])
+                    if other not in (0, main, i):   # landing on another island: group to connect next
+                        touched.add(other)
+        if not drawn:   # safety: nothing changed, avoid an endless loop
             break
     return bridges, n_islands or 0, short_islands
 
 
 def _spread(cands: list, want: int) -> list:
-    """Choisit `want` ponts bien répartis autour de l'îlot (écart angulaire), au meilleur score.
+    """Picks `want` bridges well spread around the island (angular gap), with the best score.
 
-    Les ponts « dégagés » passent d'abord (même moins bien répartis) ; ceux qui longent un bord
-    (score ≥ 1e6) ne complètent la sélection qu'en dernier recours.
+    "Clear" bridges come first (even if less well spread); those running along an edge
+    (score >= 1e6) only complete the selection as a last resort.
     """
     clean = [c for c in cands if c[0] < 1e6]
     chosen = _spread_in(clean, want, [])
-    # Pas assez de place autour : un pont dégagé proche d'un autre vaut mieux qu'un pont qui longe
-    # un bord -> on prend le dégagé le plus écarté (en angle) de ceux déjà choisis.
+    # Not enough room around: a clear bridge close to another is better than one running along
+    # an edge -> take the clear one with the widest angle from those already chosen.
     while chosen and len(chosen) < want:
         rest = [c for c in clean if c not in chosen and all(c[1] != d[1] for d in chosen)]
         if not rest:
@@ -580,8 +748,24 @@ def _spread_in(cands: list, want: int, chosen: list) -> list:
         if ok:
             chosen.append(min(ok, key=lambda c: c[0]))
         else:
-            sep *= 0.75  # pas assez de place : on accepte des ponts plus rapprochés
+            sep *= 0.75  # not enough room: accept closer bridges
     return chosen
+
+
+class NearestMain:
+    """Nearest frame point (main component) of a pixel, read from the labels of
+    `distanceTransformWithLabels` (O(1)); falls back to a local search if the label is inconsistent."""
+
+    def __init__(self, is_main, lbl, zx, zy):
+        self.is_main, self.lbl, self.zx, self.zy = is_main, lbl, zx, zy
+
+    def __call__(self, x, y, d):
+        k = int(self.lbl[y, x]) - 1
+        if 0 <= k < len(self.zx):
+            qx, qy = int(self.zx[k]), int(self.zy[k])
+            if self.is_main[qy, qx]:
+                return qx, qy
+        return _nearest(self.is_main, x, y, d)
 
 
 def _nearest(is_main, x, y, d):
@@ -598,22 +782,22 @@ def _nearest(is_main, x, y, d):
 
 
 def _clip_bridge(lab, i, ax, ay, q, bw=1):
-    """Raccourcit le pont [ancre -> q] pour qu'il ne passe que dans le vide.
+    """Shortens the bridge [anchor -> q] so that it only crosses empty space.
 
-    Après avoir quitté l'îlot `i`, le pont s'arrête sur la première matière rencontrée (cadre ou
-    autre îlot : les îlots se relient alors en chaîne). S'il commence par traverser l'îlot `i` ou
-    s'il le retraverse plus loin (ancre sur une face « arrière »), le candidat est rejeté (None).
-    Sinon renvoie (arrivée, dégagé) ; dégagé = False si le pont longe ou frôle de la matière.
+    After leaving island `i`, the bridge stops on the first material it meets (frame or
+    another island: islands are then chained). If it starts by crossing island `i` or
+    crosses it again further on (anchor on a "back" face), the candidate is rejected (None).
+    Otherwise returns (landing point, clear); clear = False if the bridge runs along or grazes material.
     """
     n = max(2, int(math.ceil(math.hypot(q[0] - ax, q[1] - ay))) + 1)
     lx = np.linspace(ax, q[0], n).round().astype(int)
     ly = np.linspace(ay, q[1], n).round().astype(int)
     v = lab[ly, lx]
     gap = np.flatnonzero(v == 0)
-    if len(gap) == 0:          # matière immédiatement voisine
+    if len(gap) == 0:          # material immediately adjacent
         return q, True
     s = gap[0]
-    if s > 3:                  # le pont commencerait par traverser l'îlot (ancre côté opposé)
+    if s > 3:                  # the bridge would start by crossing the island (anchor on the far side)
         return None
     hit = np.flatnonzero(v[s:] != 0)
     if len(hit) == 0:
@@ -626,15 +810,15 @@ def _clip_bridge(lab, i, ax, ay, q, bw=1):
 
 
 def _clear_of_material(lab, i, ax, ay, q, bw):
-    """Le pont se tient-il à distance de la matière en dehors de ses deux attaches ?
+    """Does the bridge keep away from material outside its two attachments?
 
-    On élargit le pont d'un dégagement de chaque côté ; hors des disques d'attache autour de
-    l'ancre (rayon 1,5 × demi-largeur élargie : le pont doit quitter l'îlot à plus de ~40° de son
-    bord) et de l'arrivée (rayon 2 ×, ~30°), cette bande ne doit toucher aucune matière. Cela
-    écarte les ponts qui longent ou frôlent un bord, même quand ils restent entièrement dans le
-    vide et paraissent « coller » à l'îlot.
+    The bridge is widened by a clearance on each side; outside the attachment discs around
+    the anchor (radius 1.5 x widened half width: the bridge must leave the island at more than
+    ~40° from its edge) and the landing point (radius 2 x, ~30°), this band must touch no
+    material. This discards bridges that run along or graze an edge, even when they stay
+    entirely in empty space and look "stuck" to the island.
     """
-    half = bw / 2 + max(2.0, bw / 2)          # demi-largeur + dégagement
+    half = bw / 2 + max(2.0, bw / 2)          # half width + clearance
     r_dep = 1.5 * half + 1
     r_att = 2 * half + 1
     H, W = lab.shape
@@ -649,11 +833,11 @@ def _clear_of_material(lab, i, ax, ay, q, bw):
     return touch <= 1
 
 
-def _candidates(lab, i, st, cent, dist, is_main, hidden, dmin, ppm, max_pts=96, wide=False, bw=1,
+def _candidates(lab, i, st, cent, dist, near, hidden, dmin, ppm, max_pts=96, wide=False, bw=1,
                 unlimited=False):
-    """Ponts candidats depuis le bord de l'îlot : (score, ancre, point du cadre, angle).
+    """Candidate bridges from the island edge: (score, anchor, frame point, angle).
 
-    Score = longueur pondérée par la part visible du pont (non repeinte ensuite).
+    Score = length weighted by the visible share of the bridge (not repainted afterwards).
     """
     x, y, w, h, _ = st
     m = (lab[y:y + h, x:x + w] == i).astype(np.uint8)
@@ -664,23 +848,23 @@ def _candidates(lab, i, st, cent, dist, is_main, hidden, dmin, ppm, max_pts=96, 
     xs = xs + x
     ys = ys + y
     dd = dist[ys, xs]
-    # Plusieurs ponts demandés : on accepte des ponts plus longs pour pouvoir les répartir
+    # Several bridges requested: accept longer bridges so they can be spread
     limit = np.inf if unlimited else max(3 * dmin, dmin + 12 * ppm) * (4 if wide else 1)
     ok = dd <= limit
     xs, ys, dd = xs[ok], ys[ok], dd[ok]
     if len(xs) > max_pts:
         step = len(xs) / max_pts
         sel = (np.arange(max_pts) * step).astype(int)
-        # garder toujours le point le plus proche
+        # always keep the nearest point
         sel = np.unique(np.append(sel, int(np.argmin(dd))))
         xs, ys, dd = xs[sel], ys[sel], dd[sel]
     out = []
     for ax, ay, d in zip(xs.tolist(), ys.tolist(), dd.tolist()):
-        q = _nearest(is_main, ax, ay, d)
+        q = near(ax, ay, d)
         if q is None:
             continue
         c = _clip_bridge(lab, i, ax, ay, q, bw)
-        if c is None:   # le pont repasserait sur l'îlot lui-même
+        if c is None:   # the bridge would cross back over the island itself
             continue
         q, clean = c
         length = math.hypot(q[0] - ax, q[1] - ay)
@@ -691,7 +875,7 @@ def _candidates(lab, i, st, cent, dist, is_main, hidden, dmin, ppm, max_pts=96, 
             ly = np.linspace(ay, q[1], n).round().astype(int)
             vis = 1.0 - float(hidden[ly, lx].mean())
         score = (length + 1) * (0.15 + 0.85 * vis)
-        if not clean:   # longe un bord : seulement en dernier recours
+        if not clean:   # runs along an edge: last resort only
             score += 1e6
         out.append((score, (ax, ay), q, math.atan2(ay - cent[1], ax - cent[0])))
     return out
@@ -702,7 +886,7 @@ def _candidates(lab, i, st, cent, dist, is_main, hidden, dmin, ppm, max_pts=96, 
 # --------------------------------------------------------------------------
 
 def vectorize(opening: np.ndarray, p: Params) -> list[np.ndarray]:
-    """Contours fermés en mm (liste de tableaux Nx2)."""
+    """Closed outlines in mm (list of Nx2 arrays)."""
     ppm = p.px_per_mm
     cnts, _ = cv2.findContours(opening, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     sigma = max(0.8, 0.2 * ppm)
@@ -739,16 +923,16 @@ def _smooth_closed(pts: np.ndarray, sigma: float) -> np.ndarray:
 
 @dataclass
 class Layer:
-    index: int               # 1..n (ordre de pulvérisation)
+    index: int               # 1..n (spraying order)
     color: np.ndarray        # BGR
-    target: np.ndarray       # masque visé (zone image)
-    opening: np.ndarray      # masque final des ouvertures (feuille entière)
-    lost: np.ndarray         # détails perdus par les contraintes (zone image)
+    target: np.ndarray       # target mask (image area)
+    opening: np.ndarray      # final opening mask (whole sheet)
+    lost: np.ndarray         # details lost to the constraints (image area)
     bridges: list
-    paths: list              # contours en mm (repère feuille)
-    islands: int = 0         # nombre d'îlots reliés par des ponts
-    short_islands: int = 0   # îlots n'ayant pas pu recevoir le minimum de ponts demandé
-    kind: str = "color"      # "color" (aplat) ou "outline" (contours des détails clés)
+    paths: list              # outlines in mm (sheet coordinates)
+    islands: int = 0         # number of islands connected by bridges
+    short_islands: int = 0   # islands that could not get the requested minimum of bridges
+    kind: str = "color"      # "color" (flat colour) or "outline" (key-detail outlines)
 
 
 @dataclass
@@ -757,14 +941,14 @@ class Result:
     prepared: Prepared
     layers: list
     support_color: np.ndarray    # BGR
-    support_label: int | None    # teinte laissée au support (pas de pochoir)
-    sheet_mm: tuple              # (largeur, hauteur) de la feuille du pochoir
+    support_label: int | None    # tone left to the support (no stencil)
+    sheet_mm: tuple              # (width, height) of the stencil sheet
     support_mm: tuple
     image_mm: tuple
-    support_px: tuple            # (largeur, hauteur)
-    img_off_px: tuple            # (x, y) de l'image dans la feuille
-    sup_off_px: tuple = (0, 0)   # (x, y) du coin haut-gauche du support dans la feuille (peut être < 0)
-    sheet_rect_mm: tuple = (0.0, 0.0, 0.0, 0.0)  # feuille dans le repère du support (x0, y0, x1, y1)
+    support_px: tuple            # (width, height)
+    img_off_px: tuple            # (x, y) of the image in the sheet
+    sup_off_px: tuple = (0, 0)   # (x, y) of the support's top-left corner in the sheet (may be < 0)
+    sheet_rect_mm: tuple = (0.0, 0.0, 0.0, 0.0)  # sheet in support coordinates (x0, y0, x1, y1)
 
     @property
     def sup_off_mm(self) -> tuple:
@@ -776,18 +960,48 @@ def _lab(bgr: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(arr, cv2.COLOR_BGR2LAB).reshape(-1, 3)
 
 
+def layer_job(job):
+    """Bridges + vectorisation of one layer (module-level function: can run in another process)."""
+    opening, hidden, p = job
+    bridges, n_isl, n_short = add_bridges(opening, p, hidden) if p.bridges else ([], 0, 0)
+    return opening, bridges, n_isl, n_short, vectorize(opening, p)
+
+
+# Parallelism between layers: "thread" (default), "process" (separate processes), or "none" (serial)
+PARALLEL = os.environ.get("STENCILIT_PARALLEL", "thread")
+_POOL = None
+
+
+def _pool():
+    global _POOL
+    if _POOL is None:
+        from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+        n = max(1, min(8, (os.cpu_count() or 2) - 1))
+        _POOL = ProcessPoolExecutor(n) if PARALLEL == "process" else ThreadPoolExecutor(n)
+    return _POOL
+
+
+def run_layer_jobs(jobs: list) -> list:
+    if PARALLEL == "none" or len(jobs) < 2:
+        return [layer_job(j) for j in jobs]
+    try:
+        return list(_pool().map(layer_job, jobs))
+    except Exception:                  # pool unavailable (e.g. child process killed): serial
+        return [layer_job(j) for j in jobs]
+
+
 def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -> Result:
-    """`outline_region` : masque booléen (zone image) limitant la recherche des détails clés
-    du pochoir de contours ; None = toute l'image."""
+    """`outline_region`: boolean mask (image area) limiting the key-detail search of the
+    outline stencil; None = whole image."""
     labels = prep.labels
     H, W = labels.shape
     ppm = p.px_per_mm
     SW = int(round(p.support_w_mm * ppm))
     SH = int(round(p.support_h_mm * ppm))
-    # Feuille dans le repère du support (la partie visible de l'image se déduit de la préparation)
+    # Sheet in support coordinates (the visible part of the image is derived from the preparation)
     vis = (prep.off_px[0] / ppm, prep.off_px[1] / ppm, (prep.off_px[0] + W) / ppm, (prep.off_px[1] + H) / ppm)
     sx0, sy0, sx1, sy1 = sheet_rect(p, vis)
-    ox, oy = int(round(-sx0 * ppm)), int(round(-sy0 * ppm))       # support dans la feuille
+    ox, oy = int(round(-sx0 * ppm)), int(round(-sy0 * ppm))       # support in the sheet
     sheet_shape = (max(int(round((sy1 - sy0) * ppm)), oy + prep.off_px[1] + H + 1),
                    max(int(round((sx1 - sx0) * ppm)), ox + prep.off_px[0] + W + 1))
     X0, Y0 = ox + prep.off_px[0], oy + prep.off_px[1]
@@ -812,25 +1026,31 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
             t = np.isin(labels, color_ids[li:])
         else:
             t = labels == ci
+        if prep.fg is not None:            # removed background: left as bare support
+            t &= prep.fg
         t = np.where(t, 255, 0).astype(np.uint8)
         targets.append(t)
         cleaned_all.append(clean_mask(t, p, extra_area))
 
-    layers = []
+    # Each layer (bridges + vectorisation) is independent of the others: computed in parallel
+    jobs = []
     for li, ci in enumerate(color_ids):
-        target, cleaned = targets[li], cleaned_all[li]
-        lost = cv2.bitwise_xor(cleaned, target)
-        opening = place(cleaned)
+        cleaned = cleaned_all[li]
         hidden = None
         if li + 1 < len(color_ids):
             later = np.zeros_like(cleaned)
             for c2 in cleaned_all[li + 1:]:
                 later |= c2
             hidden = place(later) > 0
-        bridges, n_isl, n_short = add_bridges(opening, p, hidden) if p.bridges else ([], 0, 0)
-        paths = vectorize(opening, p)
-        layers.append(Layer(index=li + 1, color=prep.palette[ci], target=target,
-                            opening=opening, lost=lost, bridges=bridges, paths=paths,
+        jobs.append((place(cleaned), hidden, p))
+    results = run_layer_jobs(jobs)
+    layers = []
+    for li, ci in enumerate(color_ids):
+        opening, bridges, n_isl, n_short, paths = results[li]
+        target, cleaned = targets[li], cleaned_all[li]
+        color = parse_layer_colors(p.layer_colors).get(li + 1, prep.palette[ci])   # chosen paint
+        layers.append(Layer(index=li + 1, color=color, target=target,
+                            opening=opening, lost=cv2.bitwise_xor(cleaned, target), bridges=bridges, paths=paths,
                             islands=n_isl, short_islands=n_short))
     res = Result(params=p, prepared=prep, layers=layers, support_color=support, support_label=sup,
                  sheet_mm=(sheet_shape[1] / ppm, sheet_shape[0] / ppm),
@@ -838,10 +1058,13 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
                  support_px=(SW, SH), img_off_px=(X0, Y0), sup_off_px=(ox, oy),
                  sheet_rect_mm=(sx0, sy0, sx0 + sheet_shape[1] / ppm, sy0 + sheet_shape[0] / ppm))
 
-    # Pochoir de contours : peint en dernier, au-dessus de toutes les couches
+    # Outline stencil: painted last, above all layers
     if p.outline:
         sim = image_sim(res)
-        target = detect_key_details(prep, sim, p, outline_region)
+        region = outline_region
+        if prep.fg is not None:
+            region = prep.fg if region is None else (region.astype(bool) & prep.fg)
+        target = detect_key_details(prep, sim, p, region)
         if target.any():
             color = outline_color(prep, support, p)
             cleaned = clean_mask(target, p)
@@ -855,7 +1078,7 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
 
 
 def outline_color(prep: Prepared, support: np.ndarray, p: Params) -> np.ndarray:
-    """Couleur du trait : choisie par l'utilisateur, ou teinte de la palette la plus contrastée avec le support."""
+    """Line colour: chosen by the user, or the palette tone with the most contrast against the support."""
     if not p.outline_auto_color:
         return hex_to_bgr(p.outline_color).astype(np.uint8)
     L_sup = _lab(support)[0, 0]
@@ -865,13 +1088,13 @@ def outline_color(prep: Prepared, support: np.ndarray, p: Params) -> np.ndarray:
 
 def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
                        region: np.ndarray | None = None) -> np.ndarray:
-    """Détails clés de l'image que le rendu en aplats (simplification + flou de l'aérographe) fait disparaître.
+    """Key details of the image that the flat render (simplification + airbrush blur) makes disappear.
 
-    1. Contours nets de l'original (Canny, seuils adaptés à l'image et à la sensibilité).
-    2. On ne garde que ceux où le contraste local du rendu simulé est nettement plus faible
-       que celui de l'original (détail perdu ou estompé).
-    3. On supprime les traits trop courts, puis on les épaissit à la largeur du trait.
-    Renvoie un masque (zone image) des ouvertures du pochoir de contours.
+    1. Sharp edges of the original (Canny, thresholds adapted to the image and the sensitivity).
+    2. Only those where the local contrast of the simulated render is clearly lower than the
+       original's are kept (lost or faded detail).
+    3. Lines that are too short are removed, then thickened to the line width.
+    Returns a mask (image area) of the outline stencil openings.
     """
     ppm = p.px_per_mm
     s = p.outline_sensitivity / 100.0
@@ -893,54 +1116,54 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     g_ref = grad(lab(ref))
     g_sim = grad(lab(sim))
 
-    # 1. Contours candidats : Canny sur la luminance ET sur les canaux de couleur (a, b),
-    #    pour attraper aussi les détails de même luminosité que leur entourage.
+    # 1. Candidate edges: Canny on the luminance AND on the colour channels (a, b),
+    #    to also catch details as bright as their surroundings.
     lab8 = cv2.cvtColor(cv2.bilateralFilter(ref, 7, 40, 5), cv2.COLOR_BGR2LAB)
     edges = np.zeros(ref.shape[:2], bool)
     for c, (lo, hi) in enumerate(((12, 32), (8, 20), (8, 20))):
         edges |= cv2.Canny(lab8[..., c], lo, hi, L2gradient=True) > 0
-    b = max(2, int(round(0.5 * ppm)))   # pas de trait sur le bord de l'image elle-même
+    b = max(2, int(round(0.5 * ppm)))   # no line on the edge of the image itself
     edges[:b, :] = False; edges[-b:, :] = False; edges[:, :b] = False; edges[:, -b:] = False
-    if region is not None:               # masque peint par l'utilisateur : on ne cherche que dedans
+    if region is not None:               # mask painted by the user: search only inside
         edges &= region.astype(bool)
 
-    # 2. Perte de netteté : part du contraste local de l'original absente du rendu simulé
+    # 2. Loss of sharpness: share of the original's local contrast missing from the simulated render
     loss = np.clip((g_ref - g_sim) / (g_ref + 1e-3), 0, 1)
-    loss = cv2.dilate(loss, disk(max(1.0, 0.4 * ppm)))      # tolérance de position du bord
+    loss = cv2.dilate(loss, disk(max(1.0, 0.4 * ppm)))      # edge position tolerance
 
-    # 3. Sélection point par point : importance = contraste de l'original x part perdue.
-    #    La sensibilité fixe la part des points de contour retenus (des plus importants aux moins importants).
+    # 3. Point-by-point selection: importance = original contrast x lost share.
+    #    The sensitivity sets the share of edge points kept (from most to least important).
     cand = edges & (loss >= 0.5 - 0.3 * s)
     if not cand.any():
         return np.zeros(ref.shape[:2], np.uint8)
     score = g_ref * loss
     thr = float(np.percentile(score[cand], 100 * (0.85 - 0.8 * s)))
     sel = cand & (score >= thr)
-    # recoller les petites coupures le long d'un même trait, puis retirer les morceaux trop courts
+    # rejoin small gaps along a same line, then remove pieces that are too short
     e8 = cv2.morphologyEx(sel.astype(np.uint8) * 255, cv2.MORPH_CLOSE, disk(max(1.0, 0.3 * ppm)))
     n, lab_e, stats, _ = cv2.connectedComponentsWithStats(e8, connectivity=8)
     min_px = max(2, int(p.outline_min_length_mm * ppm))
-    # longueur approximative d'un trait = sa plus grande dimension
+    # approximate length of a line = its largest dimension
     length = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
     keep = length >= min_px
     keep[0] = False
     e8 = keep[lab_e].astype(np.uint8) * 255
-    # largeur effective : jamais moins que l'ouverture mini du matériau (sinon non découpable)
+    # effective width: never less than the material's minimum opening (otherwise not cuttable)
     width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
     stroke = cv2.dilate(e8, disk(width * ppm / 2))
     return stroke
 
 # --------------------------------------------------------------------------
-# Repères de calage (géométrie exacte en mm, repère feuille)
+# Registration marks (exact geometry in mm, sheet coordinates)
 # --------------------------------------------------------------------------
 
 CORNER_NAMES = ("haut-gauche", "haut-droite", "bas-gauche", "bas-droite")
 
 
 def _reg_layout(res: Result) -> tuple[str, list[tuple], float, list[str]]:
-    """Forme effective, centres des repères (repère feuille, mm) et largeur de la bande libre.
+    """Effective shape, mark centres (sheet coordinates, mm) and width of the free band.
 
-    Renvoie (forme, [(nom, cx, cy, sx, sy)], bande, avertissements) ; (sx, sy) = sens vers l'intérieur.
+    Returns (shape, [(name, cx, cy, sx, sy)], band, warnings); (sx, sy) = inward direction.
     """
     p = res.params
     a = p.reg_size_mm
@@ -963,18 +1186,18 @@ def _reg_layout(res: Result) -> tuple[str, list[tuple], float, list[str]]:
             if shape == "equerre":
                 pts.append((name, cx, cy, sx, sy))
             elif m >= a + 2:
-                pts.append((name, cx - sx * m / 2, cy - sy * m / 2, sx, sy))          # dans la marge
+                pts.append((name, cx - sx * m / 2, cy - sy * m / 2, sx, sy))          # in the margin
             else:
-                pts.append((name, cx + sx * (a / 2 + 1), cy + sy * (a / 2 + 1), sx, sy))  # dans l'angle du support
+                pts.append((name, cx + sx * (a / 2 + 1), cy + sy * (a / 2 + 1), sx, sy))  # in the support corner
                 if p.inner_margin_mm < a + 2 and not warns:
                     warns.append("Les repères sont placés dans les angles du support et risquent de "
                                  "chevaucher l'image : augmentez la marge de la feuille ou la marge intérieure.")
         return shape, pts, m, warns
-    # Feuille posée DANS le support : pas d'angle du support à viser -> croix (ou trous) dans la bordure,
-    # reportées au crayon sur le support grâce aux cotes.
+    # Sheet laid INSIDE the support: no support corner to aim at -> crosses (or holes) in the border,
+    # transferred in pencil onto the support using the dimensions.
     if shape == "equerre":
         shape = "croix"
-    bx = (res.img_off_px[0]) / p.px_per_mm                       # bordure réelle à gauche…
+    bx = (res.img_off_px[0]) / p.px_per_mm                       # actual border on the left…
     by = (res.img_off_px[1]) / p.px_per_mm
     bx2 = W - bx - res.image_mm[0]
     by2 = H - by - res.image_mm[1]
@@ -990,14 +1213,14 @@ def _reg_layout(res: Result) -> tuple[str, list[tuple], float, list[str]]:
 
 
 def registration_shapes(res: Result, layer_index: int | None = None) -> tuple[list[dict], list[str]]:
-    """Formes à découper pour le calage.
+    """Shapes to cut for registration.
 
-    - equerre : fente en L posée à l'extérieur de chaque angle du support. Le pochoir est
-      bien placé quand l'angle du support affleure exactement le coin intérieur du L.
-    - croix   : fenêtre en croix -> on reporte la croix au crayon sur le support (aux cotes données
-      quand la feuille est posée dans le support), puis on aligne chaque couche dessus.
-    - rond    : trou pour pions de calage (diamètre = taille).
-    3 coins : l'angle bas-droit est omis, ce qui sert de détrompeur.
+    - equerre (L-bracket): L-shaped slot outside each support corner. The stencil is
+      in place when the support corner exactly meets the inner corner of the L.
+    - croix (cross): cross window -> the cross is transferred in pencil onto the support (at the
+      given dimensions when the sheet is laid inside the support), then each layer is aligned on it.
+    - rond (round): hole for registration pegs (diameter = size).
+    3 corners: the bottom-right corner is omitted, which acts as a key.
     """
     p = res.params
     a = p.reg_size_mm
@@ -1029,10 +1252,10 @@ def registration_shapes(res: Result, layer_index: int | None = None) -> tuple[li
 
 
 def positioning(res: Result) -> dict:
-    """Cotes à la règle (feuille posée dans le support), repère = coin haut-gauche du support (mm).
+    """Ruler dimensions (sheet laid inside the support), origin = support's top-left corner (mm).
 
-    On trace au crayon une croix sur le support à chaque cote, puis on pose chaque couche en
-    alignant ses fenêtres en croix sur ces traits.
+    A cross is pencilled on the support at each dimension, then each layer is laid by
+    aligning its cross windows on these marks.
     """
     p = res.params
     sw, sh = res.support_mm
@@ -1056,11 +1279,11 @@ def positioning(res: Result) -> dict:
 
 
 # --------------------------------------------------------------------------
-# 6. Aperçus
+# 6. Previews
 # --------------------------------------------------------------------------
 
 def simulate_sheet(res: Result) -> np.ndarray:
-    """Simulation du rendu à l'aérographe sur la feuille (seul endroit où la peinture passe)."""
+    """Airbrush render simulation on the sheet (the only place paint goes through)."""
     p = res.params
     first = res.layers[0].opening if res.layers else None
     shape = first.shape if first is not None else (int(round(res.sheet_mm[1] * p.px_per_mm)),
@@ -1076,7 +1299,7 @@ def simulate_sheet(res: Result) -> np.ndarray:
 
 
 def support_overlap(res: Result) -> tuple[tuple, tuple]:
-    """Zone commune feuille / support : (x0, y0, x1, y1) dans le support et décalage vers la feuille."""
+    """Common area of sheet and support: (x0, y0, x1, y1) in the support and offset to the sheet."""
     SW, SH = res.support_px
     ox, oy = res.sup_off_px
     if res.layers:
@@ -1089,7 +1312,7 @@ def support_overlap(res: Result) -> tuple[tuple, tuple]:
 
 
 def sheet_to_support(res: Result, arr: np.ndarray, fill=0) -> np.ndarray:
-    """Recopie un tableau « feuille » à la taille du support (le reste est rempli par `fill`)."""
+    """Copies a "sheet" array to the support size (the rest is filled with `fill`)."""
     SW, SH = res.support_px
     out = np.empty((SH, SW) + arr.shape[2:], arr.dtype)
     out[:] = fill
@@ -1100,12 +1323,12 @@ def sheet_to_support(res: Result, arr: np.ndarray, fill=0) -> np.ndarray:
 
 
 def simulate(res: Result) -> np.ndarray:
-    """Simulation du rendu à l'aérographe sur tout le support."""
+    """Airbrush render simulation over the whole support."""
     return sheet_to_support(res, simulate_sheet(res), res.support_color.astype(np.uint8))
 
 
 def image_sim(res: Result, sheet_sim: np.ndarray | None = None) -> np.ndarray:
-    """Rendu simulé de la seule zone de l'image."""
+    """Simulated render of the image area only."""
     sim = simulate_sheet(res) if sheet_sim is None else sheet_sim
     H, W = res.prepared.labels.shape
     X0, Y0 = res.img_off_px
@@ -1113,7 +1336,7 @@ def image_sim(res: Result, sheet_sim: np.ndarray | None = None) -> np.ndarray:
 
 
 def image_crop(res: Result, sim: np.ndarray) -> np.ndarray:
-    """Zone de l'image dans un rendu à la taille du support."""
+    """Image area in a support-sized render."""
     H, W = res.prepared.labels.shape
     ox, oy = res.prepared.off_px
     return sim[oy:oy + H, ox:ox + W]
@@ -1126,30 +1349,30 @@ def quantized_view(res: Result) -> np.ndarray:
     return pal[res.prepared.labels]
 
 
-def layer_view(res: Result, L: Layer, sheet_bgr=(200, 211, 220)) -> np.ndarray:
-    """Vue du pochoir : matière, ouvertures, ponts (rouge), détails perdus (orange), calage."""
+def layer_view(res: Result, L: Layer, sheet_bgr=(200, 211, 220), bridges: bool = True,
+               lost: bool = True) -> np.ndarray:
+    """Stencil view: material, openings, bridges (red), lost details (orange), registration.
+
+    `bridges` / `lost` = False: view without these highlights (see `layer_overlays` to get them separately).
+    """
     p = res.params
     ppm = p.px_per_mm
-    H, W = res.prepared.labels.shape
-    X0, Y0 = res.img_off_px
     SW, SH = res.support_px
     ox, oy = res.sup_off_px
     op = L.opening > 0
     img = np.empty(op.shape + (3,), np.uint8)
     img[:] = sheet_bgr
-    # emprise du support (repère visuel, non découpé)
+    # support outline (visual guide, not cut)
     cv2.rectangle(img, (ox, oy), (ox + SW - 1, oy + SH - 1), (150, 150, 150), 1)
     light = (L.color.astype(np.float32) * 0.55 + 255 * 0.45).astype(np.uint8)
     img[op] = light
     edge = cv2.morphologyEx(L.opening, cv2.MORPH_GRADIENT, np.ones((3, 3), np.uint8)) > 0
     img[edge] = (40, 40, 40)
-    lost = np.zeros(op.shape, bool)
-    lost[Y0:Y0 + H, X0:X0 + W] = L.lost > 0
-    sel = lost & ~edge
-    img[sel] = (img[sel] * 0.4 + np.array((0, 140, 255)) * 0.6).astype(np.uint8)
-    bw = max(1, int(round(p.bridge_width_mm * ppm)))
-    for (x1, y1, x2, y2) in L.bridges:
-        cv2.line(img, (x1, y1), (x2, y2), (40, 40, 230), thickness=bw)
+    if lost:
+        sel = _lost_mask(res, L, edge)
+        img[sel] = (img[sel] * (1 - LOST_ALPHA) + np.array(LOST_BGR) * LOST_ALPHA).astype(np.uint8)
+    if bridges:
+        _draw_bridges(img, res, L, BRIDGE_BGR)
     shapes, _ = registration_shapes(res, L.index)
     for s in shapes:
         if s["type"] == "poly":
@@ -1166,8 +1389,45 @@ def layer_view(res: Result, L: Layer, sheet_bgr=(200, 211, 220)) -> np.ndarray:
     return img
 
 
+BRIDGE_BGR = (40, 40, 230)
+LOST_BGR = (0, 140, 255)
+LOST_ALPHA = 0.6
+
+
+def _lost_mask(res: Result, L: Layer, edge: np.ndarray | None = None) -> np.ndarray:
+    H, W = res.prepared.labels.shape
+    X0, Y0 = res.img_off_px
+    m = np.zeros(L.opening.shape, bool)
+    m[Y0:Y0 + H, X0:X0 + W] = L.lost > 0
+    if edge is None:
+        edge = cv2.morphologyEx(L.opening, cv2.MORPH_GRADIENT, np.ones((3, 3), np.uint8)) > 0
+    return m & ~edge
+
+
+def _draw_bridges(img: np.ndarray, res: Result, L: Layer, color) -> None:
+    bw = max(1, int(round(res.params.bridge_width_mm * res.params.px_per_mm)))
+    for (x1, y1, x2, y2) in L.bridges:
+        cv2.line(img, (x1, y1), (x2, y2), color, thickness=bw)
+
+
+def layer_overlays(res: Result, L: Layer) -> tuple[np.ndarray, np.ndarray]:
+    """Transparent overlays (BGRA, sheet size) of the bridges and removed details,
+    to stack on `layer_view(..., bridges=False, lost=False)` so they can be shown or hidden."""
+    # colour everywhere, only transparency varies: sharp edges once the image is downscaled
+    shape = L.opening.shape
+    br = np.empty(shape + (4,), np.uint8)
+    br[..., :3] = BRIDGE_BGR
+    a = np.zeros(shape, np.uint8)
+    _draw_bridges(a, res, L, 255)
+    br[..., 3] = a
+    lo = np.empty(shape + (4,), np.uint8)
+    lo[..., :3] = LOST_BGR
+    lo[..., 3] = np.where(_lost_mask(res, L), int(round(255 * LOST_ALPHA)), 0).astype(np.uint8)
+    return br, lo
+
+
 def delta_e(res: Result, sheet_sim: np.ndarray | None = None) -> float:
-    """Écart moyen (ΔE Lab) entre l'image d'origine et le rendu simulé, sur la zone de l'image."""
+    """Mean difference (Lab ΔE) between the original image and the simulated render, over the image area."""
     a = cv2.cvtColor(res.prepared.resized.astype(np.float32) / 255, cv2.COLOR_BGR2LAB)
     b = cv2.cvtColor(image_sim(res, sheet_sim).astype(np.float32) / 255, cv2.COLOR_BGR2LAB)
     if res.prepared.gray:

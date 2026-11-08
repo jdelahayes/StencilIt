@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,22 +14,60 @@
             --line: #33373d; --accent: #f97316; --accent-ink: #111; --soft: #25292e; }
   }
   * { box-sizing: border-box; }
-  [hidden] { display: none !important; }   /* l'attribut hidden l'emporte sur les display: flex/grid */
+  [hidden] { display: none !important; }   /* the hidden attribute wins over display: flex/grid */
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   header { display: flex; align-items: center; gap: 12px; padding: 10px 18px;
            border-bottom: 1px solid var(--line); background: var(--panel); }
   header h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
+  header .autocalc { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); cursor: pointer; margin-left: 10px; }
+  .calcbtn { font-size: 12px; padding: 4px 12px; border-radius: 999px; }
+  .calcbtn:not(.dirty) { color: var(--muted); }
+  .calcbtn.dirty { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600;
+                   box-shadow: 0 0 0 0 rgba(249,115,22,.6); animation: calcpulse 1.6s ease-out infinite; }
+  @keyframes calcpulse { 70% { box-shadow: 0 0 0 8px rgba(249,115,22,0); } 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); } }
+  @media (prefers-reduced-motion: reduce) { .calcbtn.dirty { animation: none; } }
+  /* Computing: coloured header, animated stripes */
+  header { transition: background-color .25s, color .25s; }
+  header.busy { background-color: #b45309; color: #fff;
+    background-image: repeating-linear-gradient(-45deg, rgba(255,255,255,.12) 0 14px, rgba(255,255,255,0) 14px 28px);
+    background-size: 40px 40px; animation: busystripes 1s linear infinite; }
+  header.busy .status, header.busy button.link, header.busy span { color: #fff; }
+  @keyframes busystripes { to { background-position: 40px 0; } }
+  @media (prefers-reduced-motion: reduce) { header.busy { animation: none; } }
   header .status { margin-left: auto; color: var(--muted); font-size: 13px; }
-  main { display: grid; grid-template-columns: 330px minmax(0, 1fr) 290px; min-height: calc(100vh - 49px); }
-  /* Colonne des pochoirs, à droite de l'image */
+  main { display: grid; grid-template-columns: var(--col-left, 330px) minmax(0, 1fr) var(--col-right, 290px);
+         min-height: calc(100vh - 49px); position: relative; }
+  /* Column resize handles (drag; double-click = default width) */
+  .colgrip { position: absolute; top: 0; bottom: 0; width: 8px; z-index: 20; cursor: col-resize; touch-action: none; }
+  .colgrip::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background .15s; }
+  .colgrip:hover::after, .colgrip.drag::after { background: var(--accent); }
+  .colgrip.left { left: calc(var(--col-left, 330px) - 4px); }
+  .colgrip.right { right: calc(var(--col-right, 290px) - 4px); }
+  body.col-resizing { cursor: col-resize; user-select: none; }
+  /* Stencil column, right of the image */
   .layercol { background: var(--panel); border-left: 1px solid var(--line); padding: 12px 12px 30px;
-              overflow-y: auto; max-height: calc(100vh - 49px); }
+              overflow-y: auto; overflow-x: hidden; max-height: calc(100vh - 49px); min-width: 0; }
   .layercol-head { display: flex; align-items: baseline; gap: 8px; }
+  .palbar { display: flex; gap: 8px; align-items: center; margin: 6px 0 2px; }
+  .paldd { position: relative; flex: 1; min-width: 0; }
+  .paldd > button { width: 100%; display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 8px; text-align: left; }
+  .paldd .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .paldd .chev { color: var(--muted); }
+  .palmenu { position: fixed; z-index: 50; max-height: 380px; overflow-y: auto;
+             background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px;
+             box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+  .palmenu button { width: 100%; display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 5px 6px;
+                    border: none; background: none; text-align: left; border-radius: 5px; }
+  .palmenu button:hover, .palmenu button:focus-visible, .palmenu button[aria-selected="true"] { background: var(--soft); }
+  .palmenu .pgroup { font-size: 11px; color: var(--muted); padding: 6px 6px 2px; }
+  .palprev { display: inline-flex; height: 14px; border-radius: 3px; overflow: hidden; flex: none; }
+  .palprev i { width: 12px; height: 14px; display: block; }
+  .palmenu .palprev i { width: 14px; height: 14px; }
   .layercol h2 { font-size: 14px; margin: 0; }
   .layercol .legend { margin: 6px 0 10px; gap: 6px 12px; }
   aside { background: var(--panel); border-right: 1px solid var(--line); padding: 12px 14px 40px;
-          overflow-y: auto; max-height: calc(100vh - 49px); }
+          overflow-y: auto; overflow-x: hidden; max-height: calc(100vh - 49px); min-width: 0; }
   section.view { padding: 14px 18px; overflow-y: auto; max-height: calc(100vh - 49px); }
   fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 10px 10px; }
   legend { font-weight: 600; padding: 0 4px; font-size: 13px; }
@@ -62,18 +100,22 @@
   .compare img.top { position: absolute; inset: 0; width: 100%; height: 100%; clip-path: inset(0 50% 0 0); }
   .compare .split { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 3px rgba(0,0,0,.6); pointer-events: none; }
   .compare .tag { position: absolute; top: 6px; font: 600 11px/1.4 system-ui, sans-serif; background: rgba(0,0,0,.55); color: #fff; padding: 1px 6px; border-radius: 4px; }
-  /* Barre d'outils de prévisualisation */
+  /* Preview toolbar */
   .viewtools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; font-size: 13px; }
   .vt-label { color: var(--muted); }
   .vt-toggles { display: flex; flex-wrap: wrap; gap: 4px; }
+  .vt-opts { display: inline-flex; gap: 4px; padding-right: 10px; margin-right: 2px; border-right: 1px solid var(--line); }
+  .vt-opt { padding: 3px 10px; font-size: 12px; border-radius: 999px; }
+  .vt-opt[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .ltog { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 4px; font-size: 12px; border-radius: 999px; }
   .ltog .sw { width: 16px; height: 16px; font-size: 10px; }
   .ltog[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
   .vt-small { padding: 3px 8px; font-size: 12px; }
   .vt-sim { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; cursor: pointer; }
-  /* Éditeur du masque des détails clés */
+  /* Key-detail mask editor */
   .maskwrap { position: relative; display: inline-block; line-height: 0; touch-action: none; user-select: none; cursor: none; }
   .maskwrap img { max-width: 100%; max-height: 72vh; display: block; pointer-events: none; }
+  .maskwrap img.fgov { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; pointer-events: none; }
   .maskwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; pointer-events: none; }
   .maskwrap .cropguide { position: absolute; border: 1.5px dashed rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.4); pointer-events: none; }
   .maskwrap .brush { position: absolute; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7);
@@ -98,8 +140,50 @@
   .card.sel { outline: 2px solid var(--accent); }
   .card img { width: 100%; display: block; background: #ddd; }
   .card .meta { padding: 8px 10px; font-size: 12px; color: var(--muted); }
+  .lcolor { width: 22px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; flex: none; }
+  .colorpop { position: fixed; z-index: 60; width: 236px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+              padding: 8px 10px 10px; box-shadow: 0 10px 28px rgba(0,0,0,.4); font-size: 12px; }
+  .colorpop h4 { margin: 6px 0 4px; font-size: 11px; font-weight: 500; color: var(--muted); }
+  .colorpop .sws { display: flex; flex-wrap: wrap; gap: 5px; }
+  .colorpop .sws button { width: 26px; height: 26px; padding: 0; border-radius: 6px; border: 1px solid rgba(127,127,127,.45); cursor: pointer; }
+  .colorpop .sws button:hover, .colorpop .sws button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .colorpop .sws button.cur { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .colorpop .acts { display: flex; gap: 6px; margin-top: 10px; }
+  .colorpop .acts button { flex: 1; font-size: 12px; padding: 4px 6px; }
+  .colorpop .cpnone { color: var(--muted); font-style: italic; }
+  .cpick canvas.sv { width: 216px; height: 110px; display: block; border-radius: 6px; cursor: crosshair; touch-action: none; }
+  .cpick input.hue { width: 216px; margin: 6px 0 4px; -webkit-appearance: none; appearance: none; height: 12px; border-radius: 6px;
+    background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); outline: none; }
+  .cpick input.hue::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    border: 2px solid #333; cursor: pointer; }
+  .cpick input.hue::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid #333; }
+  .cpick .cprow { display: flex; gap: 6px; align-items: center; }
+  .cpick .cpprev { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(127,127,127,.45); flex: none; }
+  .cpick .cphex { width: 76px; font: 12px ui-monospace, monospace; padding: 4px 6px; }
+  .cpick .cprow button { flex: 1; font-size: 12px; padding: 4px 6px; }
+  .palmenu .prow { display: flex; align-items: center; }
+  .palmenu .prow > button:first-child { flex: 1; min-width: 0; }
+  .palmenu .pdel { flex: none; width: 24px; padding: 2px 0; color: var(--muted); text-align: center; }
+  .palmenu .pdel:hover { color: #dc2626; }
+  .palmenu .psave { color: var(--accent); border-top: 1px solid var(--line); margin-top: 4px; border-radius: 0 0 5px 5px; }
+  .palmenu .pform { display: flex; gap: 4px; padding: 6px; }
+  .palmenu .pform input { flex: 1; min-width: 0; font-size: 12px; padding: 4px 6px; }
+  .palmenu .pform button { width: auto; flex: none; padding: 4px 8px; background: var(--soft); border: 1px solid var(--line); }
+  .lcreset { font-size: 11px; padding: 0 5px; border-radius: 4px; line-height: 18px; }
   .card .meta .t { display: flex; gap: 8px; align-items: center; color: var(--ink); font-weight: 600; font-size: 13px; margin-bottom: 3px; }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .lgbtn { font: inherit; font-size: 12px; color: inherit; background: none; border: 1px solid var(--line);
+           border-radius: 999px; padding: 1px 8px 1px 5px; cursor: pointer; }
+  .lgbtn[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
+  /* layer view = base image + bridge / removed-detail overlays */
+  .lv { position: relative; line-height: 0; background: #ddd; }
+  .lv img { width: 100%; display: block; }
+  .lv img.ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; background: transparent; }
+  .stage .lv { max-width: 100%; }
+  .stage .lv img { max-width: none; max-height: none; width: 100%; height: 100%; }
+  body.no-bridges .lv .ov-bridges, body.no-lost .lv .ov-lost { display: none; }
+  .histo { margin: 6px 0 2px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; line-height: 0; }
+  .histo canvas { width: 100%; height: 96px; display: block; touch-action: none; }
   .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
   .empty { color: var(--muted); text-align: center; padding: 80px 20px; }
   .reco { background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
@@ -116,7 +200,7 @@
           padding: 7px 10px; margin-bottom: 8px; font-size: 13px; }
   @media (prefers-color-scheme: dark) { .warn { background: #3a2e12; color: #fde68a; border-color: #854d0e; } }
   .sw.pick { cursor: pointer; width: 20px; height: 20px; }
-  /* Éditeur de cadrage */
+  /* Crop editor */
   .cropwrap { position: relative; display: inline-block; overflow: hidden; user-select: none; touch-action: none; line-height: 0; }
   .cropwrap img { max-width: 100%; max-height: 72vh; display: block; pointer-events: none; }
   .croprect { position: absolute; border: 1.5px solid #fff; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move;
@@ -127,7 +211,7 @@
   .h.sw { left: -7px; bottom: -7px; cursor: nesw-resize; } .h.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
   .h.n { left: calc(50% - 7px); top: -7px; cursor: ns-resize; } .h.s { left: calc(50% - 7px); bottom: -7px; cursor: ns-resize; }
   .h.w { top: calc(50% - 7px); left: -7px; cursor: ew-resize; } .h.e { top: calc(50% - 7px); right: -7px; cursor: ew-resize; }
-  /* Sections repliables (accordéon) */
+  /* Collapsible sections (accordion) */
   aside fieldset { padding-top: 0; }
   aside fieldset > legend { width: 100%; padding: 0; }
   aside fieldset.collapsed { padding-bottom: 0; }
@@ -157,9 +241,8 @@
   header button.link { margin-left: 12px; background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 12px; }
   .aligngrid { display: grid; grid-template-columns: repeat(3, 30px); gap: 3px; }
   .aligngrid button, #alignH, #alignV { padding: 3px 0; width: 30px; font-size: 14px; line-height: 1.2; }
-  /* Éditeur de mise en page */
-  /* Option « Support dans toutes les vues » : cadre commun en mm */
-  .tabopt { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); margin-left: 6px; cursor: pointer; }
+  /* Layout editor */
+  /* "Support in every view" option: common frame in mm */
   .sframe { position: relative; flex: none; overflow: hidden; }
   .sframe .sf-sheet { position: absolute; border: 1px dashed rgba(127,127,127,.85); pointer-events: none; z-index: 4; }
   .sframe .sf-sup { position: absolute; box-shadow: 0 1px 6px rgba(0,0,0,.35); pointer-events: none; }
@@ -196,15 +279,17 @@
   .lay .dim { position: absolute; font-size: 11px; color: var(--muted); }
   .lay .rz { position: absolute; width: 14px; height: 14px; background: #fff; border: 1px solid #333; border-radius: 3px; cursor: nwse-resize; z-index: 2; }
   .err { color: #dc2626; }
-  /* Écran moyen : la colonne des pochoirs passe sous l'image, en grille */
+  /* Medium screen: the stencil column moves below the image, as a grid */
   @media (max-width: 1150px) {
-    main { grid-template-columns: 330px minmax(0, 1fr); }
+    main { grid-template-columns: var(--col-left, 330px) minmax(0, 1fr); }
     .layercol { grid-column: 2; border-left: none; border-top: 1px solid var(--line); max-height: none; }
+    .colgrip.right { display: none; }
     .layers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   }
   @media (max-width: 820px) {
     main { grid-template-columns: 1fr; }
     .layercol { grid-column: 1; }
+    .colgrip { display: none; }
     aside, section.view { max-height: none; }
   }
 </style>
@@ -214,9 +299,19 @@
   <h1>StencilIt</h1>
   <span style="color:var(--muted)">pochoirs multicouches pour l'aérographe</span>
   <span class="status" id="status">Chargez une image pour commencer</span>
+  <select id="lang" data-noi18n aria-label="Language / Langue" title="Language / Langue" style="width:auto; font-size:12px; padding:3px 6px; margin-left:10px">
+    <option value="en">English</option>
+    <option value="fr">Français</option>
+  </select>
+  <label class="autocalc" title="Coché : chaque modification relance le calcul. Décoché : le calcul ne se fait qu'à la demande (bouton à côté, ou Ctrl + Entrée).">
+    <input type="checkbox" id="auto_calc" checked> Calcul auto</label>
+  <button type="button" id="calcBtn" class="calcbtn" hidden>À jour ✓</button>
   <button type="button" class="link" id="resetAll" title="Oublier les derniers réglages utilisés (les réglages enregistrés sont conservés)">Réglages par défaut</button>
 </header>
+<div class="colorpop" id="colorPop" role="dialog" aria-label="Couleur de la couche" hidden></div>
 <main>
+<div class="colgrip left" data-side="left" role="separator" aria-orientation="vertical" aria-label="Largeur du panneau des réglages" title="Glisser pour élargir / réduire (double-clic : largeur par défaut)"></div>
+<div class="colgrip right" data-side="right" role="separator" aria-orientation="vertical" aria-label="Largeur de la colonne des pochoirs" title="Glisser pour élargir / réduire (double-clic : largeur par défaut)"></div>
 <aside>
   <div id="drop">
     <div id="dropInner">Glissez une image ici<br>ou cliquez pour choisir</div>
@@ -413,6 +508,38 @@
   </fieldset>
 
   <fieldset>
+    <legend>Prétraitement de l'image</legend>
+    <label class="full"><input type="checkbox" id="pre_auto_levels"> Niveaux automatiques
+      <span class="hint">(étire les tons du plus sombre au plus clair)</span></label>
+    <label class="row">Contraste local <span class="v" id="pre_clahe_v"></span>
+      <input type="range" id="pre_clahe" min="0" max="100" step="5" value="0"></label>
+    <label class="row">Tons moyens (gamma) <span class="v" id="pre_gamma_v"></span>
+      <input type="range" id="pre_gamma" min="0.4" max="2.5" step="0.05" value="1"></label>
+    <p class="hint">Contraste local : fait ressortir les volumes (visage, plis) avant le découpage en teintes.
+      Gamma &gt; 1 éclaircit les tons moyens, &lt; 1 les assombrit.</p>
+    <label class="row">Saturation (%) <span class="v" id="pre_saturation_v"></span>
+      <input type="range" id="pre_saturation" min="0" max="250" step="5" value="100"></label>
+    <label class="row">Netteté <span class="v" id="pre_sharpen_v"></span>
+      <input type="range" id="pre_sharpen" min="0" max="100" step="5" value="0"></label>
+    <p class="hint">Saturation : sépare mieux les teintes proches d'une image couleur. Netteté : surtout utile au
+      pochoir de contours (détails clés) ; au-delà d'un réglage léger, elle crée du bruit.</p>
+    <label class="full"><input type="checkbox" id="pre_remove_bg"> Supprimer le fond (il reste support nu)</label>
+    <div style="display:flex; gap:6px; align-items:center; margin:2px 0 6px">
+      <button type="button" id="paintSubject" class="vt-small">Peindre le sujet…</button>
+      <span class="hint" id="subjInfoSide">Aucun sujet peint.</span>
+    </div>
+    <label class="full"><input type="checkbox" id="manual_thresholds"> Seuils manuels entre les teintes</label>
+    <div class="histo"><canvas id="histo" width="300" height="96" aria-label="Histogramme de luminance et seuils entre les teintes"></canvas></div>
+    <div style="display:flex; gap:6px; margin:4px 0">
+      <button type="button" id="thrAuto" class="vt-small" title="Revenir aux seuils calculés automatiquement">Seuils automatiques</button>
+      <button type="button" id="preReset" class="vt-small" title="Aucun prétraitement">Réinitialiser</button>
+    </div>
+    <p class="hint" id="thrHint">Faites glisser un trait de l'histogramme pour déplacer la frontière entre deux teintes
+      (les seuils manuels s'activent alors). Le bandeau du bas montre la teinte de chaque plage.</p>
+    <input type="hidden" id="thresholds" value="">
+  </fieldset>
+
+  <fieldset>
     <legend>Feuille du pochoir & calage</legend>
     <label class="full" for="sheet_mode">Feuille du pochoir</label>
     <select id="sheet_mode" style="width:100%">
@@ -585,22 +712,34 @@
   <div class="tabs" id="tabs">
     <button data-v="crop">Cadrage</button>
     <button data-v="layout">Mise en page</button>
-    <button data-v="mask" title="Peindre les zones où chercher les détails clés du pochoir de contours">Masque contours</button>
+    <button data-v="mask" title="Masques peints au pinceau : zones des détails clés (pochoir de contours) ou sujet à garder (fond supprimé)">Masques</button>
     <button data-v="preview" class="on">Prévisualisation</button>
     <button data-v="compare">Comparer à l'original</button>
     <button data-v="reference">Original</button>
-    <label class="tabopt" title="Affiche le support (et la feuille du pochoir en pointillés) dans toutes les vues, à la même échelle"><input type="checkbox" id="show_support"> Support dans toutes les vues</label>
-    <label class="tabopt" title="Affiche le tapis de découpe (feuille posée dans son coin) dans toutes les vues, à la même échelle"><input type="checkbox" id="show_mat"> Tapis dans toutes les vues</label>
     <span style="margin-left:auto" class="palette" id="palette"></span>
   </div>
   <div id="warnings"></div>
   <div class="viewtools" id="viewtools" hidden>
-    <span class="vt-label">Couches</span>
-    <span id="layerToggles" class="vt-toggles"></span>
-    <button type="button" id="showAll" class="vt-small">Tout afficher</button>
-    <label class="vt-sim"><input type="checkbox" id="preview_sim"> Rendu simulé <span class="hint">(flou de l'aérographe)</span></label>
+    <span class="vt-opts" role="group" aria-label="Afficher">
+      <button type="button" class="vt-opt" id="optSupport" aria-pressed="true"
+        title="Support : sa couleur sous la prévisualisation, son bord et la feuille du pochoir en pointillés, dans toutes les vues et à la même échelle. Désactivé : les couches seules, sur fond transparent.">Support</button>
+      <button type="button" class="vt-opt" id="optMat" aria-pressed="false"
+        title="Tapis de découpe (feuille posée dans son coin) dans toutes les vues, à la même échelle">Tapis</button>
+      <input type="checkbox" id="show_support" checked hidden>
+      <input type="checkbox" id="show_mat" hidden>
+    </span>
+    <button type="button" class="vt-opt vt-pre" id="optPre" aria-pressed="true" hidden
+      title="Onglet Original : image prétraitée (activé) ou image d'origine brute">Prétraitée</button>
+    <span class="vt-layers vt-label">Couches</span>
+    <span id="layerToggles" class="vt-toggles vt-layers"></span>
+    <button type="button" id="showAll" class="vt-small vt-layers">Tout afficher</button>
+    <label class="vt-sim vt-layers"><input type="checkbox" id="preview_sim"> Rendu simulé <span class="hint">(flou de l'aérographe)</span></label>
   </div>
   <div class="viewtools" id="masktools" hidden>
+    <select id="maskKind" aria-label="Masque à peindre" title="Masque à peindre" style="width:auto; flex:none">
+      <option value="outline">Masque contours (détails clés)</option>
+      <option value="subject">Masque sujet (fond supprimé)</option>
+    </select>
     <div class="seg" role="group" aria-label="Outil">
       <button type="button" id="mBrush" aria-pressed="true" title="Peindre une zone (B)">Pinceau</button>
       <button type="button" id="mErase" aria-pressed="false" title="Effacer (E)">Gomme</button>
@@ -619,16 +758,29 @@
     <h2>Pochoirs</h2>
     <span class="hint" id="layerCount"></span>
   </div>
+  <div class="palbar">
+    <div class="paldd" id="palDD">
+      <button type="button" id="palBtn" aria-haspopup="listbox" aria-expanded="false"
+        title="Colore toutes les couches avec une palette cohérente, du plus clair (1re couche) au plus foncé ; chaque couleur reste modifiable ensuite">
+        <span class="pname" id="palBtnLabel">Palette de couleurs…</span>
+        <span class="palprev" id="palPrev" aria-hidden="true"></span><span class="chev" aria-hidden="true">▾</span>
+      </button>
+      <div class="palmenu" id="palMenu" role="listbox" aria-label="Palettes de couleurs" hidden></div>
+    </div>
+    <button type="button" class="vt-small" id="colorsAuto" hidden title="Revenir aux teintes calculées pour toutes les couches">Auto</button>
+    <input type="hidden" id="layer_colors" value="">
+  </div>
   <div class="legend">
     <span><i style="background:#dcd3c3"></i>matière</span>
     <span><i style="background:#e6a98b"></i>ouverture</span>
-    <span><i style="background:#e62828"></i>pont</span>
-    <span><i style="background:#ff8c00"></i>détail supprimé</span>
+    <button type="button" class="lgbtn" id="lgBridges" aria-pressed="true" title="Afficher / masquer les ponts sur les vues des couches"><i style="background:#e62828"></i>pont</button>
+    <button type="button" class="lgbtn" id="lgLost" aria-pressed="true" title="Afficher / masquer les détails supprimés par les contraintes du matériau"><i style="background:#ff8c00"></i>détail supprimé</button>
   </div>
   <div class="layers" id="layers"><p class="hint">Les pochoirs apparaîtront ici, dans l'ordre de pulvérisation.</p></div>
 </div>
 </main>
 
+<script src="/static/i18n.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 let SID = null, MATS = {}, LAST = null, VIEW = "preview", SEL = null, timer = null, busy = false, again = false;
@@ -636,6 +788,8 @@ let SID = null, MATS = {}, LAST = null, VIEW = "preview", SEL = null, timer = nu
 const MAT_FIELDS = ["min_opening_mm", "min_strip_mm", "bridge_width_mm", "min_area_mm2", "double_bridge_area_mm2", "min_bridges", "bridges"];
 const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_mm",
   "image_scale", "image_height_factor", "image_pos_x", "image_pos_y", "margin_mm", "sheet_mode", "sheet_border_mm", "sheet_w_mm", "sheet_h_mm", "reg_dims", "machine_max_mm", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline",
+  "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds", "pre_saturation", "pre_sharpen", "pre_remove_bg",
+  "layer_colors",
   "n_layers", "detail", "color_mode", "layering", "skip_support",
   "outline", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_auto_color", "outline_color",
   ...MAT_FIELDS,
@@ -664,16 +818,16 @@ function syncPresetFromSize() {
   if (w !== h) $("orientation").value = w > h ? "landscape" : "portrait";
 }
 
-// ---------------- Tapis de découpe ----------------
-// Préréglage -> dimensions ; « Sans tapis » envoie 0 × 0 (le moteur ne vérifie alors que la largeur).
-// ---------------- Machine de découpe ----------------
+// ---------------- Cutting mat ----------------
+// Preset -> dimensions; "No mat" sends 0 × 0 (the engine then only checks the width).
+// ---------------- Cutting machine ----------------
 const MACHINES = { cameo4: 305, cameo5: 305, pro: 610 };
 function applyMachine() {
   const w = MACHINES[$("machine").value];
   if (w) $("machine_max_mm").value = w;
   syncMat();
 }
-// Ancien réglage sans choix de machine : on la déduit de la largeur enregistrée
+// Old setting without a machine choice: deduce it from the saved width
 function machineFromWidth() {
   const w = val("machine_max_mm");
   $("machine").value = Math.abs(w - 610) < 1 ? "pro" : Math.abs(w - 305) < 1 ? "cameo4" : "custom";
@@ -683,7 +837,7 @@ function applyMatPreset() {
   if (v.includes("x")) { const [w, h] = v.split("x").map(Number); $("mat_w_mm").value = w; $("mat_h_mm").value = h; }
   syncMat();
 }
-// Feuille du pochoir dans le repère du support (mm) — même règle que pipeline.sheet_rect
+// Stencil sheet in support coordinates (mm) — same rule as pipeline.sheet_rect
 function sheetInside() { return $("sheet_mode").value !== "around"; }
 function sheetRectMM(L = layoutCalc()) {
   const mode = $("sheet_mode").value;
@@ -699,7 +853,7 @@ function syncSheetMode() {
   $("rowBorder").hidden = !inside;
   $("rowFixed").hidden = mode !== "fixed";
   $("rowDims").hidden = !inside;
-  // les équerres visent les angles du support : impossible quand la feuille est posée dedans
+  // L-brackets aim at the support corners: impossible when the sheet is laid inside it
   const eq = $("reg_shape").querySelector('option[value="equerre"]');
   eq.disabled = inside;
   if (inside && $("reg_shape").value === "equerre") { $("reg_shape").value = "croix"; regHint(); }
@@ -710,10 +864,10 @@ function syncSheetMode() {
 function syncMat() {
   const v = $("mat_preset").value, none = v === "none", custom = $("machine").value === "custom";
   const mmax = val("machine_max_mm");
-  // largeur de coupe : saisie seulement pour une autre machine ; utile seule sans tapis (rouleau)
+  // cutting width: editable only for another machine; only useful without a mat (roll)
   $("rowMachineW").hidden = !custom;
   $("machine_max_mm").disabled = !custom;
-  // tapis plus larges que la machine : non proposés
+  // mats wider than the machine: not offered
   [...$("mat_preset").options].forEach(o => {
     if (!o.value.includes("x")) return;
     o.disabled = Number(o.value.split("x")[0]) > mmax + 1;
@@ -738,18 +892,18 @@ function syncMat() {
     `Feuille ${Math.round(sw)} × ${Math.round(sh)} mm : ` +
     (fits ? "tient sur le tapis ✓" : rot ? `tient avec le tapis en ${mat.land ? "portrait" : "paysage"}` : "dépasse du tapis ✗");
 }
-function cutMat() {             // tapis courant (mm) ou null (« Sans tapis »)
+function cutMat() {             // current mat (mm) or null ("No mat")
   const v = $("mat_preset").value;
   if (v === "none") return null;
-  const pw = val("mat_w_mm"), ph = val("mat_h_mm");      // dimensions physiques (largeur = sens machine)
+  const pw = val("mat_w_mm"), ph = val("mat_h_mm");      // physical dimensions (width = machine direction)
   if (!(pw > 0 && ph > 0)) return null;
   const land = $("mat_orient").value === "landscape";
-  const w = land ? ph : pw, h = land ? pw : ph;          // dimensions telles que posées sous le support
+  const w = land ? ph : pw, h = land ? pw : ph;          // dimensions as laid under the support
   const inch = x => Math.abs(x / 25.4 - Math.round(x / 25.4)) < 0.01 ? `${Math.round(x / 25.4)}″` : null;
   const label = (inch(pw) && inch(ph) ? `Tapis ${inch(pw)} × ${inch(ph)}` : `Tapis ${pw} × ${ph} mm`) + (land ? " (paysage)" : "");
   return { w, h, pw, ph, land, label };
 }
-function matParams(p) {           // « Sans tapis » : pas de contrôle de tapis
+function matParams(p) {           // "No mat": no mat check
   if ($("mat_preset").value === "none") { p.mat_w_mm = 0; p.mat_h_mm = 0; }
   return p;
 }
@@ -760,10 +914,10 @@ function params() {
   return matParams(p);
 }
 
-// ---------------- Recadrage & mise en page ----------------
+// ---------------- Crop & layout ----------------
 let IMG = null;                        // {w, h, src}
 let DRAGGING = false;
-let CROP = { x: 0, y: 0, w: 1, h: 1 }; // fractions de l'image source
+let CROP = { x: 0, y: 0, w: 1, h: 1 }; // fractions of the source image
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 function cropRatio() {
@@ -775,7 +929,7 @@ function cropRatio() {
 function applyCropRatio() {
   const r = cropRatio();
   if (!r || !IMG) return;
-  // plus grand cadre de ce ratio, centré sur le cadre actuel, dans l'image
+  // largest frame with this ratio, centred on the current frame, within the image
   const cxp = (CROP.x + CROP.w / 2) * IMG.w, cyp = (CROP.y + CROP.h / 2) * IMG.h;
   let wp = CROP.w * IMG.w, hp = wp / r;
   if (hp > CROP.h * IMG.h) { hp = CROP.h * IMG.h; wp = hp * r; }
@@ -790,14 +944,15 @@ function cropInfo() {
 }
 function cropChanged() { cropInfo(); syncWidth(); if (editorFollowsLayout()) render(); recommend(false); schedule(); }
 
-// ---------------- Option « Support dans toutes les vues » ----------------
-// Toutes les vues partagent alors un même cadre en mm (support au centre, feuille du pochoir en
-// pointillés, image source entière placée selon le recadrage et la mise en page), à la même échelle.
+// ---------------- "Support in every view" option ----------------
+// All views then share the same frame in mm (support in the middle, stencil sheet dashed,
+// whole source image placed according to crop and layout), at the same scale.
+// Common frame (same scale everywhere): requested by the support OR the mat option
 function showSup() { return $("show_support").checked || $("show_mat").checked; }
 function showMatAll() { return $("show_mat").checked && !!cutMat(); }
-// Les éditeurs dont l'affichage dépend du recadrage / de la mise en page / du support
+// Editors whose display depends on crop / layout / support
 function editorFollowsLayout() { return VIEW === "layout" || (showSup() && (VIEW === "crop" || VIEW === "mask")); }
-// Emprise (mm, origine = coin haut-gauche du support) de l'image source ENTIÈRE, recadrage compris
+// Footprint (mm, origin = support's top-left corner) of the WHOLE source image, crop included
 function fullImageRect(L) {
   const w = L.w / CROP.w, h = L.h / CROP.h;
   return { x: L.x - CROP.x * w, y: L.y - CROP.y * h, w, h };
@@ -825,9 +980,9 @@ function supportFrame(st) {
   Object.assign(fr.style, { width: w.W + "px", height: w.H + "px" });
   const box = (x, y, bw, bh) => `left:${w.px(x)}px;top:${w.py(y)}px;width:${bw * k}px;height:${bh * k}px`;
   fr.innerHTML = `<div class="sf-sheet" title="Feuille du pochoir" style="${box(sr.x0, sr.y0, sr.x1 - sr.x0, sr.y1 - sr.y0)}"></div>
-    <div class="sf-sup" style="${box(0, 0, L.SW, L.SH)};background:${val("support_color")}"></div>`;
+    ${$("show_support").checked ? `<div class="sf-sup" style="${box(0, 0, L.SW, L.SH)};background:${val("support_color")}"></div>` : ""}`;
   const mat = showMatAll() && cutMat();
-  if (mat) {   // tapis : quadrillage sous le support, contour et nom au-dessus de tout
+  if (mat) {   // mat: grid under the support, outline and name above everything
     const sw = sr.x1 - sr.x0, sh = sr.y1 - sr.y0, over = sw > mat.w + 1e-6 || sh > mat.h + 1e-6, g = 25.4 * k;
     fr.insertAdjacentHTML("afterbegin", `<div class="mat" style="${box(sr.x0, sr.y0, mat.w, mat.h)};` +
       `background-image:linear-gradient(rgba(120,180,200,.22) 1px, transparent 1px),linear-gradient(90deg, rgba(120,180,200,.22) 1px, transparent 1px);background-size:${g}px ${g}px"></div>`);
@@ -840,11 +995,13 @@ function supportFrame(st) {
     Object.assign(el.style, { left: w.px(x) + "px", top: w.py(y) + "px", width: bw * k + "px", height: bh * k + "px" });
     fr.append(el);
   };
-  // contour du support au-dessus de tout (repère, ne capte pas la souris)
-  w.edge = () => fr.insertAdjacentHTML("beforeend", `<div class="sf-edge" title="Bord du support" style="${box(0, 0, L.SW, L.SH)}"></div>` + (w.matEdge || ""));
+  // support outline above everything (guide, does not catch the mouse)
+  // the support is only drawn when "Support" is on (the mat alone may request the frame)
+  w.edge = () => fr.insertAdjacentHTML("beforeend", ($("show_support").checked
+    ? `<div class="sf-edge" title="Bord du support" style="${box(0, 0, L.SW, L.SH)}"></div>` : "") + (w.matEdge || ""));
   return w;
 }
-// Éditeurs « Cadrage » et « Masque » : image source entière posée sur le support
+// "Crop" and "Mask" editors: whole source image laid on the support
 function frameSource(st, wrap) {
   if (!showSup()) return;
   st.style.minHeight = ""; st.style.alignItems = "";
@@ -853,7 +1010,7 @@ function frameSource(st, wrap) {
   w.edge();
   st.replaceChildren(w.frame);
 }
-// Vues calculées (prévisualisation, comparaison, original, pochoir) posées dans le cadre commun
+// Computed views (preview, comparison, original, stencil) placed in the common frame
 function frameView(st) {
   const top = st.firstElementChild, dm = st.querySelector("[data-mm]");
   if (!top || !dm || top.classList.contains("sframe")) return;
@@ -880,10 +1037,10 @@ function syncWidth() {
   $("img_width_mm").value = Math.round(L.w);
   $("img_height_mm").value = Math.round(L.h);
   updateSummaries();
-  syncMat();   // la feuille ajustée au motif change avec la taille de l'image
+  syncMat();   // the sheet fitted to the design changes with the image size
 }
 function setHF(v) { $("image_height_factor").value = Math.min(10, Math.max(0.1, v)); }
-// Redimensionnement au mm près (largeur ou hauteur), proportionnel ou non
+// Resize to the millimetre (width or height), proportional or not
 function resizeTo(wmm, hmm) {
   const L = layoutCalc();
   if ($("keep_ratio").checked) {
@@ -896,22 +1053,22 @@ function resizeTo(wmm, hmm) {
     setLayout(w / L.fitW * 100);
   }
 }
-// Aligne l'image sur un bord / coin / centre du support (hx, vy ∈ {-1, 0, 1}, null = inchangé)
+// Aligns the image on an edge / corner / centre of the support (hx, vy ∈ {-1, 0, 1}, null = unchanged)
 function alignTo(hx, vy) {
   const L = layoutCalc(), m = val("align_margin_mm");
   const px = hx == null ? null : hx < 0 ? (m + L.w / 2) / L.SW * 100 : hx > 0 ? (L.SW - m - L.w / 2) / L.SW * 100 : 50;
   const py = vy == null ? null : vy < 0 ? (m + L.h / 2) / L.SH * 100 : vy > 0 ? (L.SH - m - L.h / 2) / L.SH * 100 : 50;
   setLayout(null, px, py);
 }
-// Plus grande image possible dans le pochoir, selon le mode de feuille :
-//  autour du support -> le support (marge intérieure comprise) ;
-//  taille fixe       -> la feuille moins sa bordure ;
-//  ajustée au motif  -> le tapis (ou la largeur de coupe sans tapis) moins la bordure.
-// Dans les deux derniers cas, l'orientation (feuille ou tapis) donnant la plus grande image est retenue,
-// et l'image reste entièrement sur le support.
+// Largest possible image in the stencil, depending on the sheet mode:
+//  around the support -> the support (inner margin included);
+//  fixed size        -> the sheet minus its border;
+//  fitted to design  -> the mat (or the cutting width without a mat) minus the border.
+// In the last two cases, the orientation (sheet or mat) giving the largest image is chosen,
+// and the image stays entirely on the support.
 function fitToStencil() {
   if (!IMG) return status("Chargez d'abord une image", true);
-  const L = layoutCalc(), mode = $("sheet_mode").value, k = L.ar * L.hf;   // hauteur = largeur × k
+  const L = layoutCalc(), mode = $("sheet_mode").value, k = L.ar * L.hf;   // height = width × k
   const b = Math.max(3, val("sheet_border_mm"));
   const widthIn = (TW, TH) => Math.max(5, Math.min(TW, TH / k));
   if (mode === "around") {
@@ -930,7 +1087,7 @@ function fitToStencil() {
   }
   let best = null;
   for (const [BW, BH, swap] of boxes) {
-    // la feuille (image + bordure) doit aussi rester sur le support
+    // the sheet (image + border) must also stay on the support
     const w = widthIn(Math.min(BW, L.SW) - 2 * b, Math.min(BH, L.SH) - 2 * b);
     if (!best || w > best.w + 0.5) best = { w, swap };
   }
@@ -945,8 +1102,8 @@ function fitToStencil() {
     }
     syncSheetMode(); syncMat();
   }
-  const w = Math.max(5, best.w - 0.2), h = w * k;     // 0,2 mm de jeu : l'arrondi de l'échelle ne doit pas rogner
-  // on garde le centre actuel, ramené pour que l'image tienne entièrement sur le support
+  const w = Math.max(5, best.w - 0.2), h = w * k;     // 0.2 mm slack: rounding of the scale must not crop
+  // keep the current centre, moved so that the image fits entirely on the support
   const cx = clamp(L.x + L.w / 2, w / 2 + b, L.SW - w / 2 - b), cy = clamp(L.y + L.h / 2, h / 2 + b, L.SH - h / 2 - b);
   setLayout(w / L.fitW * 100, cx / L.SW * 100, cy / L.SH * 100);
   status(`Image ajustée ${what}, bordure comprise : ${Math.round(w)} × ${Math.round(h)} mm${turned}`);
@@ -1001,14 +1158,15 @@ function cropEditor(st) {
 
 function layoutEditor(st) {
   const L0 = layoutCalc();
-  const mat = cutMat(), sr = sheetRectMM(L0);
+  // mat drawn only when the "Mat" button is on (as in the other views)
+  const mat = $("show_mat").checked ? cutMat() : null, sr = sheetRectMM(L0);
   let totW, totH, k, ox, oy;
-  if (showSup()) {   // même cadre et même échelle que les autres vues
+  if (showSup()) {   // same frame and same scale as the other views
     st.style.minHeight = ""; st.style.alignItems = "";
-    const w = supportWorld(st, true);
+    const w = supportWorld(st);
     k = w.k; totW = w.W / k; totH = w.H / k; ox = w.px(0); oy = w.py(0);
   } else {
-    // espace autour du support pour voir ce qui dépasse, agrandi au besoin pour montrer tout le tapis
+    // room around the support to see what overflows, enlarged if needed to show the whole mat
     const room = 0.18;
     let x0 = Math.min(-L0.SW * room, sr.x0 - 2), y0 = Math.min(-L0.SH * room, sr.y0 - 2),
         x1 = Math.max(L0.SW * (1 + room), sr.x1 + 2), y1 = Math.max(L0.SH * (1 + room), sr.y1 + 2);
@@ -1018,18 +1176,18 @@ function layoutEditor(st) {
     k = Math.min(availW / totW, availH / totH);
     ox = -x0 * k; oy = -y0 * k;
   }
-  // Tapis de découpe (feuille posée dans son coin haut-gauche, comme dans Silhouette Studio) + feuille
+  // Cutting mat (sheet laid in its top-left corner, as in Silhouette Studio) + sheet
   let sheet = "", mattop = "";
   if (mat) {
     const sw = sr.x1 - sr.x0, sh = sr.y1 - sr.y0, over = sw > mat.w + 1e-6 || sh > mat.h + 1e-6;
-    const g = 25.4 * k;     // quadrillage au pouce, comme sur les tapis Silhouette
+    const g = 25.4 * k;     // inch grid, like on Silhouette mats
     const box = `left:${ox + sr.x0 * k}px;top:${oy + sr.y0 * k}px;width:${mat.w * k}px;height:${mat.h * k}px`;
     sheet += `<div class="mat" style="${box};` +
       `background-image:linear-gradient(rgba(120,180,200,.22) 1px, transparent 1px),linear-gradient(90deg, rgba(120,180,200,.22) 1px, transparent 1px);background-size:${g}px ${g}px"></div>`;
-    // contour du tapis au-dessus du support : on voit où s'arrête la zone de coupe
+    // mat outline above the support: shows where the cutting area ends
     mattop = `<div class="matedge${over ? " over" : ""}" title="${mat.label}" style="${box}"><span>${mat.label}${over ? " — la feuille dépasse !" : ""}</span></div>`;
   }
-  // feuille du pochoir (au-dessus du support quand elle est posée dedans) + croix cotées du dernier calcul
+  // stencil sheet (above the support when laid inside it) + dimensioned crosses of the last computation
   mattop += `<div class="sheetol" title="Feuille du pochoir" style="left:${ox + sr.x0 * k}px;top:${oy + sr.y0 * k}px;width:${(sr.x1 - sr.x0) * k}px;height:${(sr.y1 - sr.y0) * k}px"></div>`;
   const pos = LAST && LAST.positioning;
   if (sheetInside() && pos && pos.mode !== "around" && val("reg_dims")) {
@@ -1079,7 +1237,7 @@ function layoutEditor(st) {
     if (!drag) return;
     const dx = (e.clientX - drag.sx) / k, dy = (e.clientY - drag.sy) / k, L = drag.L;
     if (drag.rz) {
-      // coin haut-gauche fixe
+      // top-left corner fixed
       const w = Math.max(5, L.w + dx);
       let h = w * L.ar * L.hf;
       if (!$("keep_ratio").checked || e.shiftKey) {
@@ -1109,7 +1267,7 @@ function material() {
   return base;
 }
 
-// ---------------- Réglages enregistrés (fichier presets_utilisateur.json côté serveur) ----------------
+// ---------------- Saved presets (presets_utilisateur.json file on the server) ----------------
 let UP = { support: {}, material: {} };
 const SUPPORT_FIELDS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_mm",
   "margin_mm", "sheet_mode", "sheet_border_mm", "sheet_w_mm", "sheet_h_mm", "reg_dims", "mat_preset", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline"];
@@ -1118,7 +1276,7 @@ function setVals(o) {
     const e = $(k); if (!e) continue;
     if (e.type === "checkbox") e.checked = !!v; else e.value = v;
   }
-  syncSheetMode(); syncMat();   // état des champs, feuille et tapis de découpe
+  syncSheetMode(); syncMat();   // state of the fields, sheet and cutting mat
 }
 async function presetCall(method, url, body) {
   try {
@@ -1136,7 +1294,7 @@ function refreshUserPresets() {
   us.add(new Option(names.length ? "— Choisir un support enregistré —" : "(aucun support enregistré)", ""));
   names.forEach(n => us.add(new Option(n, n)));
   us.value = names.includes(cur) ? cur : "";
-  // Matériaux : options « user:<nom> » insérées avant « Personnalisé »
+  // Materials: "user:<name>" options inserted before "Custom"
   const sel = $("material"), curM = sel.value;
   Object.keys(MATS).filter(k => k.startsWith("user:")).forEach(k => delete MATS[k]);
   sel.querySelectorAll("optgroup").forEach(g => g.remove());
@@ -1157,7 +1315,7 @@ function applyUserSupport(name) {
   schedule();
 }
 
-// Barre « Enregistrer / Enregistrer sous… / Renommer… / Supprimer » (commune aux supports et matériaux)
+// "Save / Save as… / Rename… / Delete" bar (shared by supports and materials)
 let SUPBAR = null, MATBAR = null;
 function makePresetBar(cfg) {
   const bar = $(cfg.bar), form = bar.querySelector(".nameform"), input = form.querySelector("input"),
@@ -1203,7 +1361,7 @@ function makePresetBar(cfg) {
   btn("delete").onclick = async () => {
     const s = cfg.selected(); if (!s) return;
     const d = btn("delete");
-    if (!d.classList.contains("confirm")) {   // confirmation en 2 clics, sans boîte de dialogue
+    if (!d.classList.contains("confirm")) {   // 2-click confirmation, without a dialog box
       d.classList.add("confirm"); d.textContent = "Confirmer ?";
       delTimer = setTimeout(resetDel, 3000);
       return;
@@ -1236,9 +1394,9 @@ function makePresetBar(cfg) {
   return api;
 }
 
-// ---------------- Mémorisation automatique des derniers réglages (navigateur) ----------------
+// ---------------- Automatic memory of the last settings (browser) ----------------
 const LS_KEY = "stencilit.derniers_reglages";
-const NOT_REMEMBERED = new Set(["image_scale", "image_height_factor", "image_pos_x", "image_pos_y"]); // propres à chaque image
+const NOT_REMEMBERED = new Set(["image_scale", "image_height_factor", "image_pos_x", "image_pos_y"]); // specific to each image
 let NO_REMEMBER = false;
 function rememberSettings() {
   if (NO_REMEMBER) return;
@@ -1246,9 +1404,9 @@ function rememberSettings() {
     const s = {};
     PARAMS.filter(k => !NOT_REMEMBERED.has(k)).forEach(k => s[k] = val(k));
     CUT_FIELDS.forEach(f => s["cut_" + f] = $("cut_" + f).value);
-    ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine"].forEach(k => s[k] = val(k));
+    ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "auto_calc"].forEach(k => s[k] = val(k));
     localStorage.setItem(LS_KEY, JSON.stringify(s));
-  } catch (e) { /* stockage indisponible : on ignore */ }
+  } catch (e) { /* storage unavailable: ignored */ }
 }
 function restoreSettings() {
   let s = null;
@@ -1263,13 +1421,13 @@ function restoreSettings() {
   return true;
 }
 function showValues() {
-  ["n_layers", "detail", "tolerance_mm", "spray_mm", "px_per_mm", "image_scale", "image_pos_x", "image_pos_y", "outline_sensitivity"].forEach(k => {
+  ["n_layers", "detail", "tolerance_mm", "spray_mm", "px_per_mm", "image_scale", "image_pos_x", "image_pos_y", "outline_sensitivity", "pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen"].forEach(k => {
     const o = $(k + "_v");
-    if (o) o.textContent = k.startsWith("image_") ? (+$(k).value).toFixed(1) : $(k).value;
+    if (o) o.textContent = k.startsWith("image_") ? (+$(k).value).toFixed(1) : k === "pre_gamma" ? (+$(k).value).toFixed(2) : $(k).value;
   });
 }
 function cutInfo() {
-  // Les réglages machine sont des champs éditables (voir applyMaterial) ; on met à jour la barre d'enregistrement
+  // Machine settings are editable fields (see applyMaterial); update the save bar
   MATBAR?.update();
 }
 function applyMaterial(k) {
@@ -1279,12 +1437,23 @@ function applyMaterial(k) {
   cutInfo();
 }
 
-// ---------------- Sections repliables du panneau ----------------
-// Toutes repliées au départ ; en ouvrir une referme les autres.
+// ---------------- Collapsible panel sections ----------------
+// All collapsed at first; opening one closes the others.
 const SECTION_SUMMARY = {
   "Support à peindre": () => `${val("support_w_mm")} × ${val("support_h_mm")} mm`,
   "Image : cadrage & taille": () => IMG ? `${$("img_width_mm").value} × ${$("img_height_mm").value} mm` : "",
-  "Feuille du pochoir & calage": () => `${$("reg_corners").selectedOptions[0].text.split(" ")[0]} coins · ${$("reg_shape").selectedOptions[0].text.split(" ")[0].toLowerCase()}`,
+  "Feuille du pochoir & calage": () => `${val("reg_corners")} coins · ${{ equerre: "équerres", croix: "croix", rond: "trous" }[val("reg_shape")] || ""}`,
+  "Prétraitement de l'image": () => {
+    const a = [];
+    if (val("pre_auto_levels")) a.push("niveaux");
+    if (val("pre_clahe") > 0) a.push(`contraste ${val("pre_clahe")}`);
+    if (Math.abs(val("pre_gamma") - 1) > 1e-3) a.push(`gamma ${val("pre_gamma").toFixed(2)}`);
+    if (val("manual_thresholds")) a.push("seuils manuels");
+    if (val("pre_saturation") !== 100) a.push(`saturation ${val("pre_saturation")} %`);
+    if (val("pre_sharpen") > 0) a.push(`netteté ${val("pre_sharpen")}`);
+    if (val("pre_remove_bg")) a.push("fond supprimé");
+    return a.length ? a.join(" · ") : "aucun";
+  },
   "Simplification": () => `${val("n_layers")} pochoir${val("n_layers") > 1 ? "s" : ""} · détail ${val("detail")}`,
   "Contours des détails clés": () => val("outline") ? `activé · ${MASK_EMPTY ? "toute l'image" : "masque"} · sens. ${val("outline_sensitivity")}` : "désactivé",
   "Matériau & découpe": () => $("material").selectedOptions[0] ? $("material").selectedOptions[0].text : "",
@@ -1324,12 +1493,156 @@ function openSectionOf(el) {
 function updateSummaries() {
   document.querySelectorAll("aside .acc").forEach(b => {
     const f = SECTION_SUMMARY[b.dataset.title];
-    try { b.querySelector(".sum").textContent = f ? f() : ""; } catch (e) { /* champ pas encore prêt */ }
+    try { b.querySelector(".sum").textContent = f ? f() : ""; } catch (e) { /* field not ready yet */ }
   });
 }
 
+// ---------------- Colonnes redimensionnables ----------------
+const COLS = { left: { def: 330, min: 240, max: 720 }, right: { def: 290, min: 200, max: 720 } };
+function setColWidth(side, w, save = true) {
+  const c = COLS[side];
+  w = Math.round(clamp(w, c.min, Math.min(c.max, innerWidth * 0.45)));
+  document.querySelector("main").style.setProperty(`--col-${side}`, w + "px");
+  if (save) try {
+    const o = JSON.parse(localStorage.getItem("stencilit.colonnes") || "{}"); o[side] = w;
+    localStorage.setItem("stencilit.colonnes", JSON.stringify(o));
+  } catch (e) { /* storage unavailable */ }
+}
+function setupColumns() {
+  try {
+    const o = JSON.parse(localStorage.getItem("stencilit.colonnes") || "{}");
+    ["left", "right"].forEach(k => { if (o[k]) setColWidth(k, o[k], false); });
+  } catch (e) { /* storage unavailable */ }
+  document.querySelectorAll(".colgrip").forEach(g => {
+    const side = g.dataset.side;
+    g.onpointerdown = e => {
+      e.preventDefault();
+      try { g.setPointerCapture(e.pointerId); } catch (err) { /* pointer cannot be captured */ }
+      g.classList.add("drag"); document.body.classList.add("col-resizing");
+      const main = document.querySelector("main").getBoundingClientRect();
+      g.onpointermove = ev => setColWidth(side, side === "left" ? ev.clientX - main.left : main.right - ev.clientX, false);
+      g.onpointerup = g.onpointercancel = ev => {
+        g.onpointermove = g.onpointerup = g.onpointercancel = null;
+        g.classList.remove("drag"); document.body.classList.remove("col-resizing");
+        setColWidth(side, side === "left" ? ev.clientX - main.left : main.right - ev.clientX);
+        window.dispatchEvent(new Event("resize"));            // the centre image re-fits
+      };
+    };
+    g.ondblclick = () => { setColWidth(side, COLS[side].def); window.dispatchEvent(new Event("resize")); };
+  });
+}
+
+// ---------------- Setting tooltips (left column) ----------------
+// Added to the field and its label, without overwriting a tooltip already defined in the HTML.
+const TIPS = {
+  file: "Image à transformer en pochoirs (photo, dessin, logo… en couleur ou noir et blanc). Vous pouvez aussi la glisser sur la zone.",
+  projectFile: "Projet StencilIt exporté (.zip) ou son fichier …_infos.json.",
+  user_support: "Vos supports enregistrés : format, couleur, marges, feuille, tapis et repères de calage.",
+  orientation: "Portrait ou paysage : intervertit la largeur et la hauteur du support.",
+  support_w_mm: "Largeur réelle de la surface à peindre, en millimètres.",
+  support_h_mm: "Hauteur réelle de la surface à peindre, en millimètres.",
+  support_color: "Couleur de la surface avant peinture. Elle sert de fond à l'aperçu ; la teinte de l'image la plus proche peut rester « nue » (sans pochoir).",
+  crop_ratio: "Proportions imposées au cadre de recadrage (onglet Cadrage) : libres, celles du support, ou un rapport fixe.",
+  cropReset: "Revient à l'image entière, sans recadrage.",
+  image_scale: "Taille de l'image en % de la taille « ajustée au support » (100 % = l'image tient dans le support, marge intérieure comprise).",
+  img_width_mm: "Largeur de l'image sur le support, en mm (la hauteur suit si « Garder les proportions » est coché).",
+  img_height_mm: "Hauteur de l'image sur le support, en mm.",
+  keep_ratio: "Coché : largeur et hauteur restent proportionnelles. Décoché : l'image peut être étirée.",
+  align_margin_mm: "Distance au bord du support utilisée par les boutons d'alignement (coins, milieux des bords).",
+  image_pos_x: "Position horizontale du centre de l'image, en % de la largeur du support (50 % = centrée).",
+  image_pos_y: "Position verticale du centre de l'image, en % de la hauteur du support (50 % = centrée).",
+  layCenter: "Centre l'image sur le support sans changer sa taille.",
+  inner_margin_mm: "Marge gardée libre tout autour de l'image par « Ajuster » (et la taille 100 %).",
+  pre_auto_levels: "Étire les tons de l'image du plus sombre au plus clair avant le découpage en teintes (utile pour les photos ternes).",
+  pre_clahe: "Contraste local : accentue les volumes (visage, plis) zone par zone. 0 = désactivé.",
+  pre_gamma: "Tons moyens : au-dessus de 1 éclaircit, en dessous assombrit, sans toucher au noir et au blanc.",
+  pre_saturation: "Saturation des couleurs (100 % = inchangée) : plus haut sépare mieux les teintes proches d'une image couleur.",
+  pre_sharpen: "Netteté (masque flou, ≈ 0,3 mm) : surtout utile au pochoir de contours ; trop forte, elle crée du bruit.",
+  pre_remove_bg: "Le fond détouré (masque Sujet) reste support nu : aucun pochoir n'y est découpé.",
+  paintSubject: "Ouvre l'onglet Masques sur le masque Sujet : peignez grossièrement le sujet à garder.",
+  manual_thresholds: "Chaque teinte devient une plage de luminance que vous réglez en glissant les traits de l'histogramme.",
+  sheet_mode: "Feuille autour du support (calage sur ses angles) ou posée dans le support (ajustée au motif ou de taille fixe, calage par croix et cotes).",
+  margin_mm: "Marge de la feuille autour du support : elle porte les repères de calage et le numéro de couche.",
+  sheet_border_mm: "Bordure de matière autour du motif (feuille dans le support) : elle protège le support et porte les croix.",
+  sheet_w_mm: "Largeur de la feuille de taille fixe, en mm.",
+  sheet_h_mm: "Hauteur de la feuille de taille fixe, en mm.",
+  reg_dims: "Affiche les cotes à la règle pour tracer les croix de calage sur le support (feuille posée dans le support).",
+  machine: "Machine de découpe : fixe la largeur de coupe et les tapis utilisables.",
+  machine_max_mm: "Largeur de coupe maximale de la machine, en mm (utile surtout sans tapis, matière en rouleau).",
+  mat_preset: "Tapis de découpe utilisé : vérifie que la feuille tient dessus et l'affiche dans la mise en page.",
+  mat_w_mm: "Largeur du tapis, en mm (sens d'entrée dans la machine).",
+  mat_h_mm: "Longueur du tapis, en mm.",
+  reg_corners: "Nombre de coins portant un repère de calage. Sur 3 coins, le coin vide sert de détrompeur.",
+  reg_shape: "Forme des repères : équerres sur les angles du support, croix à reporter au crayon, ou trous pour pions.",
+  reg_size_mm: "Taille des repères de calage, en mm.",
+  layer_notches: "Petites encoches carrées en haut de la feuille : leur nombre indique le numéro de la couche.",
+  sheet_outline: "Découpe aussi le contour de la feuille (sinon seules les ouvertures et les repères sont découpés).",
+  n_layers: "Nombre de pochoirs (couleurs peintes), sans compter le support nu ni le pochoir de contours.",
+  detail: "Niveau de détail : bas = formes simples et lisses, haut = plus de petits détails (plus de découpe et de ponts).",
+  color_mode: "Couleur, noir et blanc, ou automatique (détecté selon l'image).",
+  layering: "Cumulatif : chaque pochoir ouvre sa couleur et toutes les plus foncées (moins de raccords). Exclusif : chaque pochoir n'ouvre que sa couleur.",
+  skip_support: "La teinte de l'image la plus proche de la couleur du support n'a pas de pochoir : le support reste visible à la place.",
+  outline: "Ajoute un dernier pochoir qui retrace les détails fins estompés par la simplification et le flou de l'aérographe.",
+  outline_sensitivity: "Quantité de détails retenus pour le pochoir de contours (bas = seulement les plus marqués).",
+  outline_width_mm: "Largeur du trait du pochoir de contours, en mm (jamais moins que l'ouverture mini du matériau).",
+  outline_min_length_mm: "Les traits plus courts que cette longueur sont ignorés.",
+  outline_auto_color: "Couleur du trait choisie automatiquement : la teinte de l'image la plus contrastée avec le support.",
+  outline_color: "Couleur du trait du pochoir de contours (si la couleur automatique est décochée).",
+  material: "Matériau du pochoir : fixe les contraintes de découpe et les réglages machine conseillés.",
+  min_opening_mm: "Largeur minimale d'une ouverture découpable : les zones plus fines sont supprimées (détails supprimés, en orange).",
+  min_strip_mm: "Largeur minimale d'une bande de matière entre deux ouvertures : plus fine, elle se déchirerait.",
+  min_area_mm2: "Surface minimale d'une ouverture ou d'un morceau de matière, en mm².",
+  bridges: "Ajoute des ponts pour que les îlots de matière (centre d'un O…) restent attachés à la feuille.",
+  bridge_width_mm: "Largeur des ponts, en mm.",
+  min_bridges: "Nombre minimal de ponts par îlot (2 ou plus = îlot mieux tenu, mais plus de ponts visibles).",
+  double_bridge_area_mm2: "Au-delà de cette surface (mm²), un îlot reçoit au moins 2 ponts.",
+  cut_blade: "Profondeur de lame conseillée (réglage Silhouette Studio).",
+  cut_force: "Force de coupe conseillée (réglage Silhouette Studio).",
+  cut_speed: "Vitesse de coupe conseillée (réglage Silhouette Studio).",
+  cut_passes: "Nombre de passages de la lame.",
+  cut_notes: "Notes libres sur ce matériau (test de coupe, astuces…).",
+  tolerance_mm: "Tolérance de simplification des contours : plus haut = moins de nœuds, contours moins fidèles.",
+  smooth_curves: "Contours en courbes de Bézier (coupe plus douce) plutôt qu'en segments droits.",
+  spray_mm: "Flou de l'aérographe utilisé par le rendu simulé, en mm.",
+  px_per_mm: "Résolution de calcul : plus haut = bords plus précis mais calcul plus long. Ne fait pas apparaître de détails plus fins que les contraintes du matériau.",
+};
+const PRESET_BTN_TIPS = {
+  "Enregistrer": "Écrase le réglage sélectionné avec les valeurs actuelles (sans sélection : comme « Enregistrer sous »).",
+  "Enregistrer sous…": "Enregistre les valeurs actuelles sous un nouveau nom.",
+  "Renommer…": "Renomme le réglage sélectionné.",
+  "Supprimer": "Supprime le réglage sélectionné (cliquer deux fois pour confirmer).",
+};
+// same tooltips when the buttons are already shown in English
+Object.assign(PRESET_BTN_TIPS, { "Save": PRESET_BTN_TIPS["Enregistrer"], "Save as…": PRESET_BTN_TIPS["Enregistrer sous…"],
+  "Rename…": PRESET_BTN_TIPS["Renommer…"], "Delete": PRESET_BTN_TIPS["Supprimer"] });
+function applyTips() {
+  for (const [id, tip] of Object.entries(TIPS)) {
+    const el = $(id);
+    if (!el) continue;
+    if (!el.title) el.title = tip;
+    const lab = el.closest("label") || document.querySelector(`label[for="${id}"]`);
+    if (lab && !lab.title) lab.title = tip;
+  }
+  document.querySelectorAll("aside button").forEach(b => {
+    const t = PRESET_BTN_TIPS[b.textContent.trim()];
+    if (t && !b.title) b.title = t;
+  });
+  const set = (sel, t) => document.querySelectorAll(sel).forEach(e => { if (!e.title) e.title = t; });
+  set("aside button.acc", "Déplier / replier la section (une seule section ouverte à la fois). Le résumé à droite rappelle les réglages.");
+  set("aside button.ok", "Valider");
+  set("aside button.cancel", "Annuler");
+  set("aside input[type=text][placeholder^=\"Nom\"]", "Nom du réglage à enregistrer (Entrée pour valider, Échap pour annuler)");
+}
+
 async function init() {
+  setupColumns();
+  applyTips();
   setupAccordion();
+  // Language: English by default; the choice is remembered and applies without reloading the page.
+  // Started after the sections are built (they read the original French titles).
+  I18N.start();
+  $("lang").value = I18N.lang;
+  $("lang").addEventListener("change", () => { I18N.setLang($("lang").value); drawHisto(); if (LAST) render(); });
   document.querySelector("aside").addEventListener("change", updateSummaries);
   document.querySelector("aside").addEventListener("input", updateSummaries);
   MATS = await (await fetch("/api/materials")).json();
@@ -1337,7 +1650,7 @@ async function init() {
   Object.entries(MATS).forEach(([k, m]) => sel.add(new Option(m.label, k)));
   sel.add(new Option("Personnalisé", "custom"));
   sel.value = "mylar"; applyMaterial("mylar");
-  try { UP = await (await fetch("/api/presets")).json(); } catch (e) { /* pas de réglages enregistrés */ }
+  try { UP = await (await fetch("/api/presets")).json(); } catch (e) { /* no saved presets */ }
   refreshUserPresets();
   if (restoreSettings()) {
     syncPresetFromSize(); status("Derniers réglages restaurés — chargez une image");
@@ -1345,8 +1658,8 @@ async function init() {
   showValues();
 
   sel.addEventListener("change", () => { applyMaterial(sel.value); cutInfo(); schedule(); });
-  // Modifier un champ : un matériau fourni bascule en « Personnalisé » ; un matériau ★ reste sélectionné
-  // (marqué « modifié ») pour pouvoir l'écraser avec « Enregistrer ».
+  // Editing a field: a built-in material switches to "Custom"; a ★ material stays selected
+  // (marked "modified") so it can be overwritten with "Save".
   const MAT_EDIT_FIELDS = [...MAT_FIELDS, "cut_blade", "cut_force", "cut_speed", "cut_passes", "cut_notes"];
   MAT_EDIT_FIELDS.forEach(f => $(f).addEventListener("input", () => {
     const k = $("material").value;
@@ -1355,7 +1668,7 @@ async function init() {
   }));
   ["cut_blade", "cut_force", "cut_speed", "cut_passes", "cut_notes"].forEach(f => $(f).addEventListener("change", rememberSettings));
 
-  // Réglages enregistrés : barres Enregistrer / Enregistrer sous… / Renommer… / Supprimer
+  // Saved presets: Save / Save as… / Rename… / Delete bars
   SUPBAR = makePresetBar({
     kind: "support", bar: "supBar", label: "Support",
     selected: () => $("user_support").value || null,
@@ -1376,12 +1689,12 @@ async function init() {
     applyUserSupport($("user_support").value); SUPBAR.setDirty(false); SUPBAR.update();
   });
   sel.addEventListener("change", () => MATBAR.setDirty(false));
-  // Modifier un champ du support marque le support enregistré sélectionné comme « modifié »
+  // Editing a support field marks the selected saved support as "modified"
   [...SUPPORT_FIELDS, "support_preset", "orientation"].forEach(f => $(f).addEventListener("input", () => SUPBAR.setDirty(true)));
   ["support_preset", "orientation", "reg_corners", "reg_shape"].forEach(f => $(f).addEventListener("change", () => SUPBAR.setDirty(true)));
   $("supportSwatches").addEventListener("click", () => SUPBAR.setDirty(true));
   $("resetAll").onclick = () => {
-    NO_REMEMBER = true; // sinon « beforeunload » réenregistrerait les réglages actuels
+    NO_REMEMBER = true; // otherwise "beforeunload" would save the current settings again
     try { localStorage.removeItem(LS_KEY); } catch (e) {}
     location.reload();
   };
@@ -1389,6 +1702,39 @@ async function init() {
   PARAMS.forEach(k => $(k).addEventListener(($(k).type === "range") ? "input" : "change", () => { showValues(); schedule(); }));
   ["margin_mm", ...MAT_FIELDS].forEach(k => $(k).addEventListener("input", schedule));
   $("n_layers").addEventListener("input", renderReco);
+  $("calcBtn").onclick = () => process();
+  $("auto_calc").addEventListener("change", () => {
+    if (autoCalc() && DIRTY) process();            // back to auto mode: catch up with the changes
+    updateCalcBtn(); rememberSettings();
+    status(autoCalc() ? "Calcul automatique" : "Calcul à la demande : bouton « Recalculer » ou Ctrl + Entrée");
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && SID) { e.preventDefault(); process(); }
+  });
+  $("colorsAuto").onclick = () => {
+    $("layer_colors").value = ""; showPaletteChoice(""); PAL_LAST = "";
+    status("Couleurs calculées pour toutes les couches"); schedule();
+  };
+  setupPalettes();
+  setupColorPop();
+  setupHisto(); drawHisto();
+  ["pre_auto_levels", "pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen"].forEach(k => $(k).addEventListener("change", () => { updateSummaries(); recommend(false); }));
+  ["pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen"].forEach(k => $(k).addEventListener("input", preprocessPreview));
+  ["pre_auto_levels", "pre_remove_bg"].forEach(k => $(k).addEventListener("change", preprocessPreview));
+  $("pre_remove_bg").addEventListener("change", () => {
+    updateSummaries();
+    if (val("pre_remove_bg") && SUBJ_EMPTY) status("Peignez le sujet dans l'onglet « Masques » (masque Sujet) pour supprimer le fond");
+  });
+  $("paintSubject").onclick = () => { $("maskKind").value = "subject"; VIEW = "mask"; SEL = null; render(); };
+  $("maskKind").addEventListener("change", () => { showMaskInfo(); render(); });
+  $("manual_thresholds").addEventListener("change", () => { updateSummaries(); drawHisto(); });
+  $("thrAuto").onclick = () => { $("manual_thresholds").checked = false; updateSummaries(); drawHisto(); schedule(); };
+  $("preReset").onclick = () => {
+    $("pre_auto_levels").checked = false; $("pre_clahe").value = 0; $("pre_gamma").value = 1;
+    $("pre_saturation").value = 100; $("pre_sharpen").value = 0; $("pre_remove_bg").checked = false;
+    $("manual_thresholds").checked = false; $("thresholds").value = "";
+    showValues(); updateSummaries(); drawHisto(); recommend(false); schedule(); preprocessPreview();
+  };
   ["color_mode", "skip_support"].forEach(k => $(k).addEventListener("change", () => recommend(false)));
 
   // Support
@@ -1405,6 +1751,25 @@ async function init() {
   $("machine").addEventListener("change", () => { applyMachine(); if (VIEW === "layout" || showMatAll()) render(); schedule(); });
   $("mat_orient").addEventListener("change", () => { syncMat(); if (VIEW === "layout" || showMatAll()) render(); schedule(); });
   $("show_mat").addEventListener("change", () => { render(); rememberSettings(); });
+  try {
+    const ov = JSON.parse(localStorage.getItem("stencilit.surlignages") || "{}");
+    setOverlay("lgBridges", "no-bridges", ov.bridges !== false);
+    setOverlay("lgLost", "no-lost", ov.lost !== false);
+  } catch (e) { /* storage unavailable */ }
+  const saveOverlays = () => {
+    try {
+      localStorage.setItem("stencilit.surlignages", JSON.stringify({
+        bridges: $("lgBridges").getAttribute("aria-pressed") === "true",
+        lost: $("lgLost").getAttribute("aria-pressed") === "true" }));
+    } catch (e) { /* storage unavailable */ }
+  };
+  $("lgBridges").onclick = () => { setOverlay("lgBridges", "no-bridges", $("lgBridges").getAttribute("aria-pressed") !== "true"); saveOverlays(); };
+  $("lgLost").onclick = () => { setOverlay("lgLost", "no-lost", $("lgLost").getAttribute("aria-pressed") !== "true"); saveOverlays(); };
+  $("optPre").onclick = () => { SHOW_PRE = !SHOW_PRE; render(); };
+  [["optSupport", "show_support"], ["optMat", "show_mat"]].forEach(([b, c]) => $(b).onclick = () => {
+    $(c).checked = !$(c).checked;
+    $(c).dispatchEvent(new Event("change"));
+  });
   $("machine_max_mm").addEventListener("input", syncMat);
   const sheetChanged = () => { syncSheetMode(); syncMat(); if (VIEW === "layout" || (showSup() && editorFollowsLayout())) render(); schedule(); };
   $("sheet_mode").addEventListener("change", sheetChanged);
@@ -1424,7 +1789,7 @@ async function init() {
     `<span class="sw pick" title="${n}" data-c="${c}" style="background:${c}"></span>`).join("");
   $("supportSwatches").querySelectorAll(".sw").forEach(s => s.onclick = () => { $("support_color").value = s.dataset.c; schedule(); });
   $("support_color").addEventListener("input", schedule);
-  // Cadrage & mise en page
+  // Crop & layout
   $("crop_ratio").addEventListener("change", () => { applyCropRatio(); if (VIEW === "crop") render(); cropChanged(); });
   $("cropReset").onclick = () => { $("crop_ratio").value = "free"; CROP = { x: 0, y: 0, w: 1, h: 1 }; if (VIEW === "crop") render(); cropChanged(); };
   ["image_scale", "image_pos_x", "image_pos_y"].forEach(k => $(k).addEventListener("input", () => { syncWidth(); if (VIEW === "layout") render(); }));
@@ -1453,12 +1818,16 @@ async function init() {
   $("reg_shape").addEventListener("change", () => { $("reg_size_mm").value = REG_DEFAULT[val("reg_shape")]; regHint(); schedule(); });
   $("reg_corners").addEventListener("change", regHint);
   regHint();
-  // Masque des détails clés
+  // Key-detail mask
   $("mBrush").onclick = () => setMaskTool("brush");
   $("mErase").onclick = () => setMaskTool("erase");
   $("mSize").addEventListener("input", () => { $("mSizeV").textContent = $("mSize").value; });
-  $("mShow").addEventListener("change", () => { if (MASK) MASK.style.display = $("mShow").checked ? "" : "none"; });
-  $("mClear").onclick = () => { if (!MASK) return; MASK.getContext("2d").clearRect(0, 0, MASK.width, MASK.height); sendMask(); };
+  $("mShow").addEventListener("change", () => { if (VIEW === "mask") render(); });
+  $("mClear").onclick = () => {
+    const c = maskKind() === "subject" ? SUBJ : MASK;
+    if (!c) return;
+    c.getContext("2d").clearRect(0, 0, c.width, c.height); sendMask();
+  };
   document.addEventListener("keydown", e => {
     if (VIEW !== "mask" || e.target.closest("input, textarea, select")) return;
     if (e.key === "b" || e.key === "B") setMaskTool("brush");
@@ -1468,10 +1837,10 @@ async function init() {
       $("mSizeV").textContent = $("mSize").value;
     }
   });
-  // Prévisualisation : rendu simulé et visibilité des couches (sans recalcul serveur)
+  // Preview: simulated render and layer visibility (no server recomputation)
   $("preview_sim").addEventListener("change", () => { refreshPreviewOnly(); rememberSettings(); });
   $("showAll").onclick = () => { HIDDEN.clear(); refreshPreviewOnly(); };
-  // Pochoir de contours : couleur automatique ou choisie
+  // Outline stencil: automatic or chosen colour
   $("outline_auto_color").addEventListener("change", () => { $("outline_color").disabled = $("outline_auto_color").checked; });
   $("outline_color").addEventListener("input", schedule);
   ["outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("input", schedule));
@@ -1492,7 +1861,7 @@ async function init() {
   $("projectFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; f && openProject(f); };
 
   $("tabs").querySelectorAll("button").forEach(b => b.onclick = () => { VIEW = b.dataset.v; SEL = null; render(); });
-  $("export").onclick = () => { if (SID) location.href = "/api/export/" + SID; };
+  $("export").onclick = () => { if (SID) location.href = "/api/export/" + SID + "?lang=" + I18N.lang; };
 }
 
 async function upload(file) {
@@ -1502,7 +1871,7 @@ async function upload(file) {
   const j = await r.json();
   if (!r.ok) return status(j.error, true);
   setSession(j, file.name);
-  if (PENDING_PROJECT) {            // réglages d'un projet (.json) ouverts avant l'image
+  if (PENDING_PROJECT) {            // settings of a project (.json) opened before the image
     applyProjectSettings(PENDING_PROJECT);
     PENDING_PROJECT = null;
     status("Image chargée — réglages du projet appliqués");
@@ -1520,9 +1889,10 @@ async function upload(file) {
 }
 function setSession(j, name) {
   SID = j.id;
+  DIRTY = false; updateCalcBtn();
   IMG = { w: j.width, h: j.height, src: j.original };
   CROP = { x: 0, y: 0, w: 1, h: 1 };
-  createMask();
+  createMask(); createSubj();
   $("crop_ratio").value = "free";
   $("image_scale").value = 100; $("image_pos_x").value = 50; $("image_pos_y").value = 50;
   setHF(1); $("keep_ratio").checked = true;
@@ -1530,10 +1900,10 @@ function setSession(j, name) {
   $("dropInner").innerHTML = `<img src="${j.original}"><b>${name}</b><br>${j.width}×${j.height} px · ${j.gray ? "noir & blanc" : "couleur"}`;
 }
 
-// ---------------- Projet : export / réouverture ----------------
-// L'état complet de l'interface part avec chaque calcul ; l'export l'écrit dans …_infos.json
-// (clé « projet »), avec l'image d'origine et le masque. « Ouvrir un projet » relit le zip
-// (tout est restauré) ou seulement le .json (réglages ; l'image est demandée ensuite).
+// ---------------- Project: export / reopen ----------------
+// The full interface state goes with each computation; the export writes it into …_infos.json
+// ("projet" key), with the original image and the mask. "Open a project" reads the zip back
+// (everything is restored) or only the .json (settings; the image is asked for next).
 const UI_EXTRA = ["material", "support_preset", "orientation", "crop_ratio", "keep_ratio", "align_margin_mm",
   "preview_sim", "show_support", "show_mat", "mat_preset", "machine"];
 let PENDING_PROJECT = null;
@@ -1548,7 +1918,7 @@ function applyProjectSettings(info) {
   let vals = {}, crop = null;
   if (ui && ui.values) {
     vals = { ...ui.values }; crop = ui.crop;
-  } else {                          // export d'une version antérieure : paramètres du moteur
+  } else {                          // export from an earlier version: engine parameters
     const p = (info && info.parametres) || {}, m = (info && info.materiau) || {};
     PARAMS.forEach(k => { if (p[k] !== undefined) vals[k] = p[k]; });
     CUT_FIELDS.forEach(f => { if (m.cut && m.cut[f] != null) vals["cut_" + f] = m.cut[f]; });
@@ -1564,21 +1934,22 @@ function applyProjectSettings(info) {
   $("outline_color").disabled = $("outline_auto_color").checked;
   showValues(); cutInfo(); regHint(); cropInfo(); syncWidth(); updateSummaries(); renderOutlineSwatches();
 }
-function loadMaskImage(src, coverage) {
+function loadMaskImage(src, coverage, kind = "outline") {
   return new Promise(done => {
     const im = new Image();
     im.onload = () => {
-      createMask();
-      const c = MASK.getContext("2d");
-      c.drawImage(im, 0, 0, MASK.width, MASK.height);
-      const d = c.getImageData(0, 0, MASK.width, MASK.height);
-      for (let i = 0; i < d.data.length; i += 4) {      // gris 0/255 -> rouge transparent
+      if (kind === "subject") createSubj(); else createMask();
+      const CV = kind === "subject" ? SUBJ : MASK, c = CV.getContext("2d");
+      const [r, g, b] = MASK_COLORS[kind].match(/\w\w/g).map(h => parseInt(h, 16));
+      c.drawImage(im, 0, 0, CV.width, CV.height);
+      const d = c.getImageData(0, 0, CV.width, CV.height);
+      for (let i = 0; i < d.data.length; i += 4) {      // grey 0/255 -> mask colour, transparent
         const on = d.data[i] > 127;
-        d.data[i] = 0xe6; d.data[i + 1] = 0x1e; d.data[i + 2] = 0x1e; d.data[i + 3] = on ? 255 : 0;
+        d.data[i] = r; d.data[i + 1] = g; d.data[i + 2] = b; d.data[i + 3] = on ? 255 : 0;
       }
       c.putImageData(d, 0, 0);
-      MASK_EMPTY = !(coverage > 0);
-      maskInfo(coverage);
+      if (kind === "subject") { SUBJ_EMPTY = !(coverage > 0); }
+      else { MASK_EMPTY = !(coverage > 0); maskInfo(coverage); }
       done();
     };
     im.onerror = () => done();
@@ -1612,6 +1983,10 @@ async function openProject(file) {
   setSession(j, `${file.name} (projet)`);
   applyProjectSettings(j.info);
   if (j.mask) await loadMaskImage(j.mask, j.mask_coverage);
+  if (j.subject && j.subject.png) {
+    await loadMaskImage(j.subject.png, j.subject.coverage, "subject");
+    FG_OVERLAY = j.subject.overlay; subjInfo(j.subject);
+  }
   status(`Projet ouvert : ${file.name}`);
   render();
   await recommend(false);
@@ -1623,7 +1998,9 @@ async function recommend(apply) {
   if (!SID) return;
   const r = await fetch("/api/recommend", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id: SID, color_mode: val("color_mode"), skip_support: val("skip_support"),
-      crop: { crop_x: CROP.x, crop_y: CROP.y, crop_w: CROP.w, crop_h: CROP.h } }) });
+      crop: { crop_x: CROP.x, crop_y: CROP.y, crop_w: CROP.w, crop_h: CROP.h,
+              pre_auto_levels: val("pre_auto_levels"), pre_clahe: val("pre_clahe"), pre_gamma: val("pre_gamma"),
+              pre_saturation: val("pre_saturation"), pre_sharpen: val("pre_sharpen") } }) });
   if (!r.ok) return;
   RECO = await r.json();
   if (apply) setLayers(RECO.layers, false);
@@ -1650,12 +2027,31 @@ function renderReco() {
   box.querySelectorAll(".chip").forEach(c => c.onclick = () => setLayers(+c.dataset.n));
 }
 
-function schedule() { if (!SID) return; clearTimeout(timer); timer = setTimeout(process, 350); }
+// Automatic computation (on every change) or on demand: in manual mode, a change only
+// marks the result as outdated ("Recompute" button highlighted).
+let DIRTY = false, GEN = 0;
+const autoCalc = () => $("auto_calc").checked;
+function schedule() {
+  if (!SID) return;
+  if (!autoCalc()) { GEN++; DIRTY = true; updateCalcBtn(); return; }
+  clearTimeout(timer); timer = setTimeout(process, 350);
+}
+function updateCalcBtn() {
+  const b = $("calcBtn");
+  b.hidden = autoCalc() || !SID;
+  b.disabled = busy;
+  b.classList.toggle("dirty", DIRTY && !busy);
+  b.textContent = busy ? "Calcul en cours…" : DIRTY ? "Recalculer ●" : "À jour ✓";
+  b.title = DIRTY ? "Des réglages ont changé depuis le dernier calcul : cliquer pour recalculer (Ctrl + Entrée)"
+                  : "Le résultat correspond aux réglages actuels (cliquer pour recalculer quand même)";
+}
 
 async function process() {
   if (!SID) return;
   if (busy) { again = true; return; }
   busy = true; status("Calcul en cours…");
+  document.querySelector("header").classList.add("busy");
+  const gen = GEN; updateCalcBtn();
   try {
     const r = await fetch("/api/process", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: SID, params: params(), material: material(), ui: uiState() }) });
@@ -1663,44 +2059,94 @@ async function process() {
     if (!r.ok) throw new Error(j.error || "Erreur");
     IMG_CACHE = new Map(); LAST = j; render(); rememberSettings(); updateSummaries();
     status(`Calculé en ${j.seconds} s`);
+    if (GEN === gen) DIRTY = false;               // nothing changed during the computation
     $("export").disabled = false;
   } catch (e) { status(e.message, true); }
   busy = false;
+  if (!again) document.querySelector("header").classList.remove("busy");
+  updateCalcBtn();
   if (again) { again = false; process(); }
 }
 
 function status(t, err) { const s = $("status"); s.textContent = t; s.className = "status" + (err ? " err" : ""); }
 
-// ---------------- Masque des détails clés (pochoir de contours) ----------------
-// Calque peint par l'utilisateur, à la taille de l'aperçu de l'image source (donc indépendant du
-// recadrage et de la mise en page). Les zones peintes, en rouge transparent, limitent la recherche
-// des détails clés ; sans zone peinte, la recherche porte sur toute l'image.
+// ---------------- Key-detail mask (outline stencil) ----------------
+// Layer painted by the user, at the size of the source image preview (so independent of
+// crop and layout). Painted areas, in transparent red, limit the key-detail
+// search; with no painted area, the whole image is searched.
 let MASK = null, MASK_TOOL = "brush", MASK_EMPTY = true, MASK_SENDING = null;
+// Second mask: area roughly painted around the subject; the server cuts it out (GrabCut) and the
+// background becomes bare support. FG_OVERLAY = cut-out preview (darkened background).
+let SUBJ = null, SUBJ_EMPTY = true, FG_OVERLAY = null, SUBJ_SENDING = null;
+let OUT_INFO = "", SUBJ_INFO = "";
+const maskKind = () => $("maskKind").value;
+const MASK_COLORS = { outline: "#e61e1e", subject: "#1fbf4f" };
+function maskCanvas() {
+  const s = Math.min(1, 1100 / Math.max(IMG.w, IMG.h));   // same size as the preview sent by the server
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(IMG.w * s));
+  c.height = Math.max(1, Math.round(IMG.h * s));
+  c.setAttribute("aria-hidden", "true");
+  return c;
+}
 function createMask() {
-  const s = Math.min(1, 1100 / Math.max(IMG.w, IMG.h));   // même taille que l'aperçu envoyé par le serveur
-  MASK = document.createElement("canvas");
-  MASK.width = Math.max(1, Math.round(IMG.w * s));
-  MASK.height = Math.max(1, Math.round(IMG.h * s));
-  MASK.setAttribute("aria-hidden", "true");
+  MASK = maskCanvas();
   MASK_EMPTY = true;
   maskInfo(0);
 }
+function createSubj() {
+  SUBJ = maskCanvas();
+  SUBJ_EMPTY = true; FG_OVERLAY = null;
+  subjInfo(null);
+}
+function showMaskInfo() { $("mInfo").textContent = maskKind() === "subject" ? SUBJ_INFO : OUT_INFO; }
 function maskInfo(coverage) {
-  $("mInfo").textContent = MASK_EMPTY
+  OUT_INFO = MASK_EMPTY
     ? "Aucune zone peinte : les détails clés sont cherchés sur toute l'image."
     : `Zones peintes : ${coverage} % de l'image — les détails clés ne sont cherchés que dedans.`;
+  showMaskInfo();
+}
+function subjInfo(j) {
+  SUBJ_INFO = SUBJ_EMPTY || !j
+    ? "Peignez grossièrement le sujet (en débordant un peu) : le fond autour est détecté et supprimé."
+    : `Sujet détouré : ${j.subject_pct} % de l'image — le fond (assombri) restera support nu. Gomme = retirer une zone.`;
+  $("subjInfoSide").textContent = SUBJ_EMPTY || !j ? "Aucun sujet peint." : `Sujet détouré (${j.subject_pct} % de l'image).`;
+  showMaskInfo();
 }
 function setMaskTool(t) {
   MASK_TOOL = t;
   $("mBrush").setAttribute("aria-pressed", String(t === "brush"));
   $("mErase").setAttribute("aria-pressed", String(t === "erase"));
 }
-function maskIsEmpty() {
-  const d = MASK.getContext("2d").getImageData(0, 0, MASK.width, MASK.height).data;
+function maskIsEmpty(c = MASK) {
+  const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
   for (let i = 3; i < d.length; i += 4) if (d[i]) return false;
   return true;
 }
+async function sendSubject() {
+  if (!SID || !SUBJ) return;
+  SUBJ_EMPTY = maskIsEmpty(SUBJ);
+  const png = SUBJ_EMPTY ? null : SUBJ.toDataURL("image/png");
+  status(SUBJ_EMPTY ? "Masque sujet effacé" : "Détourage du sujet…");
+  const req = fetch("/api/subject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png }) });
+  SUBJ_SENDING = req;
+  try {
+    const r = await req, j = await r.json();
+    if (!r.ok) { status(j.error || "Erreur du masque sujet", true); return; }
+    if (SUBJ_SENDING !== req) return;
+    FG_OVERLAY = j.overlay;
+    subjInfo(j);
+    const ov = document.querySelector("#stage .fgov");
+    if (ov) { if (FG_OVERLAY) { ov.src = FG_OVERLAY; ov.hidden = false; } else ov.hidden = true; }
+    if (!SUBJ_EMPTY && !$("pre_remove_bg").checked) {   // painting the subject = wanting to remove the background
+      $("pre_remove_bg").checked = true; updateSummaries();
+      status("Fond supprimé (sujet peint)");
+    } else status(SUBJ_EMPTY ? "Masque sujet effacé" : "Sujet détouré");
+    if ($("pre_remove_bg").checked) schedule();
+  } catch (e) { status("Serveur injoignable : " + e.message, true); }
+}
 async function sendMask() {
+  if (maskKind() === "subject") return sendSubject();
   if (!SID || !MASK) return;
   MASK_EMPTY = maskIsEmpty();
   const png = MASK_EMPTY ? null : MASK.toDataURL("image/png");
@@ -1709,9 +2155,9 @@ async function sendMask() {
   try {
     const r = await req, j = await r.json();
     if (!r.ok) { status(j.error || "Erreur du masque", true); return; }
-    if (MASK_SENDING !== req) return;                 // un envoi plus récent est en cours
+    if (MASK_SENDING !== req) return;                 // a more recent upload is in progress
     maskInfo(j.coverage);
-    if (!MASK_EMPTY && !$("outline").checked) {       // peindre un masque n'a de sens qu'avec le pochoir de contours
+    if (!MASK_EMPTY && !$("outline").checked) {       // painting a mask only makes sense with the outline stencil
       $("outline").checked = true; updateSummaries();
       status("Pochoir de contours activé (masque peint)");
     }
@@ -1720,23 +2166,27 @@ async function sendMask() {
 }
 function maskEditor(st) {
   if (!MASK) createMask();
+  if (!SUBJ) createSubj();
+  const kind = maskKind(), CV = kind === "subject" ? SUBJ : MASK;
   const wrap = document.createElement("div");
   wrap.className = "maskwrap";
-  wrap.innerHTML = `<img src="${IMG.src}" alt="Image source — peignez les zones à détailler" draggable="false">
+  wrap.innerHTML = `<img src="${IMG.src}" alt="Image source — ${kind === "subject" ? "peignez le sujet à garder" : "peignez les zones à détailler"}" draggable="false">
+    <img class="fgov" alt="" ${kind === "subject" && FG_OVERLAY ? `src="${FG_OVERLAY}"` : "hidden"}>
     <div class="cropguide" title="Partie de l'image utilisée (recadrage)"></div><div class="brush"></div>`;
-  wrap.insertBefore(MASK, wrap.querySelector(".cropguide"));
-  MASK.style.display = $("mShow").checked ? "" : "none";
+  wrap.insertBefore(CV, wrap.querySelector(".cropguide"));
+  [MASK, SUBJ].forEach(c => c.style.display = (c === CV && $("mShow").checked) ? "" : "none");
+  showMaskInfo();
   Object.assign(wrap.querySelector(".cropguide").style, {
     left: CROP.x * 100 + "%", top: CROP.y * 100 + "%", width: CROP.w * 100 + "%", height: CROP.h * 100 + "%",
     display: (CROP.w > 0.999 && CROP.h > 0.999) ? "none" : ""
   });
   st.replaceChildren(wrap);
   frameSource(st, wrap);
-  const brush = wrap.querySelector(".brush"), ctx = MASK.getContext("2d");
+  const brush = wrap.querySelector(".brush"), ctx = CV.getContext("2d");
   let last = null;
   const toMask = e => {
     const r = wrap.getBoundingClientRect();
-    return { x: (e.clientX - r.left) * MASK.width / r.width, y: (e.clientY - r.top) * MASK.height / r.height, k: MASK.width / r.width,
+    return { x: (e.clientX - r.left) * CV.width / r.width, y: (e.clientY - r.top) * CV.height / r.height, k: CV.width / r.width,
              sx: e.clientX - r.left, sy: e.clientY - r.top };
   };
   const moveBrush = e => {
@@ -1746,7 +2196,7 @@ function maskEditor(st) {
   };
   const paint = q => {
     ctx.globalCompositeOperation = MASK_TOOL === "erase" ? "destination-out" : "source-over";
-    ctx.strokeStyle = ctx.fillStyle = "#e61e1e";
+    ctx.strokeStyle = ctx.fillStyle = MASK_COLORS[kind];
     ctx.lineWidth = val("mSize") * q.k; ctx.lineCap = ctx.lineJoin = "round";
     ctx.beginPath();
     if (last) { ctx.moveTo(last.x, last.y); ctx.lineTo(q.x, q.y); ctx.stroke(); }
@@ -1757,7 +2207,7 @@ function maskEditor(st) {
     if (e.button !== 0) return;
     e.preventDefault();
     DRAGGING = true; last = null;
-    if (!$("mShow").checked) { $("mShow").checked = true; MASK.style.display = ""; }
+    if (!$("mShow").checked) { $("mShow").checked = true; CV.style.display = ""; }
     wrap.setPointerCapture(e.pointerId);
     paint(toMask(e));
   };
@@ -1766,10 +2216,32 @@ function maskEditor(st) {
   wrap.onpointerleave = () => { if (!DRAGGING) brush.style.display = "none"; };
 }
 
-// ---------------- Prévisualisation composée dans le navigateur ----------------
-// Chaque couche arrive sous forme de calque PNG transparent (net et flouté) ; on les superpose
-// sur la couleur du support, dans l'ordre de pulvérisation, en sautant les couches masquées.
-const HIDDEN = new Set();       // numéros des couches masquées
+// ---------------- Preview composed in the browser ----------------
+// Each layer arrives as a transparent PNG overlay (sharp and blurred); they are stacked
+// on the support colour, in spraying order, skipping hidden layers.
+let SHOW_PRE = true;            // Original tab: preprocessed image (otherwise raw)
+// Instant preprocessing preview: computed separately (≈ a few tens of ms), even in
+// "on-demand computation" mode; shown in the Original tab, histogram included.
+let PRE_TIMER = null, PRE_REQ = 0;
+function preprocessPreview() {
+  if (!SID || !LAST) return;
+  clearTimeout(PRE_TIMER);
+  PRE_TIMER = setTimeout(async () => {
+    const id = ++PRE_REQ;
+    try {
+      const r = await fetch("/api/prepreview", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: SID, params: params() }) });
+      const j = await r.json();
+      if (!r.ok || id !== PRE_REQ || !LAST) return;
+      LAST.reference_pre = j.image; LAST.histogram = j.histogram;
+      SHOW_PRE = true;
+      if (VIEW !== "reference" || SEL !== null) { VIEW = "reference"; SEL = null; }
+      if (!busy) render(); else { const st = $("stage"); st.innerHTML = `<img src="${j.image}" alt="Image prétraitée sur le support" data-mm="${LAST.support_mm.join(",")}">`; fitStage(); }
+      drawHisto();
+    } catch (e) { /* optional preview */ }
+  }, 60);
+}
+const HIDDEN = new Set();       // numbers of the hidden layers
 let IMG_CACHE = new Map(), RENDER_TOKEN = 0, COMPARE_POS = 50;
 function loadImg(src) {
   if (!IMG_CACHE.has(src)) IMG_CACHE.set(src, new Promise((ok, ko) => {
@@ -1783,7 +2255,9 @@ async function composeCanvas() {
   cv.width = w; cv.height = h; cv.className = "pv";
   cv.dataset.mm = LAST.support_mm.join(",");
   const ctx = cv.getContext("2d");
-  ctx.fillStyle = LAST.base; ctx.fillRect(0, 0, w, h);
+  // background = support colour, only when the "Support" option is on;
+  // otherwise the layers alone appear on the checkerboard
+  if ($("show_support").checked) { ctx.fillStyle = LAST.base; ctx.fillRect(0, 0, w, h); }
   const sim = $("preview_sim").checked;
   const imgs = await Promise.all(LAST.layers.map(L => HIDDEN.has(L.index) ? null : loadImg(sim ? L.mask_sim : L.mask_flat)));
   imgs.forEach(im => im && ctx.drawImage(im, 0, 0, w, h));
@@ -1797,7 +2271,7 @@ async function renderPreview(st) {
   const view = VIEW;
   let cv;
   try { cv = await composeCanvas(); } catch (e) { return; }
-  if (tok !== RENDER_TOKEN || VIEW !== view || SEL !== null) return;   // un rendu plus récent a pris la main
+  if (tok !== RENDER_TOKEN || VIEW !== view || SEL !== null) return;   // a more recent render took over
   if (view === "compare") {
     const wrap = document.createElement("div");
     wrap.className = "compare";
@@ -1816,9 +2290,9 @@ async function renderPreview(st) {
   }
   fitStage();
 }
-// Même échelle (px par mm) pour toutes les vues : la zone d'affichage est calculée pour la feuille
-// entière (support + marge), la plus grande. La prévisualisation (support seul) et la vue d'un pochoir
-// (feuille entière) gardent ainsi la même taille de support à l'écran, et la zone ne change pas de hauteur.
+// Same scale (px per mm) for every view: the display area is computed for the whole sheet
+// (support + margin), the largest. The preview (support only) and a stencil view
+// (whole sheet) thus keep the same support size on screen, and the area keeps its height.
 function fitStage() {
   const st = $("stage");
   if (showSup() && LAST) { frameView(st); return; }
@@ -1837,13 +2311,17 @@ function fitStage() {
   st.style.alignItems = "center";
 }
 function renderToolbar() {
-  const show = !!LAST && SEL === null && (VIEW === "preview" || VIEW === "compare");
-  // Pochoir sélectionné : la barre est gardée invisible pour que l'image ne remonte pas
-  const reserve = !!LAST && SEL !== null;
-  $("viewtools").hidden = !(show || reserve);
-  $("viewtools").style.visibility = reserve ? "hidden" : "";
+  const layersShown = !!LAST && SEL === null && (VIEW === "preview" || VIEW === "compare");
+  // the bar (Support / Mat options) is there in every view once an image is loaded;
+  // layer buttons only in preview and comparison
+  $("viewtools").hidden = !(IMG || LAST);
+  document.querySelectorAll("#viewtools .vt-layers").forEach(e => e.hidden = !layersShown);
+  $("optSupport").setAttribute("aria-pressed", String($("show_support").checked));
+  $("optPre").hidden = !(LAST && LAST.reference_pre && SEL === null && VIEW === "reference");
+  $("optPre").setAttribute("aria-pressed", String(SHOW_PRE));
+  $("optMat").setAttribute("aria-pressed", String($("show_mat").checked));
   if (!LAST) return;
-  // oublier les couches qui n'existent plus
+  // forget layers that no longer exist
   [...HIDDEN].forEach(i => { if (!LAST.layers.some(L => L.index === i)) HIDDEN.delete(i); });
   $("layerToggles").innerHTML = LAST.layers.map(L => {
     const vis = !HIDDEN.has(L.index), lbl = L.kind === "outline" ? "✎ contours" : String(L.index);
@@ -1873,6 +2351,7 @@ function render() {
   $("tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === VIEW && SEL === null));
   const st = $("stage");
   $("masktools").hidden = !(IMG && SEL === null && VIEW === "mask");
+  renderToolbar();
   const editor = SEL === null && (VIEW === "crop" || VIEW === "layout" || VIEW === "mask");
   if (editor) {
     if (IMG && !DRAGGING) { st.style.minHeight = ""; st.style.alignItems = "";
@@ -1882,13 +2361,14 @@ function render() {
     return;
   } else if (SEL !== null) {
     const L = LAST.layers[SEL];
-    st.innerHTML = `<img src="${L.image}" alt="Pochoir ${L.index}" data-mm="${LAST.sheet_mm.join(",")}" data-at="sheet">`;
+    st.innerHTML = layerStack(L, `data-mm="${LAST.sheet_mm.join(",")}" data-at="sheet"`);
     fitStage();
   } else if (VIEW === "reference") {
-    st.innerHTML = `<img src="${LAST.reference}" alt="Image d'origine sur le support" data-mm="${LAST.support_mm.join(",")}">`;
+    const pre = SHOW_PRE && LAST.reference_pre;
+    st.innerHTML = `<img src="${pre || LAST.reference}" alt="${pre ? "Image prétraitée" : "Image d'origine"} sur le support" data-mm="${LAST.support_mm.join(",")}">`;
     fitStage();
   } else {
-    renderPreview(st);   // « preview » et « compare » : composition des couches dans le navigateur
+    renderPreview(st);   // "preview" and "compare": layers composed in the browser
   }
   renderToolbar();
 
@@ -1915,28 +2395,36 @@ function render() {
     <span>Longueur de coupe totale : <b>${tot.c.toFixed(2)} m</b></span>`;
 
   renderCalage();
+  syncThresholds();
 
   $("layers").innerHTML = LAST.layers.map((L, i) => `
     <div class="card ${SEL === i ? "sel" : ""} ${HIDDEN.has(L.index) ? "hidden-layer" : ""}" data-i="${i}" data-idx="${L.index}">
-      <img src="${L.image}" alt="Pochoir ${L.index}">
+      ${layerStack(L)}
       <div class="meta">
-        <div class="t"><span class="sw" style="background:${L.color}"></span>Couche ${L.index}${L.kind === "outline" ? " — contours ✎" : ""} — ${L.color}
+        <div class="t">${L.kind === "outline"
+          ? `<span class="sw" style="background:${L.color}"></span>`
+          : `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur de la peinture de la couche ${L.index}${layerColors()[L.index] ? " (choisie)" : " (calculée)"} — cliquer pour changer"></button>`}Couche ${L.index}${L.kind === "outline" ? " — contours ✎" : ""} — ${L.color}${layerColors()[L.index]
+          ? ` <button type="button" class="lcreset vt-small" data-idx="${L.index}" title="Revenir à la teinte calculée">auto</button>` : ""}
           <button type="button" class="eye" aria-pressed="${!HIDDEN.has(L.index)}" title="Afficher / masquer dans la prévisualisation">${HIDDEN.has(L.index) ? "masquée" : "visible"}</button></div>
         ${L.paths} tracés · ${L.nodes} nœuds · ${L.islands} îlot${L.islands > 1 ? "s" : ""} · ${L.bridges} ponts<br>
         ${L.short_islands ? `<span style="color:#d97706">⚠ ${L.short_islands} îlot(s) sans place pour ${val("min_bridges")} ponts</span><br>` : ""}
         Coupe : ${L.cut_length_m} m · détails supprimés : ${L.lost_pct} %
       </div>
     </div>`).join("");
+  $("layers").querySelectorAll(".lcolor").forEach(b => b.onclick = () => openColorPop(b));
+  $("colorsAuto").hidden = !Object.keys(layerColors()).length;
   const nOut = LAST.layers.filter(L => L.kind === "outline").length;
   $("layerCount").textContent = `${LAST.layers.length - nOut} couche${LAST.layers.length - nOut > 1 ? "s" : ""}${nOut ? " + contours" : ""} · dans l'ordre`;
   $("layers").querySelectorAll(".card").forEach(c => c.onclick = e => {
     if (e.target.closest(".eye")) { toggleLayer(+c.dataset.idx); return; }
+    if (e.target.closest(".lcolor")) return;                       // colour picker: no selection
+    if (e.target.closest(".lcreset")) { setLayerColor(+e.target.closest(".lcreset").dataset.idx, null); return; }
     const i = +c.dataset.i; SEL = (SEL === i) ? null : i; render();
   });
 }
-// Teintes proposées pour le trait de contour : noir, blanc et les couleurs de la palette calculée
+// Tones offered for the outline stroke: black, white and the colours of the computed palette
 const fmtMM = v => `${(Math.round(v * 10) / 10).toString().replace(".", ",")} mm`;
-// Cotes à la règle : où tracer les croix sur le support (feuille posée dans le support)
+// Ruler dimensions: where to draw the crosses on the support (sheet laid inside the support)
 function renderCalage() {
   const box = $("calage"), pos = LAST && LAST.positioning;
   if (!pos || pos.mode === "around" || !val("reg_dims") || !pos.reperes.length) { box.hidden = true; return; }
@@ -1951,6 +2439,375 @@ function renderCalage() {
     <p class="hint" style="margin:6px 0 0">Bords de la feuille (${fmtMM(f.largeur)} × ${fmtMM(f.hauteur)}) : à ${fmtMM(f.gauche)} du bord gauche,
       ${fmtMM(f.haut)} du haut, ${fmtMM(f.droite)} de la droite, ${fmtMM(f.bas)} du bas.</p>`;
 }
+// Layer view: base image + bridges and removed details as overlays (shown separately)
+function layerStack(L, attrs = "") {
+  return `<div class="lv" ${attrs}><img src="${L.image}" alt="Pochoir ${L.index}">` +
+    (L.img_lost ? `<img class="ov ov-lost" src="${L.img_lost}" alt="">` : "") +
+    (L.img_bridges ? `<img class="ov ov-bridges" src="${L.img_bridges}" alt="">` : "") + `</div>`;
+}
+function setOverlay(btn, cls, on) {
+  $(btn).setAttribute("aria-pressed", String(on));
+  document.body.classList.toggle(cls, !on);
+}
+// ---------------- Preprocessing: histogram and thresholds between tones ----------------
+const parseThr = t => String(t || "").split(",").map(Number).filter(v => isFinite(v) && v > 0 && v < 100).sort((a, b) => a - b);
+function currentThr() {
+  if (!LAST || !LAST.auto_thresholds) return [];
+  const man = parseThr($("thresholds").value);
+  return (val("manual_thresholds") && man.length === LAST.auto_thresholds.length) ? man : LAST.auto_thresholds.slice();
+}
+function drawHisto() {
+  const cv = $("histo"), ctx = cv.getContext("2d"), W = cv.width, H = cv.height, strip = 14;
+  ctx.clearRect(0, 0, W, H);
+  const css = getComputedStyle(document.body);
+  if (!LAST || !LAST.histogram) {
+    ctx.fillStyle = css.getPropertyValue("--muted") || "#888"; ctx.font = "12px system-ui";
+    ctx.fillText(I18N.t("Chargez une image pour voir l'histogramme"), 8, H / 2); return;
+  }
+  const h = LAST.histogram, bw = W / 100, thr = currentThr(), man = val("manual_thresholds");
+  // strip: tone of each range (darkest range = last palette colour)
+  const pal = LAST.palette || [], edges = [0, ...thr, 100];
+  for (let j = 0; j < edges.length - 1; j++) {
+    ctx.fillStyle = pal[pal.length - 1 - j] || `hsl(0,0%,${(edges[j] + edges[j + 1]) / 2}%)`;
+    ctx.fillRect(edges[j] / 100 * W, H - strip, (edges[j + 1] - edges[j]) / 100 * W + 1, strip);
+  }
+  // luminance histogram (dark on the left, light on the right)
+  ctx.fillStyle = "rgba(150,160,175,.85)";
+  for (let i = 0; i < 100; i++) {
+    const bh = h[i] * (H - strip - 6);
+    ctx.fillRect(i * bw, H - strip - bh, Math.max(1, bw - 0.4), bh);
+  }
+  // thresholds: solid lines (manual) or dashed (automatic)
+  const accent = (css.getPropertyValue("--accent") || "#f97316").trim();
+  thr.forEach(t => {
+    const x = Math.round(t / 100 * W) + 0.5;
+    ctx.strokeStyle = man ? accent : "rgba(230,235,240,.9)";
+    ctx.lineWidth = 2; ctx.setLineDash(man ? [] : [4, 3]);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H - strip); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = man ? accent : "rgba(230,235,240,.9)";
+    ctx.beginPath(); ctx.moveTo(x - 5, 0); ctx.lineTo(x + 5, 0); ctx.lineTo(x, 7); ctx.fill();
+  });
+}
+let THR_HINT = "";
+function setupHisto() {
+  THR_HINT = $("thrHint").textContent;
+  const cv = $("histo");
+  let drag = null;
+  const pos = e => { const r = cv.getBoundingClientRect(); return clamp((e.clientX - r.left) / r.width * 100, 0, 100); };
+  const near = v => { const t = currentThr(); let best = -1, d = 4; t.forEach((x, i) => { if (Math.abs(x - v) < d) { d = Math.abs(x - v); best = i; } }); return best; };
+  cv.onpointermove = e => {
+    if (!drag) { cv.style.cursor = near(pos(e)) >= 0 ? "ew-resize" : "default"; return; }
+    const t = drag.t, i = drag.i;
+    t[i] = clamp(Math.round(pos(e) * 10) / 10, (i ? t[i - 1] : 0) + 1, (i < t.length - 1 ? t[i + 1] : 100) - 1);
+    $("thresholds").value = t.join(",");
+    drawHisto();
+  };
+  cv.onpointerdown = e => {
+    const i = near(pos(e));
+    if (i < 0) return;
+    e.preventDefault();
+    const t = currentThr();
+    if (!val("manual_thresholds")) { $("manual_thresholds").checked = true; updateSummaries(); }
+    $("thresholds").value = t.join(",");
+    drag = { i, t };
+    $("thrHint").textContent = THR_HINT;
+    cv.setPointerCapture(e.pointerId);
+  };
+  cv.onpointerup = cv.onpointercancel = () => { if (drag) { drag = null; updateSummaries(); schedule(); } };
+}
+// After a computation: manual thresholds must match the number of tones, otherwise restart from the automatic ones
+function syncThresholds() {
+  if (!LAST || !LAST.auto_thresholds) return;
+  const n = LAST.auto_thresholds.length, man = parseThr($("thresholds").value);
+  if (val("manual_thresholds") && man.length !== n) {
+    $("thresholds").value = LAST.auto_thresholds.join(",");
+    $("thrHint").textContent = "Le nombre de teintes a changé : seuils repartis depuis le calcul automatique. Ajustez-les sur l'histogramme.";
+    // direct follow-up of the requested computation: chain it, even in "on-demand computation" mode
+    if (autoCalc()) schedule(); else if (busy) again = true; else process();
+  }
+  drawHisto();
+}
+// ---------------- Consistent colour palettes ----------------
+// Each palette goes from lightest to darkest, like the spraying order of the layers.
+const PALETTES = {
+  // — Classics
+  naturel:   ["Naturel (terres)",         ["#f2e6d0", "#d9b98c", "#a9784f", "#6b4a32", "#3a2a1f"], "Classiques"],
+  sepia:     ["Sépia",                    ["#f1e3c6", "#d2b48c", "#a47c52", "#6e4f33", "#3b2a1b"], "Classiques"],
+  gris:      ["Niveaux de gris",          ["#e6e6e6", "#b0b0b0", "#7a7a7a", "#444444", "#111111"], "Classiques"],
+  sombre:    ["Sombre",                   ["#8a8f98", "#5b6170", "#3a3f4b", "#23262e", "#0d0e12"], "Classiques"],
+  vintage:   ["Vintage",                  ["#efe3c8", "#d8b26e", "#b5654a", "#5f7470", "#2f2f2f"], "Classiques"],
+  cuivre:    ["Cuivre",                   ["#f6dcc3", "#e3a174", "#b8693d", "#7a3e22", "#331a10"], "Classiques"],
+  // — Vivid
+  vif:       ["Vifs",                     ["#ffe03a", "#ff8c1a", "#e8312f", "#2a6fdb", "#1b1b3a"], "Vives"],
+  pop:       ["Pop art",                  ["#fff200", "#ff4fa3", "#00b7ff", "#e10600", "#111111"], "Vives"],
+  warhol:    ["Sérigraphie pop",          ["#ffd23f", "#ee4266", "#540d6e", "#3bceac", "#0e0e0e"], "Vives"],
+  comic:     ["Bande dessinée",           ["#fff4c2", "#ffcc00", "#00a6ed", "#d7263d", "#14080e"], "Vives"],
+  street:    ["Street art",               ["#f2f2f2", "#ffbe0b", "#fb5607", "#3a86ff", "#1a1a1a"], "Vives"],
+  neon:      ["Néon",                     ["#39ff14", "#00f0ff", "#ff00e6", "#7a00ff", "#0b0018"], "Vives"],
+  tropical:  ["Tropical",                 ["#fff3b0", "#ffb703", "#fb8500", "#219ebc", "#023047"], "Vives"],
+  retro70:   ["Rétro années 70",          ["#f6e7c1", "#f2a541", "#e4572e", "#76b041", "#3b2c35"], "Vives"],
+  // — Soft
+  pastel:    ["Pastel",                   ["#fdf1d6", "#f9c9d4", "#b9e3e0", "#a5b8e8", "#7c6fa8"], "Douces"],
+  printemps: ["Printemps",                ["#fdfcdc", "#c5e8b7", "#f7b7c5", "#8fb9e3", "#5a5f8c"], "Douces"],
+  lavande:   ["Lavande",                  ["#f3eefb", "#d6c6ef", "#ab92d6", "#6f5aa6", "#33285a"], "Douces"],
+  nordique:  ["Nordique",                 ["#eceff4", "#d8dee9", "#88c0d0", "#5e81ac", "#2e3440"], "Douces"],
+  // — Nature
+  ocean:     ["Océan",                    ["#e0f7fa", "#80deea", "#26a69a", "#00695c", "#0b2e33"], "Nature"],
+  foret:     ["Forêt",                    ["#e9f1d8", "#a7c957", "#6a994e", "#386641", "#1b2e1d"], "Nature"],
+  automne:   ["Automne",                  ["#ffe6a7", "#e9a03b", "#c4572b", "#7f2f1a", "#3a1a12"], "Nature"],
+  desert:    ["Désert",                   ["#f8ecd1", "#e8c48f", "#d08c57", "#9c5a3c", "#4a2c22"], "Nature"],
+  glace:     ["Glace",                    ["#f4fbff", "#cfe9f7", "#8cc8eb", "#3f88c5", "#0b3a5d"], "Nature"],
+  couchant:  ["Coucher de soleil",        ["#ffe8a3", "#ffb26b", "#ff6f61", "#c2185b", "#3d1c4f"], "Nature"],
+  camo:      ["Camouflage",               ["#d6cfa8", "#a39e6e", "#6b6b3e", "#4a4a2e", "#22231a"], "Nature"],
+  // — Monochromes / duotones
+  prusse:    ["Bleu de Prusse",           ["#e3ecf5", "#9bb7d4", "#4f7cac", "#1f4e79", "#0b1f3a"], "Monochromes"],
+  sanguine:  ["Sanguine",                 ["#f6e2d8", "#e0a68c", "#bf6a4a", "#8a3b25", "#3d1810"], "Monochromes"],
+  indigo:    ["Indigo (japonais)",        ["#f1efe8", "#c9ced6", "#6f7fa0", "#2f3e6b", "#121a33"], "Monochromes"],
+  rougenoir: ["Rouge et noir",            ["#f2efe6", "#e8b4a8", "#d62828", "#7a0f0f", "#111111"], "Monochromes"],
+  olive:     ["Olive",                    ["#f1f0dc", "#cfcc9a", "#9c9a5a", "#5f5e30", "#262612"], "Monochromes"],
+};
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgbHex = c => "#" + c.map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
+// n colours spread over the palette (interpolated between its tones beyond 5 layers)
+function paletteColors(stops, n) {
+  if (n <= 1) return [stops[stops.length - 1]];            // a single stencil: the darkest tone
+  return Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1) * (stops.length - 1), a = Math.floor(t), b = Math.min(stops.length - 1, a + 1), f = t - a;
+    const ca = hexRgb(stops[a]), cb = hexRgb(stops[b]);
+    return rgbHex(ca.map((v, k) => v + (cb[k] - v) * f));
+  });
+}
+// Custom palettes (presets_utilisateur.json, "palette" key): "u:<name>" keys
+function palDef(key) {
+  if (key && key.startsWith("u:")) {
+    const p = (UP.palette || {})[key.slice(2)];
+    return p && Array.isArray(p.colors) && p.colors.length ? [key.slice(2), p.colors, "Mes palettes"] : null;
+  }
+  return PALETTES[key] || null;
+}
+function applyPalette(key) {
+  const def = palDef(key);
+  if (!LAST || !def) return;
+  const layers = LAST.layers.filter(L => L.kind !== "outline");
+  const cols = paletteColors(def[1], layers.length);
+  $("layer_colors").value = layers.map((L, i) => `${L.index}=${cols[i]}`).join(";");
+  PAL_LAST = key;
+  status(`Palette « ${def[0]} » appliquée à ${layers.length} couche${layers.length > 1 ? "s" : ""}`);
+  schedule();
+}
+const swatches = cols => cols.map(c => `<i style="background:${c}"></i>`).join("");
+let PAL_CUR = "", PAL_LAST = "";   // PAL_LAST: last applied palette (offered for every layer)
+function showPaletteChoice(key) {        // button label + swatches ("" = no palette applied)
+  const def = palDef(key);
+  PAL_CUR = def ? key : "";
+  $("palBtnLabel").textContent = def ? def[0] : "Palette de couleurs…";
+  $("palPrev").innerHTML = def ? swatches(def[1]) : "";
+  $("palMenu").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.k === PAL_CUR)));
+}
+const escHtml = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function buildPaletteMenu() {
+  const menu = $("palMenu");
+  const item = (k, label, cols) => `<button type="button" role="option" data-k="${escHtml(k)}" aria-selected="${k === PAL_CUR}" title="${escHtml(label)} : ${cols.join(" · ")}">` +
+    `<span class="palprev" aria-hidden="true">${swatches(cols)}</span><span class="pname">${escHtml(label)}</span></button>`;
+  const mine = Object.entries(UP.palette || {}).filter(([, p]) => p && Array.isArray(p.colors) && p.colors.length);
+  let html = "";
+  if (mine.length) {
+    html += `<div class="pgroup">Mes palettes</div>` + mine.map(([name, p]) =>
+      `<div class="prow">${item("u:" + name, name, p.colors)}<button type="button" class="pdel" data-del="${escHtml(name)}" title="Supprimer la palette « ${escHtml(name)} »" aria-label="Supprimer ${escHtml(name)}">×</button></div>`).join("");
+  }
+  let group = "";
+  html += Object.entries(PALETTES).map(([k, [label, cols, g]]) =>
+    (g !== group ? `<div class="pgroup">${(group = g)}</div>` : "") + item(k, label, cols)).join("");
+  html += `<button type="button" class="psave" data-save="1" title="Enregistre les couleurs actuelles des couches (de la 1re à la dernière) comme palette réutilisable">＋ Enregistrer les couleurs actuelles…</button>
+    <form class="pform" id="palForm" hidden><input id="palName" maxlength="40" placeholder="Nom de la palette" aria-label="Nom de la palette">
+      <button type="submit">OK</button><button type="button" data-cancel="1">Annuler</button></form>`;
+  menu.innerHTML = html;
+}
+async function savePalette(name) {
+  name = name.trim();
+  const cols = LAST ? LAST.layers.filter(L => L.kind !== "outline").map(L => L.color.toLowerCase()) : [];
+  if (!name || !cols.length) return status(cols.length ? "Donnez un nom à la palette" : "Calculez d'abord les couches", true);
+  if (!(await presetCall("POST", "/api/presets/palette", { name, values: { colors: cols } }))) return;
+  PAL_LAST = "u:" + name;
+  buildPaletteMenu(); showPaletteChoice("u:" + name);
+  status(`Palette « ${name} » enregistrée (${cols.length} couleur${cols.length > 1 ? "s" : ""})`);
+}
+async function deletePalette(name) {
+  if (!(await presetCall("DELETE", "/api/presets/palette/" + encodeURIComponent(name)))) return;
+  if (PAL_CUR === "u:" + name) showPaletteChoice("");
+  if (PAL_LAST === "u:" + name) PAL_LAST = "";
+  buildPaletteMenu();
+  status(`Palette « ${name} » supprimée`);
+}
+function setupPalettes() {
+  const menu = $("palMenu"), btn = $("palBtn");
+  buildPaletteMenu();
+  const open = on => {
+    if (on) {   // positioned on the window: the (scrolling) stencil column does not clip it
+      const r = btn.getBoundingClientRect(), w = Math.max(r.width, 260);
+      Object.assign(menu.style, { width: w + "px", left: Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + "px",
+        top: r.bottom + 4 + "px", maxHeight: Math.max(160, Math.min(420, innerHeight - r.bottom - 16)) + "px" });
+    }
+    menu.hidden = !on; btn.setAttribute("aria-expanded", String(on));
+    if (on) (menu.querySelector('[aria-selected="true"]') || menu.querySelector("button")).focus();
+  };
+  btn.onclick = () => open(menu.hidden);
+  menu.onclick = e => {
+    const del = e.target.closest("[data-del]");
+    if (del) { e.stopPropagation(); deletePalette(del.dataset.del); return; }
+    if (e.target.closest("[data-save]")) {
+      if (!LAST) return status("Calculez d'abord les couches", true);
+      $("palForm").hidden = false; $("palName").value = ""; $("palName").focus(); return;
+    }
+    if (e.target.closest("[data-cancel]")) { $("palForm").hidden = true; return; }
+    const b = e.target.closest("button[data-k]");
+    if (!b) return;
+    open(false); btn.focus();
+    applyPalette(b.dataset.k);
+    showPaletteChoice(b.dataset.k);
+  };
+  menu.onsubmit = e => { e.preventDefault(); savePalette($("palName").value); };
+  menu.onkeydown = e => {
+    if (e.target.id === "palName" && e.key !== "Escape") return;      // palette name input
+    const items = [...menu.querySelectorAll("button")], i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[Math.min(items.length - 1, i + 1)].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[Math.max(0, i - 1)].focus(); }
+    else if (e.key === "Escape") { open(false); btn.focus(); }
+  };
+  document.addEventListener("pointerdown", e => { if (!menu.hidden && !e.target.closest("#palDD")) open(false); });
+  window.addEventListener("resize", () => open(false));
+  document.querySelector(".layercol").addEventListener("scroll", () => { if (!menu.hidden) open(false); });
+}
+
+// ---------------- Layer paint colours ----------------
+function layerColors() {
+  const m = {};
+  String($("layer_colors").value || "").split(";").forEach(p => {
+    const [k, v] = p.split("=");
+    if (k && /^#[0-9a-f]{6}$/i.test((v || "").trim())) m[+k] = v.trim().toLowerCase();
+  });
+  return m;
+}
+const RECENT_KEY = "stencilit.couleurs_recentes";
+function recentColors() {
+  try { return (JSON.parse(localStorage.getItem(RECENT_KEY) || "[]") || []).filter(c => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 6); }
+  catch (e) { return []; }
+}
+function rememberColor(c) {
+  const list = [c.toLowerCase(), ...recentColors().filter(x => x !== c.toLowerCase())].slice(0, 6);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (e) { /* storage unavailable */ }
+}
+let POP_IDX = null;
+// ---- Built-in colour picker (hue / saturation / brightness), no system window
+const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+function rgb2hsv([r, g, b]) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, mx ? d / mx : 0, mx];
+}
+function hsv2hex(h, s, v) {
+  const f = n => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return "#" + [f(5), f(3), f(1)].map(x => Math.round(x * 255).toString(16).padStart(2, "0")).join("");
+}
+let PICK = null;
+function setupPicker(pop, start) {
+  const cv = pop.querySelector("canvas.sv"), ctx = cv.getContext("2d"), hue = pop.querySelector(".hue"),
+        hexIn = pop.querySelector(".cphex"), prev = pop.querySelector(".cpprev");
+  let [h, s, v] = rgb2hsv(hex2rgb(start));
+  const draw = () => {
+    const W = cv.width, H = cv.height;
+    ctx.fillStyle = hsv2hex(h, 1, 1); ctx.fillRect(0, 0, W, H);
+    let g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, "#fff"); g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "#000");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const x = s * W, y = (1 - v) * H;
+    ctx.lineWidth = 2; ctx.strokeStyle = v > 0.55 ? "#000" : "#fff";
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
+    const hex = hsv2hex(h, s, v);
+    prev.style.background = hex;
+    if (document.activeElement !== hexIn) hexIn.value = hex;
+  };
+  hue.value = Math.round(h);
+  hue.oninput = () => { h = +hue.value; draw(); };
+  const fromPointer = e => {
+    const r = cv.getBoundingClientRect();
+    s = clamp((e.clientX - r.left) / r.width, 0, 1); v = 1 - clamp((e.clientY - r.top) / r.height, 0, 1); draw();
+  };
+  cv.onpointerdown = e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (err) {} fromPointer(e); cv.onpointermove = fromPointer; };
+  cv.onpointerup = cv.onpointercancel = () => { cv.onpointermove = null; };
+  hexIn.oninput = () => {
+    const t = hexIn.value.trim().replace(/^([0-9a-f]{6})$/i, "#$1");
+    if (/^#[0-9a-f]{6}$/i.test(t)) { [h, s, v] = rgb2hsv(hex2rgb(t)); hue.value = Math.round(h); draw(); }
+  };
+  draw();
+  PICK = { hex: () => hsv2hex(h, s, v) };
+}
+function closeColorPop() { $("colorPop").hidden = true; POP_IDX = null; }
+// Colour choice window of a layer: applied palette (or all layer tones),
+// computed image tones, 6 recently used colours, custom colour (system picker)
+function openColorPop(btn) {
+  const idx = +btn.dataset.idx, pop = $("colorPop");
+  if (!pop.hidden && POP_IDX === idx) return closeColorPop();
+  POP_IDX = idx;
+  const L = LAST.layers.find(x => x.index === idx), cur = (L ? L.color : "").toLowerCase();
+  const row = (cols, empty) => cols.length
+    ? `<div class="sws">${cols.map(c => `<button type="button" data-c="${c}" class="${c.toLowerCase() === cur ? "cur" : ""}" style="background:${c}" title="${c}"></button>`).join("")}</div>`
+    : `<div class="cpnone">${empty}</div>`;
+  const pal = palDef(PAL_LAST || PAL_CUR);
+  const inUse = [...new Set(LAST.layers.filter(x => x.kind !== "outline").map(x => x.color.toLowerCase()))];
+  pop.innerHTML = `<strong>Couche ${idx}</strong>
+    <h4>${pal ? `Palette « ${pal[0]} »` : "Couleurs des couches"}</h4>${row(pal ? pal[1] : inUse, "—")}
+    <h4>Teintes de l'image (calculées)</h4>${row((LAST.palette || []).slice(), "—")}
+    <h4>Dernières couleurs utilisées</h4>${row(recentColors(), "Aucune pour l'instant")}
+    <h4>Couleur personnalisée</h4>
+    <div class="cpick">
+      <canvas class="sv" width="216" height="110" aria-label="Saturation (horizontal) et luminosité (vertical)"></canvas>
+      <input type="range" class="hue" min="0" max="360" step="1" aria-label="Teinte">
+      <div class="cprow"><span class="cpprev"></span>
+        <input class="cphex" maxlength="7" spellcheck="false" aria-label="Code couleur hexadécimal">
+        <button type="button" data-act="apply">Appliquer</button></div>
+    </div>
+    <div class="acts"><button type="button" data-act="auto" ${layerColors()[idx] ? "" : "disabled"} title="Revenir à la teinte calculée">Auto (teinte calculée)</button></div>`;
+  setupPicker(pop, cur || "#888888");
+  const r = btn.getBoundingClientRect(), w = 236;
+  pop.hidden = false;
+  const h = pop.getBoundingClientRect().height;
+  Object.assign(pop.style, { left: Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px",
+    top: (r.bottom + 6 + h < innerHeight ? r.bottom + 6 : Math.max(8, r.top - h - 6)) + "px" });
+  (pop.querySelector("button.cur") || pop.querySelector(".sws button") || pop.querySelector("button")).focus();
+}
+function setupColorPop() {
+  const pop = $("colorPop");
+  pop.onclick = e => {
+    const b = e.target.closest("button");
+    if (!b || POP_IDX === null) return;
+    const idx = POP_IDX;
+    if (b.dataset.c) { closeColorPop(); setLayerColor(idx, b.dataset.c); }
+    else if (b.dataset.act === "auto") { closeColorPop(); setLayerColor(idx, null); }
+    else if (b.dataset.act === "apply") {
+      const hex = PICK.hex();
+      closeColorPop(); setLayerColor(idx, hex);
+    }
+  };
+  pop.onkeydown = e => {
+    if (e.key === "Escape") closeColorPop();
+    else if (e.key === "Enter" && e.target.classList.contains("cphex")) pop.querySelector('[data-act="apply"]').click();
+  };
+  document.addEventListener("pointerdown", e => { if (!pop.hidden && !e.target.closest("#colorPop, .lcolor")) closeColorPop(); });
+  window.addEventListener("resize", closeColorPop);
+  document.querySelector(".layercol").addEventListener("scroll", closeColorPop);
+}
+function setLayerColor(idx, color) {
+  const m = layerColors();
+  if (color) { m[idx] = color.toLowerCase(); rememberColor(color); } else delete m[idx];
+  showPaletteChoice("");
+  $("layer_colors").value = Object.entries(m).map(([k, v]) => `${k}=${v}`).join(";");
+  status(color ? `Couche ${idx} : peinture ${color}` : `Couche ${idx} : teinte calculée`);
+  schedule();
+}
 function renderOutlineSwatches() {
   const cols = ["#1e1e1e", "#ffffff"];
   if (LAST) LAST.layers.filter(L => L.kind !== "outline").forEach(L => { if (!cols.includes(L.color)) cols.push(L.color); });
@@ -1959,14 +2816,14 @@ function renderOutlineSwatches() {
     $("outline_auto_color").checked = false; $("outline_color").disabled = false;
     $("outline_color").value = sw.dataset.c; updateSummaries(); schedule();
   });
-  // En mode automatique, on affiche la couleur effectivement choisie
+  // In automatic mode, show the colour actually chosen
   const ol = LAST && LAST.layers.find(L => L.kind === "outline");
   if (ol && $("outline_auto_color").checked) $("outline_color").value = ol.color;
 }
 function regHint() { $("regHint").textContent = REG_HINT[val("reg_shape")] + (val("reg_corners") === "3" ? " Le coin bas-droit sans repère sert de détrompeur." : ""); }
 function lum(h) { const n = parseInt(h.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255); }
 
-init();
+init().then(applyTips);   // 2nd pass: buttons created during initialisation (saved presets)
 </script>
 </body>
 </html>

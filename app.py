@@ -23,20 +23,22 @@ MATERIALS_FILE = ROOT / "stencilit" / "materials.json"
 app = Flask(__name__, static_folder=str(ROOT / "static"))
 app.config["MAX_CONTENT_LENGTH"] = 60 * 1024 * 1024
 
-# Sessions en mémoire (application locale mono-utilisateur)
+# In-memory sessions (local single-user application)
 SESSIONS: dict[str, dict] = {}
 LOCK = threading.Lock()
 
-PREP_KEYS = ("support_w_mm", "support_h_mm", "px_per_mm", "detail", "n_layers", "color_mode", "skip_support")
+PREP_KEYS = ("support_w_mm", "support_h_mm", "px_per_mm", "detail", "n_layers", "color_mode", "skip_support",
+             "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds",
+             "pre_saturation", "pre_sharpen", "pre_remove_bg")
 
 
 def materials() -> dict:
     return json.loads(MATERIALS_FILE.read_text(encoding="utf-8"))
 
 
-# ---------------- Réglages enregistrés par l'utilisateur ----------------
+# ---------------- User-saved presets ----------------
 USER_PRESETS_FILE = ROOT / "presets_utilisateur.json"
-PRESET_KINDS = ("support", "material")
+PRESET_KINDS = ("support", "material", "palette")
 
 
 def load_user_presets() -> dict:
@@ -50,7 +52,7 @@ def load_user_presets() -> dict:
 def save_user_presets(data: dict) -> None:
     tmp = USER_PRESETS_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(USER_PRESETS_FILE)  # écriture atomique
+    tmp.replace(USER_PRESETS_FILE)  # atomic write
 
 
 @app.get("/api/presets")
@@ -115,11 +117,11 @@ def png_b64(img: np.ndarray, max_side: int = 1100) -> str:
     return "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode()
 
 
-PREVIEW_MAX = 1100  # plus grand côté des images de prévisualisation (px)
+PREVIEW_MAX = 1100  # longest side of the preview images (px)
 
 
 def rgba_b64(color_bgr, alpha: np.ndarray) -> str:
-    """PNG RGBA : couleur unie de la couche, transparence = masque (0..1)."""
+    """RGBA PNG: plain layer colour, transparency = mask (0..1)."""
     h, w = alpha.shape
     img = np.empty((h, w, 4), np.uint8)
     img[..., :3] = np.asarray(color_bgr, np.uint8)
@@ -157,7 +159,7 @@ def api_upload():
 
 
 def new_session(img: np.ndarray, raw: bytes, filename: str) -> dict:
-    """Crée une session ; le fichier d'origine est gardé tel quel pour l'export du projet."""
+    """Creates a session; the original file is kept as is for the project export."""
     sid = uuid.uuid4().hex
     with LOCK:
         SESSIONS[sid] = {"img": img, "name": Path(filename).stem, "raw": raw,
@@ -177,9 +179,9 @@ def api_recommend():
     skip = bool(data.get("skip_support", True))
     p = pl.Params.from_dict(data.get("crop", {}))
     x0, y0, x1, y1 = pl.crop_rect(p, sess["img"].shape)
-    src = sess["img"][y0:y1, x0:x1]
+    src = pl.preprocess_image(sess["img"][y0:y1, x0:x1], p)   # recommendation on the preprocessed image
     gray = pl.is_grayscale(src) if mode == "auto" else mode == "gray"
-    key = (gray, skip, x0, y0, x1, y1)
+    key = (gray, skip, x0, y0, x1, y1, p.pre_auto_levels, p.pre_clahe, p.pre_gamma, p.pre_saturation, p.pre_sharpen)
     cache = sess.setdefault("reco", {})
     if key not in cache:
         cache[key] = pl.recommend_layers(src, gray, skip)
@@ -188,8 +190,8 @@ def api_recommend():
 
 @app.post("/api/mask")
 def api_mask():
-    """Reçoit le masque peint (PNG transparent, à la taille de l'aperçu de l'image source).
-    Les pixels peints (opaques) délimitent les zones où chercher les détails clés."""
+    """Receives the painted mask (transparent PNG, at the size of the source image preview).
+    Painted (opaque) pixels delimit the areas where key details are searched."""
     data = request.get_json(force=True)
     sess = SESSIONS.get(data.get("id", ""))
     if not sess:
@@ -215,6 +217,95 @@ def api_mask():
     return jsonify(coverage=round(100 * float((sess["mask"] > 0).mean()), 1))
 
 
+def subject_overlay(sess) -> str | None:
+    """Cut-out preview, at the size of the source image preview: darkened background (transparent elsewhere)."""
+    fg = sess.get("fg")
+    if fg is None:
+        return None
+    h, w = fg.shape
+    s = min(1.0, 1100 / max(h, w))
+    small = cv2.resize(fg.astype(np.uint8) * 255, (max(1, round(w * s)), max(1, round(h * s))),
+                       interpolation=cv2.INTER_AREA)
+    return rgba_b64((15, 15, 15), (255 - small).astype(np.float32) / 255.0 * 0.72)
+
+
+def set_subject(sess, painted) -> dict:
+    """Stores the painted subject area and computes the cut-out (GrabCut)."""
+    if painted is None or not (painted > 0).any():
+        sess.pop("subject", None)
+        sess.pop("fg", None)
+    else:
+        sess["subject"] = painted
+        sess["fg"] = pl.grabcut_subject(sess["img"], painted)
+    sess["fg_ver"] = sess.get("fg_ver", 0) + 1
+    fg = sess.get("fg")
+    return dict(coverage=round(100 * float((painted > 0).mean()), 1) if sess.get("subject") is not None else 0.0,
+                subject_pct=round(100 * float(fg.mean()), 1) if fg is not None else None,
+                overlay=subject_overlay(sess))
+
+
+@app.post("/api/subject")
+def api_subject():
+    """Receives the area painted around the subject (transparent PNG, source image preview size)
+    and returns the computed cut-out (removed background = bare support)."""
+    data = request.get_json(force=True)
+    sess = SESSIONS.get(data.get("id", ""))
+    if not sess:
+        return jsonify(error="Session inconnue, rechargez l'image"), 404
+    png = data.get("png")
+    painted = None
+    if png:
+        try:
+            m = cv2.imdecode(np.frombuffer(base64.b64decode(png.split(",", 1)[-1]), np.uint8), cv2.IMREAD_UNCHANGED)
+        except (ValueError, cv2.error):
+            m = None
+        if m is None:
+            return jsonify(error="Masque illisible"), 400
+        alpha = m[..., 3] if (m.ndim == 3 and m.shape[2] == 4) else (m if m.ndim == 2 else m[..., 2])
+        h, w = sess["img"].shape[:2]
+        painted = np.where(cv2.resize(alpha, (w, h), interpolation=cv2.INTER_LINEAR) > 127, 255, 0).astype(np.uint8)
+    with LOCK:
+        out = set_subject(sess, painted)
+    return jsonify(out)
+
+
+@app.post("/api/prepreview")
+def api_prepreview():
+    """Instant preprocessing preview (without computing the stencils): visible part of the image,
+    preprocessed at preview size and placed on the support, + luminance histogram."""
+    data = request.get_json(force=True)
+    sess = SESSIONS.get(data.get("id", ""))
+    if not sess:
+        return jsonify(error="Session inconnue, rechargez l'image"), 404
+    p = pl.Params.from_dict(data.get("params", {}))
+    lay, _ = pl.resolve_layout(p, sess["img"].shape)
+    ppm = p.px_per_mm
+    SW, SH = round(p.support_w_mm * ppm), round(p.support_h_mm * ppm)
+    k = min(1.0, PREVIEW_MAX / max(SW, SH))
+    size = (max(1, round(SW * k)), max(1, round(SH * k)))
+    vx0, vy0, vx1, vy1 = lay.vis_mm
+    r = (round(vx0 * ppm * k), round(vy0 * ppm * k), round(vx1 * ppm * k), round(vy1 * ppm * k))
+    r = (r[0], r[1], min(size[0], max(r[0] + 1, r[2])), min(size[1], max(r[1] + 1, r[3])))
+    x0, y0, x1, y1 = lay.src_rect
+    part = cv2.resize(sess["img"][y0:y1, x0:x1], (r[2] - r[0], r[3] - r[1]), interpolation=cv2.INTER_AREA)
+    part = pl.preprocess_image(part, p, ppm * k)          # same sharpening radius in mm as in the full computation
+    fg = None
+    if p.pre_remove_bg and sess.get("fg") is not None:
+        fg = cv2.resize(sess["fg"][y0:y1, x0:x1].astype(np.uint8) * 255, (part.shape[1], part.shape[0]),
+                        interpolation=cv2.INTER_LINEAR) > 127
+    support = pl.hex_to_bgr(p.support_color).astype(np.uint8)
+    if fg is not None:
+        part[~fg] = support
+    out = np.empty((size[1], size[0], 3), np.uint8)
+    out[:] = support
+    out[r[1]:r[3], r[0]:r[2]] = part
+    L = cv2.cvtColor(part, cv2.COLOR_BGR2LAB)[..., 0].astype(np.float32) * (100.0 / 255.0)
+    Lh = L[fg] if fg is not None and fg.any() else L.ravel()
+    hist = np.bincount(np.clip(Lh, 0, 99.999).astype(np.int32), minlength=100).astype(np.float64)
+    hist = (hist / max(1.0, hist.max())).round(4).tolist()
+    return jsonify(image=png_b64(out), size=list(size), histogram=hist)
+
+
 @app.post("/api/process")
 def api_process():
     data = request.get_json(force=True)
@@ -224,11 +315,12 @@ def api_process():
     p = pl.Params.from_dict(data.get("params", {}))
     lay, warnings = pl.resolve_layout(p, sess["img"].shape)
     t0 = time.perf_counter()
-    key = tuple(getattr(p, k) for k in PREP_KEYS) + (lay.src_rect, tuple(round(v, 3) for v in lay.vis_mm))
+    key = (tuple(getattr(p, k) for k in PREP_KEYS) + (lay.src_rect, tuple(round(v, 3) for v in lay.vis_mm))
+           + ((sess.get("fg_ver", 0),) if p.pre_remove_bg else ()))
     if sess.get("prep_key") != key:
-        sess["prep"] = pl.prepare(sess["img"], p, lay)
+        sess["prep"] = pl.prepare(sess["img"], p, lay, sess.get("fg") if p.pre_remove_bg else None)
         sess["prep_key"] = key
-    # Masque des détails clés (peint dans l'onglet « Masque contours »), ramené à la zone image calculée
+    # Key-detail mask (painted in the Masks tab, outline mask), brought to the computed image area
     region = None
     if p.outline and sess.get("mask") is not None:
         x0, y0, x1, y1 = lay.src_rect
@@ -237,11 +329,11 @@ def api_process():
     res = pl.build(sess["prep"], p, region)
     sess["result"] = res
     sess["material"] = data.get("material")
-    sess["ui"] = data.get("ui")          # état complet de l'interface, pour le fichier projet
+    sess["ui"] = data.get("ui")          # full interface state, for the project file
     sheet = hex_to_bgr((data.get("material") or {}).get("sheet_color", "#c8d3dc"))
-    # Calques de prévisualisation (zone support) : couleur de la couche + transparence = ouvertures.
-    # Le navigateur les superpose lui-même -> masquer une couche ou activer le flou est instantané.
-    # Tout est projeté directement à la taille d'aperçu (un grand support ne coûte pas plus cher).
+    # Preview layers (support area): layer colour + transparency = openings.
+    # The browser stacks them itself -> hiding a layer or toggling the blur is instant.
+    # Everything is projected straight to the preview size (a large support costs no more).
     SW, SH = res.support_px
     k = min(1.0, PREVIEW_MAX / max(SW, SH))
     size = (max(1, round(SW * k)), max(1, round(SH * k)))
@@ -263,23 +355,37 @@ def api_process():
         layers.append({
             "index": L.index,
             "color": pl.bgr_hex(L.color),
-            "image": png_b64(pl.layer_view(res, L, sheet), 900),
+            # layer view without highlights + bridges and removed details as separate overlays
+            # (shown / hidden in the browser)
+            "image": png_b64(pl.layer_view(res, L, sheet, bridges=False, lost=False), 900),
+            **dict(zip(("img_bridges", "img_lost"), (png_b64(o, 900) for o in pl.layer_overlays(res, L)))),
             "mask_flat": rgba_b64(L.color, to_preview(mask)),
             "mask_sim": rgba_b64(L.color, to_preview(cv2.GaussianBlur(mask, (0, 0), sig) * 0.97)),
             **pl.layer_stats(L),
         })
     _, reg_warn = pl.registration_shapes(res)
-    # Original placé sur le support, pour comparer à l'échelle
-    ref = np.empty((size[1], size[0], 3), np.uint8)
-    ref[:] = res.support_color.astype(np.uint8)
+    # Original placed on the support, to compare at scale (raw and preprocessed)
     H, W = res.prepared.labels.shape
     ix, iy = res.prepared.off_px
     r = (round(ix * k), round(iy * k), max(round(ix * k) + 1, round((ix + W) * k)), max(round(iy * k) + 1, round((iy + H) * k)))
     r = (r[0], r[1], min(size[0], r[2]), min(size[1], r[3]))
-    ref[r[1]:r[3], r[0]:r[2]] = cv2.resize(res.prepared.resized, (r[2] - r[0], r[3] - r[1]), interpolation=cv2.INTER_AREA)
+
+    def on_support(im):
+        out = np.empty((size[1], size[0], 3), np.uint8)
+        out[:] = res.support_color.astype(np.uint8)
+        out[r[1]:r[3], r[0]:r[2]] = cv2.resize(im, (r[2] - r[0], r[3] - r[1]), interpolation=cv2.INTER_AREA)
+        return out
+    ref = on_support(res.prepared.raw if res.prepared.raw is not None else res.prepared.resized)
+    pre_on = pl.preprocess_active(p) or res.prepared.fg is not None
     sheet_sim = pl.simulate_sheet(res)
     return jsonify(
         reference=png_b64(ref),
+        reference_pre=png_b64(on_support(pre_view(res))) if pre_on else None,
+        subject_used=res.prepared.fg is not None,
+        histogram=res.prepared.hist,
+        auto_thresholds=res.prepared.auto_thresholds,
+        thresholds_used=res.prepared.thresholds_used,
+        palette=[pl.bgr_hex(c) for c in res.prepared.palette],
         preview_size=list(size),
         layers=layers,
         base=pl.bgr_hex(res.support_color),
@@ -298,6 +404,15 @@ def api_process():
     )
 
 
+def pre_view(res):
+    """Preprocessed image; removed background shown in the support colour."""
+    im = res.prepared.resized
+    if res.prepared.fg is not None:
+        im = im.copy()
+        im[~res.prepared.fg] = res.support_color.astype(np.uint8)
+    return im
+
+
 @app.get("/api/export/<sid>")
 def api_export(sid):
     sess = SESSIONS.get(sid)
@@ -307,16 +422,21 @@ def api_export(sid):
     if sess.get("mask") is not None:
         ok, buf = cv2.imencode(".png", sess["mask"])
         mask_png = buf.tobytes()
+    subject_png = None
+    if sess.get("subject") is not None:
+        ok, buf = cv2.imencode(".png", sess["subject"])
+        subject_png = buf.tobytes()
+    lang = "fr" if request.args.get("lang") == "fr" else "en"
     data = export_zip(sess["result"], sess.get("material"), sess["name"],
                       original=(sess.get("raw"), sess.get("ext", ".png")), mask_png=mask_png,
-                      ui=sess.get("ui"))
+                      ui=sess.get("ui"), subject_png=subject_png, lang=lang)
     return send_file(io.BytesIO(data), mimetype="application/zip", as_attachment=True,
-                     download_name=f"{sess['name']}_pochoirs.zip")
+                     download_name=f"{sess['name']}_{'pochoirs' if lang == 'fr' else 'stencils'}.zip")
 
 
 @app.post("/api/project")
 def api_project():
-    """Ouvre un projet exporté (.zip) : image d'origine, masque et réglages complets."""
+    """Opens an exported project (.zip): original image, masks and full settings."""
     f = request.files.get("project")
     if not f:
         return jsonify(error="Aucun fichier reçu"), 400
@@ -353,7 +473,17 @@ def api_project():
             coverage = round(100 * float((sess["mask"] > 0).mean()), 1)
             ok, buf = cv2.imencode(".png", sess["mask"])
             mask_b64 = "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode()
-    return jsonify({**out, "info": info, "mask": mask_b64, "mask_coverage": coverage})
+    subject = None
+    s_name = proj.get("masque_sujet")
+    if s_name and s_name in names:
+        m = cv2.imdecode(np.frombuffer(z.read(s_name), np.uint8), cv2.IMREAD_GRAYSCALE)
+        if m is not None and m.any():
+            h, w = img.shape[:2]
+            m = np.where(cv2.resize(m, (w, h), interpolation=cv2.INTER_NEAREST) > 127, 255, 0).astype(np.uint8)
+            subject = set_subject(sess, m)
+            ok, buf = cv2.imencode(".png", m)
+            subject["png"] = "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode()
+    return jsonify({**out, "info": info, "mask": mask_b64, "mask_coverage": coverage, "subject": subject})
 
 
 if __name__ == "__main__":
