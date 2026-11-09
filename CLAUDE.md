@@ -33,6 +33,13 @@ Hard-won constraints, verified by the author in Silhouette Studio – do not "cl
   keeps **one single compound `<path>` per layer** (openings + sheet outline + marks). Generating
   `.studio3` files directly was investigated and is not needed.
 
+## Object selection (MobileSAM)
+
+- `stencilit/semantic.py`: optional `onnxruntime`; models downloaded on first use into `models/`
+  (git-ignored), pinned by size + SHA-256. Never commit the `.onnx` files.
+- Embedding cached per session (`sess["sem"]`); a subject mask containing an object selection is
+  "exact" (`subject_exact`, project key `masque_sujet_exact`): used as is, no GrabCut.
+
 ## Testing in the browser
 
 - Never alter the author's saved state: set `NO_REMEMBER = true` in the page before changing

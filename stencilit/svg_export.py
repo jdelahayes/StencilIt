@@ -407,7 +407,8 @@ PROJECT_VERSION = 1
 
 def export_zip(res: Result, material: dict | None, name: str = "stencil",
                original: tuple[bytes | None, str] | None = None, mask_png: bytes | None = None,
-               ui: dict | None = None, subject_png: bytes | None = None, lang: str = "en") -> bytes:
+               ui: dict | None = None, subject_png: bytes | None = None, lang: str = "en",
+               subject_exact: bool = False) -> bytes:
     """Zip of the stencils + reloadable project (original image, masks, interface settings).
 
     The JSON keys of …_infos.json are a file format and stay unchanged whatever the language
@@ -446,6 +447,7 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
                     "image": img_file,
                     "masque": mask_file,
                     "masque_sujet": subject_file,
+                    "masque_sujet_exact": bool(subject_png and subject_exact),
                     "interface": ui,
                 },
                 "format_feuille_mm": [round(v, 1) for v in res.sheet_mm],

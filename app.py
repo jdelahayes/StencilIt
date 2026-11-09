@@ -15,6 +15,7 @@ from flask import Flask, jsonify, request, send_file, send_from_directory
 import io
 
 from stencilit import pipeline as pl
+from stencilit import semantic
 from stencilit.svg_export import export_zip
 
 ROOT = Path(__file__).parent
@@ -229,18 +230,21 @@ def subject_overlay(sess) -> str | None:
     return rgba_b64((15, 15, 15), (255 - small).astype(np.float32) / 255.0 * 0.72)
 
 
-def set_subject(sess, painted) -> dict:
-    """Stores the painted subject area and computes the cut-out (GrabCut)."""
+def set_subject(sess, painted, exact: bool = False) -> dict:
+    """Stores the painted subject area and computes the cut-out: GrabCut around a roughly painted
+    area, or the mask as is when it comes from the object selection (exact outline)."""
     if painted is None or not (painted > 0).any():
         sess.pop("subject", None)
         sess.pop("fg", None)
+        exact = False
     else:
         sess["subject"] = painted
-        sess["fg"] = pl.grabcut_subject(sess["img"], painted)
+        sess["fg"] = (painted > 0) if exact else pl.grabcut_subject(sess["img"], painted)
+    sess["subject_exact"] = exact
     sess["fg_ver"] = sess.get("fg_ver", 0) + 1
     fg = sess.get("fg")
     return dict(coverage=round(100 * float((painted > 0).mean()), 1) if sess.get("subject") is not None else 0.0,
-                subject_pct=round(100 * float(fg.mean()), 1) if fg is not None else None,
+                subject_pct=round(100 * float(fg.mean()), 1) if fg is not None else None, exact=exact,
                 overlay=subject_overlay(sess))
 
 
@@ -265,8 +269,59 @@ def api_subject():
         h, w = sess["img"].shape[:2]
         painted = np.where(cv2.resize(alpha, (w, h), interpolation=cv2.INTER_LINEAR) > 127, 255, 0).astype(np.uint8)
     with LOCK:
-        out = set_subject(sess, painted)
+        out = set_subject(sess, painted, bool(data.get("exact")))
     return jsonify(out)
+
+
+def semantic_state(sess) -> dict:
+    """Image analysed by the selection model (computed once per session; concurrent calls wait)."""
+    with LOCK:
+        lock = sess.setdefault("sem_lock", threading.Lock())
+    with lock:
+        if sess.get("sem") is None:
+            sess["sem"] = semantic.embed(sess["img"])
+        return sess["sem"]
+
+
+@app.post("/api/semantic/prepare")
+def api_semantic_prepare():
+    """Analyses the image in advance (and downloads the model the first time), so that the first
+    click on an object is immediate."""
+    data = request.get_json(force=True)
+    sess = SESSIONS.get(data.get("id", ""))
+    if not sess:
+        return jsonify(error="Session inconnue, rechargez l'image"), 404
+    t = time.perf_counter()
+    try:
+        semantic_state(sess)
+    except semantic.SemanticError as e:
+        return jsonify(error=str(e)), 503
+    return jsonify(ok=True, seconds=round(time.perf_counter() - t, 2))
+
+
+@app.post("/api/semantic/select")
+def api_semantic_select():
+    """Mask of the object under the click: grey PNG at the size of the mask canvas (w, h).
+    points = [[x, y, label], …] in fractions of the image, label 1 = object, 0 = not the object."""
+    data = request.get_json(force=True)
+    sess = SESSIONS.get(data.get("id", ""))
+    if not sess:
+        return jsonify(error="Session inconnue, rechargez l'image"), 404
+    try:
+        w, h = int(data["w"]), int(data["h"])
+        points = [(float(x), float(y), int(l)) for x, y, l in data["points"]][:16]
+        level = int(data.get("level", 0))
+    except (KeyError, TypeError, ValueError):
+        return jsonify(error="Requête de sélection invalide"), 400
+    if not points or not (0 < w <= 4096 and 0 < h <= 4096):
+        return jsonify(error="Requête de sélection invalide"), 400
+    try:
+        m = semantic.select(semantic_state(sess), points, (w, h), level)
+    except semantic.SemanticError as e:
+        return jsonify(error=str(e)), 503
+    ok, buf = cv2.imencode(".png", m.astype(np.uint8) * 255)
+    return jsonify(png="data:image/png;base64," + base64.b64encode(buf.tobytes()).decode(),
+                   pct=round(100 * float(m.mean()), 1))
 
 
 @app.post("/api/prepreview")
@@ -481,7 +536,8 @@ def api_export(sid):
     lang = "fr" if request.args.get("lang") == "fr" else "en"
     data = export_zip(sess["result"], sess.get("material"), sess["name"],
                       original=(sess.get("raw"), sess.get("ext", ".png")), mask_png=mask_png,
-                      ui=sess.get("ui"), subject_png=subject_png, lang=lang)
+                      ui=sess.get("ui"), subject_png=subject_png, lang=lang,
+                      subject_exact=bool(sess.get("subject_exact")))
     return send_file(io.BytesIO(data), mimetype="application/zip", as_attachment=True,
                      download_name=f"{sess['name']}_{'pochoirs' if lang == 'fr' else 'stencils'}.zip")
 
@@ -532,7 +588,7 @@ def api_project():
         if m is not None and m.any():
             h, w = img.shape[:2]
             m = np.where(cv2.resize(m, (w, h), interpolation=cv2.INTER_NEAREST) > 127, 255, 0).astype(np.uint8)
-            subject = set_subject(sess, m)
+            subject = set_subject(sess, m, bool(proj.get("masque_sujet_exact")))
             ok, buf = cv2.imencode(".png", m)
             subject["png"] = "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode()
     return jsonify({**out, "info": info, "mask": mask_b64, "mask_coverage": coverage, "subject": subject})

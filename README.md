@@ -79,6 +79,10 @@ python -m venv .venv
 then open http://127.0.0.1:5000. Keep the console window open while you work; close it to stop
 the application. Nothing leaves your computer.
 
+The **Object** selection tool (Masks tab) downloads its model once, on first use: MobileSAM in
+ONNX format, about 45 MB, from Hugging Face, checked by its SHA-256 and kept in `models/`. The
+selection itself runs on your computer; your images are never sent anywhere.
+
 The interface is in **English** by default; the **⚙ Preferences** button at the top right holds the
 language selector (**French** is available; the exported files follow the selected language).
 
@@ -211,18 +215,27 @@ range (controlled posterisation). **Automatic thresholds** goes back to automati
 
 ### 5.6 Masks: background removal and key details
 
-The **Masks** tab lets you paint on the image with a brush. Choose which mask you paint in the
-drop-down list:
+The **Masks** tab lets you paint on the image with a brush, or select objects with a click. Choose
+which mask you edit in the drop-down list:
 
 - **Subject mask** (background removal) – roughly paint over the subject, overflowing a little.
   StencilIt finds the exact edge by itself (GrabCut): outside the painted area = background,
   centre of the area = subject. The detected background is shown darkened; it stays bare support and
   no longer influences the choice of tones. Painting the subject turns on *Remove the background*.
+  Or use the **Object** tool (below): the selected outline is then used as is, without GrabCut.
 - **Outline mask** (key details) – paint where the outline stencil should look for details
   (eyes, mouth, lettering…). Without a painted area, the whole image is searched. Painting turns on
   the outline stencil.
 
-Keyboard shortcuts: **B** brush, **E** eraser, **[** and **]** brush size. *Clear all* erases the mask.
+**Object** tool (semantic selection, Segment Anything / MobileSAM) – click an object to add it to the
+current mask; click other objects one after the other to add them too. Clicking again inside the
+object just added switches to another cut of it (a part, the object, the whole); **Alt + click**
+removes an object. The image is analysed once when the tool is chosen (well under a second), then
+each click takes a few hundredths of a second. The brush and eraser still touch the mask up
+afterwards. It works for both masks.
+
+Keyboard shortcuts: **B** brush, **E** eraser, **S** object, **[** and **]** brush size. *Clear all*
+erases the mask.
 
 ![Masks tab: subject painted, background removed](docs/screenshots/masks.jpg)
 
@@ -323,9 +336,11 @@ By default each layer gets the tone computed from the image. To paint with your 
 - click the **colour swatch** of a layer card: choose a colour of the current palette, one of the
   image tones, one of the 6 recently used colours, or any colour with the built-in picker (hex code
   accepted). **Auto (computed tone)** goes back to the image tone;
-- or use the **Colour palette…** menu at the top of the stencil column: 30 harmonious palettes in 5
-  families (Classics, Vivid, Soft, Nature, Monochromes), spread from the lightest (layer 1) to the
-  darkest. **＋ Save the current colours…** creates your own palette (*My palettes*).
+- or use the **Colour palette…** menu at the top of the stencil column: 46 harmonious palettes in 7
+  families (Classics, Vivid, Modern vivid, Soft, Modern soft, Nature, Monochromes), of 8 colours
+  each, from the lightest (layer 1) to the darkest. Up to 8 layers, each layer gets a real colour
+  of the palette (always including the lightest and the darkest); beyond that, intermediate tones
+  are blended. **＋ Save the current colours…** creates your own palette (*My palettes*).
 
 The chosen colours are used in the preview, the simulated render, the export and the file names.
 
@@ -421,7 +436,8 @@ The engine lives in `stencilit/pipeline.py`; the exports in `stencilit/svg_expor
 in `app.py` (Flask) and the interface in `static/index.html` (+ `static/i18n.js` for translations).
 
 1. **Scaling** – the image is cropped, placed and resampled at its real size (mm → pixels).
-2. **Preprocessing** – levels, CLAHE, gamma, saturation, sharpening, background removal (GrabCut).
+2. **Preprocessing** – levels, CLAHE, gamma, saturation, sharpening, background removal (GrabCut
+   around a painted area, or objects selected with MobileSAM, see `stencilit/semantic.py`).
 3. **Simplification** – k-means clustering in the Lab colour space (or on luminance, or with manual
    thresholds) plus a majority filter; tones sorted from light to dark = spraying order.
 4. **Layers** – cumulative or exclusive masks, one per tone, plus the optional outline layer
@@ -445,10 +461,12 @@ StencilIt/
 ├── stencilit/
 │   ├── pipeline.py        image → layers → bridges → paths
 │   ├── svg_export.py      SVG / Inkscape / zip export
+│   ├── semantic.py        object selection (MobileSAM, ONNX)
 │   └── materials.json     built-in material presets
 ├── static/
 │   ├── index.html         the interface
 │   └── i18n.js            English / French translations
+├── models/                object selection model (downloaded on first use, not in git)
 ├── samples/               test images
 ├── docs/screenshots/      images of this README
 └── tools/                 maintenance scripts (string and comment inventories)

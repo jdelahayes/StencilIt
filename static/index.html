@@ -63,7 +63,8 @@
   .palmenu .pgroup { font-size: 11px; color: var(--muted); padding: 6px 6px 2px; }
   .palprev { display: inline-flex; height: 14px; border-radius: 3px; overflow: hidden; flex: none; }
   .palprev i { width: 12px; height: 14px; display: block; }
-  .palmenu .palprev i { width: 14px; height: 14px; }
+  .palmenu .palprev i { width: 13px; height: 14px; }
+  .paldd > button .palprev i { width: 8px; }
   .layercol h2 { font-size: 14px; margin: 0; }
   .layercol .legend { margin: 6px 0 10px; gap: 6px 12px; }
   aside { background: var(--panel); border-right: 1px solid var(--line); padding: 12px 14px 40px;
@@ -124,6 +125,8 @@
   .maskwrap .brush { position: absolute; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7);
                      transform: translate(-50%, -50%); pointer-events: none; display: none; }
   .maskwrap .brush.erase { border-style: dashed; }
+  .maskwrap.select { cursor: crosshair; }
+  .maskwrap.select.wait { cursor: progress; }
   .seg { display: inline-flex; }
   .seg button { padding: 3px 10px; font-size: 12px; border-radius: 0; }
   .seg button:first-child { border-radius: 7px 0 0 7px; } .seg button:last-child { border-radius: 0 7px 7px 0; border-left: none; }
@@ -787,6 +790,7 @@
     <div class="seg" role="group" aria-label="Outil">
       <button type="button" id="mBrush" aria-pressed="true" title="Peindre une zone (B)">Pinceau</button>
       <button type="button" id="mErase" aria-pressed="false" title="Effacer (E)">Gomme</button>
+      <button type="button" id="mSelect" aria-pressed="false" title="Sélection d'objet (S) : cliquez sur un objet pour l'ajouter au masque, recliquez dessus pour changer de découpage (partie, objet, ensemble), Alt + clic pour retirer un objet. Le pinceau et la gomme restent utilisables pour retoucher.">Objet</button>
     </div>
     <label class="vt-size">Taille <input type="range" id="mSize" min="4" max="160" value="40" aria-label="Taille du pinceau"> <span id="mSizeV">40</span> px</label>
     <label class="vt-sim" style="margin-left:0"><input type="checkbox" id="mShow" checked> Afficher le masque</label>
@@ -1900,6 +1904,7 @@ async function init() {
   // Key-detail mask
   $("mBrush").onclick = () => setMaskTool("brush");
   $("mErase").onclick = () => setMaskTool("erase");
+  $("mSelect").onclick = () => setMaskTool("select");
   $("mSize").addEventListener("input", () => { $("mSizeV").textContent = $("mSize").value; });
   $("mShow").addEventListener("change", () => { if (VIEW === "mask") render(); });
   // Outline detection preview (Masks tab)
@@ -1918,12 +1923,15 @@ async function init() {
   $("mClear").onclick = () => {
     const c = maskKind() === "subject" ? SUBJ : MASK;
     if (!c) return;
-    c.getContext("2d").clearRect(0, 0, c.width, c.height); sendMask();
+    c.getContext("2d").clearRect(0, 0, c.width, c.height); SEM_LAST = null;
+    if (c === SUBJ) SUBJ_EXACT = false;
+    sendMask();
   };
   document.addEventListener("keydown", e => {
     if (VIEW !== "mask" || e.target.closest("input, textarea, select")) return;
     if (e.key === "b" || e.key === "B") setMaskTool("brush");
     else if (e.key === "e" || e.key === "E") setMaskTool("erase");
+    else if (e.key === "s" || e.key === "S") setMaskTool("select");
     else if (e.key === "[" || e.key === "]") {
       $("mSize").value = Math.max(4, Math.min(160, val("mSize") + (e.key === "]" ? 8 : -8)));
       $("mSizeV").textContent = $("mSize").value;
@@ -2098,6 +2106,7 @@ async function openProject(file) {
   if (j.mask) await loadMaskImage(j.mask, j.mask_coverage);
   if (j.subject && j.subject.png) {
     await loadMaskImage(j.subject.png, j.subject.coverage, "subject");
+    SUBJ_EXACT = !!j.subject.exact;
     FG_OVERLAY = j.subject.overlay; subjInfo(j.subject);
   }
   status(`Projet ouvert : ${file.name}`);
@@ -2191,6 +2200,8 @@ let MASK = null, MASK_TOOL = "brush", MASK_EMPTY = true, MASK_SENDING = null;
 // Second mask: area roughly painted around the subject; the server cuts it out (GrabCut) and the
 // background becomes bare support. FG_OVERLAY = cut-out preview (darkened background).
 let SUBJ = null, SUBJ_EMPTY = true, FG_OVERLAY = null, SUBJ_SENDING = null;
+// SUBJ_EXACT: the subject mask contains an object selection, so it is used as is (no GrabCut)
+let SUBJ_EXACT = false;
 let OUT_INFO = "", SUBJ_INFO = "";
 const maskKind = () => $("maskKind").value;
 const MASK_COLORS = { outline: "#e61e1e", subject: "#1fbf4f" };
@@ -2204,12 +2215,12 @@ function maskCanvas() {
 }
 function createMask() {
   MASK = maskCanvas();
-  MASK_EMPTY = true;
+  MASK_EMPTY = true; SEM_LAST = null;
   maskInfo(0);
 }
 function createSubj() {
   SUBJ = maskCanvas();
-  SUBJ_EMPTY = true; FG_OVERLAY = null;
+  SUBJ_EMPTY = true; SUBJ_EXACT = false; FG_OVERLAY = null; SEM_LAST = null;
   subjInfo(null);
 }
 function showMaskInfo() { $("mInfo").textContent = maskKind() === "subject" ? SUBJ_INFO : OUT_INFO; }
@@ -2221,7 +2232,8 @@ function maskInfo(coverage) {
 }
 function subjInfo(j) {
   SUBJ_INFO = SUBJ_EMPTY || !j
-    ? "Peignez grossièrement le sujet (en débordant un peu) : le fond autour est détecté et supprimé."
+    ? "Cliquez sur le sujet avec l'outil Objet, ou peignez-le grossièrement (en débordant un peu) : le fond autour est détecté et supprimé."
+    : j.exact ? `Sujet sélectionné : ${j.subject_pct} % de l'image — le fond (assombri) restera support nu. Le masque est pris tel quel : retouchez-le au pinceau ou à la gomme.`
     : `Sujet détouré : ${j.subject_pct} % de l'image — le fond (assombri) restera support nu. Gomme = retirer une zone.`;
   $("subjInfoSide").textContent = SUBJ_EMPTY || !j ? "Aucun sujet peint." : `Sujet détouré (${j.subject_pct} % de l'image).`;
   showMaskInfo();
@@ -2230,6 +2242,10 @@ function setMaskTool(t) {
   MASK_TOOL = t;
   $("mBrush").setAttribute("aria-pressed", String(t === "brush"));
   $("mErase").setAttribute("aria-pressed", String(t === "erase"));
+  $("mSelect").setAttribute("aria-pressed", String(t === "select"));
+  const w = document.querySelector("#stage .maskwrap");
+  if (w) { w.classList.toggle("select", t === "select"); const b = w.querySelector(".brush"); if (b && t === "select") b.style.display = "none"; }
+  if (t === "select") semanticPrepare();
 }
 function maskIsEmpty(c = MASK) {
   const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
@@ -2239,9 +2255,10 @@ function maskIsEmpty(c = MASK) {
 async function sendSubject() {
   if (!SID || !SUBJ) return;
   SUBJ_EMPTY = maskIsEmpty(SUBJ);
+  if (SUBJ_EMPTY) SUBJ_EXACT = false;
   const png = SUBJ_EMPTY ? null : SUBJ.toDataURL("image/png");
   status(SUBJ_EMPTY ? "Masque sujet effacé" : "Détourage du sujet…");
-  const req = fetch("/api/subject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png }) });
+  const req = fetch("/api/subject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png, exact: SUBJ_EXACT }) });
   SUBJ_SENDING = req;
   try {
     const r = await req, j = await r.json();
@@ -2333,12 +2350,80 @@ function detectPreview() {
     } catch (e) { status("Serveur injoignable : " + e.message, true); }
   }, 150);
 }
+// ---------------- Object selection (semantic, MobileSAM on the server) ----------------
+// The image is analysed once per session (in advance, as soon as the Object tool is chosen); each
+// click then returns the mask of the object under it, added to (Alt: removed from) the current mask.
+// Clicking again inside the object just added switches to another cut (part / object / whole).
+let SEM_READY = null, SEM_SID = null, SEM_LAST = null, SEM_BUSY = false;
+function semanticPrepare() {
+  if (!SID) return Promise.resolve(false);
+  if (SEM_SID === SID && SEM_READY) return SEM_READY;
+  SEM_SID = SID;
+  const sid = SID;
+  status("Analyse de l'image pour la sélection d'objet…");
+  SEM_READY = fetch("/api/semantic/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: sid }) })
+    .then(async r => {
+      const j = await r.json();
+      if (!r.ok) { status(j.error || "Sélection d'objet indisponible", true); if (SEM_SID === sid) SEM_READY = null; return false; }
+      if (SID === sid) status("Sélection d'objet prête : cliquez sur un objet (Alt + clic pour le retirer)");
+      return true;
+    })
+    .catch(e => { status("Serveur injoignable : " + e.message, true); if (SEM_SID === sid) SEM_READY = null; return false; });
+  return SEM_READY;
+}
+function grayToMaskCanvas(im, w, h, color) {
+  const t = document.createElement("canvas");
+  t.width = w; t.height = h;
+  const c = t.getContext("2d");
+  c.drawImage(im, 0, 0, w, h);
+  const d = c.getImageData(0, 0, w, h), [r, g, b] = color.match(/\w\w/g).map(x => parseInt(x, 16));
+  for (let i = 0; i < d.data.length; i += 4) {
+    const on = d.data[i] > 127;
+    d.data[i] = r; d.data[i + 1] = g; d.data[i + 2] = b; d.data[i + 3] = on ? 255 : 0;
+  }
+  c.putImageData(d, 0, 0);
+  return { canvas: t, data: d.data };
+}
+async function semanticClick(CV, kind, fx, fy, remove, wrap) {
+  if (SEM_BUSY || !SID) return;
+  SEM_BUSY = true; wrap.classList.add("wait");
+  try {
+    if (!(await semanticPrepare())) return;
+    const ctx = CV.getContext("2d"), W = CV.width, H = CV.height;
+    const px = Math.min(W - 1, Math.max(0, Math.floor(fx * W))), py = Math.min(H - 1, Math.max(0, Math.floor(fy * H)));
+    // second click inside the object just added: another cut of it (replaces the previous addition)
+    let level = 0;
+    const L = SEM_LAST;
+    if (!remove && L && L.canvas === CV && L.sid === SID && L.data[(py * W + px) * 4 + 3]) {
+      level = L.level + 1;
+      ctx.putImageData(L.before, 0, 0);
+      fx = L.fx; fy = L.fy;
+    }
+    const before = ctx.getImageData(0, 0, W, H);
+    const r = await fetch("/api/semantic/select", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: SID, w: W, h: H, points: [[fx, fy, 1]], level }) });
+    const j = await r.json();
+    if (!r.ok) { status(j.error || "Erreur de la sélection d'objet", true); return; }
+    const im = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = j.png; });
+    const m = grayToMaskCanvas(im, W, H, MASK_COLORS[kind]);
+    ctx.globalCompositeOperation = remove ? "destination-out" : "source-over";
+    ctx.drawImage(m.canvas, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+    SEM_LAST = remove ? null : { canvas: CV, sid: SID, before, data: m.data, level, fx, fy };
+    if (kind === "subject") SUBJ_EXACT = true;
+    status(remove ? `Objet retiré du masque (${j.pct} % de l'image)`
+      : level ? `Autre découpage : ${j.pct} % de l'image (recliquez pour en changer encore)`
+      : `Objet ajouté : ${j.pct} % de l'image (recliquez dessus pour changer de découpage, Alt + clic pour retirer)`);
+    sendMask();
+  } catch (e) { status("Serveur injoignable : " + e.message, true); }
+  finally { SEM_BUSY = false; wrap.classList.remove("wait"); }
+}
 function maskEditor(st) {
   if (!MASK) createMask();
   if (!SUBJ) createSubj();
   const kind = maskKind(), CV = kind === "subject" ? SUBJ : MASK;
   const wrap = document.createElement("div");
-  wrap.className = "maskwrap";
+  wrap.className = "maskwrap" + (MASK_TOOL === "select" ? " select" : "");
   wrap.innerHTML = `<img src="${IMG.src}" alt="Image source — ${kind === "subject" ? "peignez le sujet à garder" : "peignez les zones à détailler"}" draggable="false">
     <img class="fgov" alt="" ${kind === "subject" && FG_OVERLAY ? `src="${FG_OVERLAY}"` : "hidden"}>
     <img class="detov" alt="" hidden>
@@ -2361,6 +2446,7 @@ function maskEditor(st) {
              sx: e.clientX - r.left, sy: e.clientY - r.top };
   };
   const moveBrush = e => {
+    if (MASK_TOOL === "select") { brush.style.display = "none"; return; }
     const q = toMask(e), size = val("mSize");
     Object.assign(brush.style, { display: "block", left: q.sx + "px", top: q.sy + "px", width: size + "px", height: size + "px" });
     brush.classList.toggle("erase", MASK_TOOL === "erase");
@@ -2377,7 +2463,13 @@ function maskEditor(st) {
   wrap.onpointerdown = e => {
     if (e.button !== 0) return;
     e.preventDefault();
-    DRAGGING = true; last = null;
+    if (MASK_TOOL === "select") {
+      if (!$("mShow").checked) { $("mShow").checked = true; CV.style.display = ""; }
+      const q = toMask(e);
+      semanticClick(CV, kind, q.x / CV.width, q.y / CV.height, e.altKey, wrap);
+      return;
+    }
+    DRAGGING = true; last = null; SEM_LAST = null;
     if (!$("mShow").checked) { $("mShow").checked = true; CV.style.display = ""; }
     wrap.setPointerCapture(e.pointerId);
     paint(toMask(e));
@@ -2703,49 +2795,70 @@ function syncThresholds() {
   drawHisto();
 }
 // ---------------- Consistent colour palettes ----------------
-// Each palette goes from lightest to darkest, like the spraying order of the layers.
+// Each palette has 8 colours from lightest to darkest, like the spraying order of the layers.
 const PALETTES = {
   // — Classics
-  naturel:   ["Naturel (terres)",         ["#f2e6d0", "#d9b98c", "#a9784f", "#6b4a32", "#3a2a1f"], "Classiques"],
-  sepia:     ["Sépia",                    ["#f1e3c6", "#d2b48c", "#a47c52", "#6e4f33", "#3b2a1b"], "Classiques"],
-  gris:      ["Niveaux de gris",          ["#e6e6e6", "#b0b0b0", "#7a7a7a", "#444444", "#111111"], "Classiques"],
-  sombre:    ["Sombre",                   ["#8a8f98", "#5b6170", "#3a3f4b", "#23262e", "#0d0e12"], "Classiques"],
-  vintage:   ["Vintage",                  ["#efe3c8", "#d8b26e", "#b5654a", "#5f7470", "#2f2f2f"], "Classiques"],
-  cuivre:    ["Cuivre",                   ["#f6dcc3", "#e3a174", "#b8693d", "#7a3e22", "#331a10"], "Classiques"],
+  naturel:   ["Naturel (terres)",   ["#f5ecdb", "#e6cfa8", "#d2ae7c", "#b78a5a", "#976a42", "#73502f", "#523822", "#2f2017"], "Classiques"],
+  sepia:     ["Sépia",              ["#f4e9d2", "#e4cfa6", "#cfb07f", "#b28c5d", "#8f6b43", "#6c4f31", "#4a3522", "#2a1d13"], "Classiques"],
+  gris:      ["Niveaux de gris",    ["#f2f2f2", "#d4d4d4", "#b3b3b3", "#919191", "#6e6e6e", "#4d4d4d", "#2e2e2e", "#111111"], "Classiques"],
+  sombre:    ["Sombre",             ["#a3a8b0", "#8a8f98", "#6e7380", "#555b68", "#3f4452", "#2c303b", "#1c1f27", "#0d0e12"], "Classiques"],
+  vintage:   ["Vintage",            ["#f2e8d0", "#e3c98f", "#d8a35a", "#c27449", "#9c5245", "#5f7470", "#3f4a47", "#2a2a2a"], "Classiques"],
+  cuivre:    ["Cuivre",             ["#f8e4d0", "#efc3a0", "#e3a174", "#cd8150", "#b0613a", "#8a4528", "#5e2d1a", "#2e160d"], "Classiques"],
   // — Vivid
-  vif:       ["Vifs",                     ["#ffe03a", "#ff8c1a", "#e8312f", "#2a6fdb", "#1b1b3a"], "Vives"],
-  pop:       ["Pop art",                  ["#fff200", "#ff4fa3", "#00b7ff", "#e10600", "#111111"], "Vives"],
-  warhol:    ["Sérigraphie pop",          ["#ffd23f", "#ee4266", "#540d6e", "#3bceac", "#0e0e0e"], "Vives"],
-  comic:     ["Bande dessinée",           ["#fff4c2", "#ffcc00", "#00a6ed", "#d7263d", "#14080e"], "Vives"],
-  street:    ["Street art",               ["#f2f2f2", "#ffbe0b", "#fb5607", "#3a86ff", "#1a1a1a"], "Vives"],
-  neon:      ["Néon",                     ["#39ff14", "#00f0ff", "#ff00e6", "#7a00ff", "#0b0018"], "Vives"],
-  tropical:  ["Tropical",                 ["#fff3b0", "#ffb703", "#fb8500", "#219ebc", "#023047"], "Vives"],
-  retro70:   ["Rétro années 70",          ["#f6e7c1", "#f2a541", "#e4572e", "#76b041", "#3b2c35"], "Vives"],
+  vif:       ["Vifs",               ["#fff176", "#ffd60a", "#ff9f1c", "#ff5a1f", "#e8312f", "#b5179e", "#2a6fdb", "#1b1b3a"], "Vives"],
+  pop:       ["Pop art",            ["#fff200", "#ffd400", "#ff4fa3", "#00d0ff", "#00a2e8", "#e10600", "#6a00b8", "#111111"], "Vives"],
+  warhol:    ["Sérigraphie pop",    ["#fff1a8", "#ffd23f", "#f7a072", "#ee4266", "#3bceac", "#1d8a99", "#540d6e", "#0e0e0e"], "Vives"],
+  comic:     ["Bande dessinée",     ["#fff4c2", "#ffe066", "#ffcc00", "#ff8a3d", "#00a6ed", "#d7263d", "#2b2d6e", "#14080e"], "Vives"],
+  street:    ["Street art",         ["#f2f2f2", "#ffbe0b", "#ff8500", "#fb5607", "#ff006e", "#8338ec", "#3a86ff", "#1a1a1a"], "Vives"],
+  neon:      ["Néon",               ["#f5ff3b", "#39ff14", "#00f0ff", "#00a3ff", "#ff00e6", "#ff2e63", "#7a00ff", "#0b0018"], "Vives"],
+  tropical:  ["Tropical",           ["#fff3b0", "#ffd166", "#ffb703", "#fb8500", "#ef476f", "#2ec4b6", "#219ebc", "#023047"], "Vives"],
+  retro70:   ["Rétro années 70",    ["#f6e7c1", "#f4c95d", "#f2a541", "#e4572e", "#c4452c", "#76b041", "#4f6d3a", "#3b2c35"], "Vives"],
+  // — Modern vivid
+  electro:   ["Électro",            ["#fdf500", "#ffb8de", "#ff6ad5", "#c774e8", "#ad8cff", "#8795e8", "#3d2c8d", "#1a1033"], "Vives modernes"],
+  acidule:   ["Acidulé",            ["#e8ff5a", "#b8f35a", "#5cf2c8", "#34c3ff", "#ff7ab6", "#ff3d7f", "#7b2ff7", "#1e1240"], "Vives modernes"],
+  miami:     ["Miami",              ["#fef6e4", "#ffd6a5", "#ffadad", "#ff7eb9", "#3bd6c6", "#00b4d8", "#7209b7", "#240046"], "Vives modernes"],
+  corail:    ["Corail & turquoise", ["#fff3e2", "#ffcf99", "#ff9f80", "#ff6b6b", "#2ec4b6", "#11998e", "#0b5563", "#08212e"], "Vives modernes"],
+  graffiti:  ["Graffiti urbain",    ["#f7f7f2", "#c6ff00", "#ffea00", "#ff9100", "#ff1744", "#d500f9", "#2979ff", "#121212"], "Vives modernes"],
+  memphis:   ["Memphis",            ["#fff5d6", "#ffd23f", "#ff8fab", "#3ec1d3", "#ff5e5b", "#5b5f97", "#2b2d42", "#0d0d0d"], "Vives modernes"],
+  agrumes:   ["Agrumes",            ["#fffbd6", "#fff36b", "#ffd93d", "#ffb627", "#ff8c42", "#ff5d3a", "#3fa34d", "#1e3d2f"], "Vives modernes"],
+  cyber:     ["Cyberpunk",          ["#f0ff42", "#00fff5", "#00b8ff", "#ff2a6d", "#d1006a", "#7700a6", "#2b0f54", "#05010d"], "Vives modernes"],
   // — Soft
-  pastel:    ["Pastel",                   ["#fdf1d6", "#f9c9d4", "#b9e3e0", "#a5b8e8", "#7c6fa8"], "Douces"],
-  printemps: ["Printemps",                ["#fdfcdc", "#c5e8b7", "#f7b7c5", "#8fb9e3", "#5a5f8c"], "Douces"],
-  lavande:   ["Lavande",                  ["#f3eefb", "#d6c6ef", "#ab92d6", "#6f5aa6", "#33285a"], "Douces"],
-  nordique:  ["Nordique",                 ["#eceff4", "#d8dee9", "#88c0d0", "#5e81ac", "#2e3440"], "Douces"],
+  pastel:    ["Pastel",             ["#fff6e5", "#fde4cf", "#f9c9d4", "#e8c5e5", "#b9e3e0", "#a5c8e8", "#a5b8e8", "#7c6fa8"], "Douces"],
+  printemps: ["Printemps",          ["#fdfcdc", "#eaf5c4", "#c5e8b7", "#f7d6c9", "#f7b7c5", "#b7d3f0", "#8fb9e3", "#5a5f8c"], "Douces"],
+  lavande:   ["Lavande",            ["#f8f5fd", "#ece3f8", "#d6c6ef", "#bfa9e3", "#ab92d6", "#8b74bf", "#6f5aa6", "#33285a"], "Douces"],
+  nordique:  ["Nordique",           ["#eceff4", "#e5e9f0", "#d8dee9", "#a3d0d9", "#88c0d0", "#81a1c1", "#5e81ac", "#2e3440"], "Douces"],
+  // — Modern soft
+  scandi:    ["Scandinave",         ["#f7f4ef", "#ece4d8", "#d9cbb8", "#c2b29c", "#a7b5a8", "#8a9a8c", "#5c6b63", "#2f3833"], "Douces modernes"],
+  sorbet:    ["Sorbet",             ["#fff4e6", "#ffe0cc", "#ffc8b4", "#ffb3c1", "#e7b8e3", "#c3b8f0", "#a5c4f2", "#6f7fb8"], "Douces modernes"],
+  sauge:     ["Sauge & argile",     ["#f4f1ea", "#e3e6d4", "#c9d3b6", "#a9bb94", "#d9b49c", "#c08a6f", "#8a6a55", "#4a4038"], "Douces modernes"],
+  terracotta:["Terracotta douce",   ["#faf0e6", "#f3d9c4", "#e8bfa3", "#d9a07f", "#c98364", "#a8664f", "#7a4a3d", "#43302a"], "Douces modernes"],
+  brume:     ["Brume",              ["#f3f5f7", "#e1e7ed", "#c9d4df", "#adbccb", "#93a5b7", "#77899c", "#56677a", "#333f4c"], "Douces modernes"],
+  peche:     ["Pêche & menthe",     ["#fff8f0", "#ffe5d4", "#ffccb6", "#f3b0a0", "#c5e7d8", "#9fd3c7", "#6fb3a8", "#3e6e6a"], "Douces modernes"],
+  rose:      ["Rose poudré",        ["#fbf3f3", "#f4e0e1", "#ebc9cc", "#deadb3", "#c99098", "#a8747e", "#7d5560", "#4a3339"], "Douces modernes"],
+  aube:      ["Aube",               ["#fff9ec", "#ffeccc", "#fdd7b8", "#f6bfb2", "#dcb3c8", "#b4acd6", "#8a97c4", "#4f5a87"], "Douces modernes"],
   // — Nature
-  ocean:     ["Océan",                    ["#e0f7fa", "#80deea", "#26a69a", "#00695c", "#0b2e33"], "Nature"],
-  foret:     ["Forêt",                    ["#e9f1d8", "#a7c957", "#6a994e", "#386641", "#1b2e1d"], "Nature"],
-  automne:   ["Automne",                  ["#ffe6a7", "#e9a03b", "#c4572b", "#7f2f1a", "#3a1a12"], "Nature"],
-  desert:    ["Désert",                   ["#f8ecd1", "#e8c48f", "#d08c57", "#9c5a3c", "#4a2c22"], "Nature"],
-  glace:     ["Glace",                    ["#f4fbff", "#cfe9f7", "#8cc8eb", "#3f88c5", "#0b3a5d"], "Nature"],
-  couchant:  ["Coucher de soleil",        ["#ffe8a3", "#ffb26b", "#ff6f61", "#c2185b", "#3d1c4f"], "Nature"],
-  camo:      ["Camouflage",               ["#d6cfa8", "#a39e6e", "#6b6b3e", "#4a4a2e", "#22231a"], "Nature"],
+  ocean:     ["Océan",              ["#e0f7fa", "#b2ebf2", "#80deea", "#4dd0e1", "#26a69a", "#00897b", "#00695c", "#0b2e33"], "Nature"],
+  foret:     ["Forêt",              ["#eef4dd", "#d4e5a9", "#a7c957", "#82ad52", "#6a994e", "#4c7a43", "#386641", "#1b2e1d"], "Nature"],
+  automne:   ["Automne",            ["#ffeec2", "#ffd47a", "#f0b24a", "#e08a33", "#c4572b", "#a03b20", "#7f2f1a", "#3a1a12"], "Nature"],
+  desert:    ["Désert",             ["#faf1dc", "#f1dcb2", "#e8c48f", "#dca671", "#d08c57", "#b77048", "#9c5a3c", "#4a2c22"], "Nature"],
+  glace:     ["Glace",              ["#f7fcff", "#e6f4fc", "#cfe9f7", "#aed8f1", "#8cc8eb", "#5fa6d6", "#3f88c5", "#0b3a5d"], "Nature"],
+  couchant:  ["Coucher de soleil",  ["#fff1c1", "#ffe08a", "#ffc46b", "#ffa06b", "#ff6f61", "#e0407a", "#a61e5c", "#3d1c4f"], "Nature"],
+  camo:      ["Camouflage",         ["#e2dcbc", "#cdc69b", "#b3ad7f", "#9a9465", "#7a7a4c", "#5e5e3a", "#44442b", "#22231a"], "Nature"],
   // — Monochromes / duotones
-  prusse:    ["Bleu de Prusse",           ["#e3ecf5", "#9bb7d4", "#4f7cac", "#1f4e79", "#0b1f3a"], "Monochromes"],
-  sanguine:  ["Sanguine",                 ["#f6e2d8", "#e0a68c", "#bf6a4a", "#8a3b25", "#3d1810"], "Monochromes"],
-  indigo:    ["Indigo (japonais)",        ["#f1efe8", "#c9ced6", "#6f7fa0", "#2f3e6b", "#121a33"], "Monochromes"],
-  rougenoir: ["Rouge et noir",            ["#f2efe6", "#e8b4a8", "#d62828", "#7a0f0f", "#111111"], "Monochromes"],
-  olive:     ["Olive",                    ["#f1f0dc", "#cfcc9a", "#9c9a5a", "#5f5e30", "#262612"], "Monochromes"],
+  prusse:    ["Bleu de Prusse",     ["#eef3f9", "#d3e0ee", "#b0c7e0", "#86a7cc", "#5c84b4", "#3a6699", "#1f4e79", "#0b1f3a"], "Monochromes"],
+  sanguine:  ["Sanguine",           ["#faeee7", "#f2d6c8", "#e8b8a1", "#d9957a", "#c4714f", "#a5543a", "#7a3a26", "#3d1810"], "Monochromes"],
+  indigo:    ["Indigo (japonais)",  ["#f4f2ec", "#e1e2e3", "#c3c8d2", "#9aa5bb", "#6f7fa0", "#4b5b85", "#2f3e6b", "#121a33"], "Monochromes"],
+  rougenoir: ["Rouge et noir",      ["#f5f2ea", "#f0d5cc", "#e8a598", "#e06656", "#d62828", "#a51d1d", "#6e1212", "#111111"], "Monochromes"],
+  olive:     ["Olive",              ["#f4f3e3", "#e3e1bd", "#cfcc9a", "#b6b479", "#9c9a5a", "#7d7c44", "#5f5e30", "#262612"], "Monochromes"],
 };
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const rgbHex = c => "#" + c.map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
-// n colours spread over the palette (interpolated between its tones beyond 5 layers)
+// n colours spread over the palette, lightest to darkest: real palette colours as long as there are
+// enough of them (always keeping the first and the last), interpolated between them beyond that
 function paletteColors(stops, n) {
   if (n <= 1) return [stops[stops.length - 1]];            // a single stencil: the darkest tone
+  if (n <= stops.length)
+    return Array.from({ length: n }, (_, i) => stops[Math.round(i * (stops.length - 1) / (n - 1))]);
   return Array.from({ length: n }, (_, i) => {
     const t = i / (n - 1) * (stops.length - 1), a = Math.floor(t), b = Math.min(stops.length - 1, a + 1), f = t - a;
     const ca = hexRgb(stops[a]), cb = hexRgb(stops[b]);
