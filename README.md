@@ -263,7 +263,7 @@ Choose how the stencil sheet relates to the support:
 | Mode | When to use it | Registration |
 |---|---|---|
 | **Around the support** (support + margin) | Small supports (paper, small canvas): the sheet is larger than the support. | **Corner brackets** cut around the corners of the support – lay each corner of the support into its bracket. Or crosses / holes in the margin. |
-| **Inside the support, fitted to the design** (+ border) | Large surfaces (big canvas, wall, furniture): the sheet only covers the design. | **Crosses** in the border, with **ruler measurements** telling where to pencil each cross on the support. |
+| **Inside the support, fitted to the design** (+ border) – default | Large surfaces (big canvas, wall, furniture): the sheet only covers the design. | **Crosses** in the border, with **ruler measurements** telling where to pencil each cross on the support. |
 | **Inside the support, fixed size** | Same, with a sheet of a given size (the **= mat** button uses the mat size). | Same as above. |
 
 - **Registration marks** on **3 corners** (the empty bottom-right corner prevents putting a sheet
@@ -284,7 +284,9 @@ Choose how the stencil sheet relates to the support:
 - **Merge instead of bridges** (0 = off): many islands can be held without a bridge, by
   - **closing a narrow channel** of opening (narrower than *Max channel width*) that separates the
     island from the rest of the sheet: the island is welded along the whole narrow part;
-  - **removing a small island**: it simply gets painted.
+  - **removing a small island**: it simply gets painted. Islands touching key-detail lines cut into
+    the layer are kept, unless *… including those enclosed by key-detail lines* is ticked (useful on
+    textures, where the lines enclose many small light areas; the lines themselves are never cut).
 
   A merge is used when the visible area it changes stays below the limit set by the slider
   (progressive scale, about 5 mm² at 50). Areas repainted later by a darker layer do not count, and

@@ -200,6 +200,8 @@
     "détecté, non retenu": "detected, not kept",
     "Fusion au lieu des ponts": "Merge instead of bridges", "Largeur max d'un chenal (mm)": "Max channel width (mm)",
     "Fermer les chenaux étroits": "Close narrow channels", "Supprimer les petits îlots": "Remove small islands",
+    "… y compris ceux entourés par les traits des détails clés": "… including those enclosed by key-detail lines",
+    "Quand les traits des détails clés sont mis dans une couche, ils encerclent souvent de petites zones claires qui demandent chacune un pont. Coché : ces petits îlots peuvent aussi être supprimés (peints), dans la même limite de surface ; le trait lui-même n'est jamais coupé. Attention : l'intérieur d'un petit motif cerclé (un œil…) peut alors être rempli.": "When key-detail lines are put in a layer, they often enclose small light areas that each need a bridge. Checked: these small islands may be removed (painted) too, within the same area limit; the line itself is never cut. Beware: the inside of a small circled motif (an eye…) may then be filled.",
     "Désactivée : les îlots sont toujours tenus par des ponts.": "Off: islands are always held by bridges.",
     "fusion": "merge",
     "Afficher / masquer les zones fusionnées au lieu d'un pont (chenal fermé ou petit îlot supprimé)": "Show / hide the zones merged instead of a bridge (closed channel or removed small island)",

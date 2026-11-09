@@ -563,7 +563,7 @@
     <label class="full" for="sheet_mode">Feuille du pochoir</label>
     <select id="sheet_mode" style="width:100%">
       <option value="around">Autour du support (support + marge)</option>
-      <option value="fit">Dans le support, ajustée au motif (+ bordure)</option>
+      <option value="fit" selected>Dans le support, ajustée au motif (+ bordure)</option>
       <option value="fixed">Dans le support, taille fixe</option>
     </select>
     <div id="rowMargin"><label class="row">Marge autour du support (mm) <input type="number" id="margin_mm" value="15" min="0" max="80" step="1"></label></div>
@@ -615,11 +615,11 @@
       </select>
       <select id="reg_shape" style="flex:1">
         <option value="equerre">Équerres sur les angles du support</option>
-        <option value="croix">Croix de repérage</option>
+        <option value="croix" selected>Croix de repérage</option>
         <option value="rond">Trous pour pions</option>
       </select>
     </div>
-    <label class="row">Taille des repères (mm) <input type="number" id="reg_size_mm" value="10" min="2" max="40" step="0.5"></label>
+    <label class="row">Taille des repères (mm) <input type="number" id="reg_size_mm" value="8" min="2" max="40" step="0.5"></label>
     <p class="hint" id="regHint"></p>
     <div class="check"><input type="checkbox" id="layer_notches" checked><label for="layer_notches">Encoches = numéro de couche</label></div>
     <div class="check"><input type="checkbox" id="sheet_outline" checked><label for="sheet_outline">Découper le contour de la feuille</label></div>
@@ -704,6 +704,7 @@
     <label class="row">Largeur max d'un chenal (mm) <input type="number" id="merge_channel_mm" value="2.5" min="0.3" max="30" step="0.5"></label>
     <div class="check"><input type="checkbox" id="merge_channels" checked><label for="merge_channels">Fermer les chenaux étroits</label></div>
     <div class="check"><input type="checkbox" id="merge_islands" checked><label for="merge_islands">Supprimer les petits îlots</label></div>
+    <div class="check"><input type="checkbox" id="merge_line_islands"><label for="merge_line_islands">… y compris ceux entourés par les traits des détails clés</label></div>
     <div class="cut">
       <b>Réglages de la machine</b>
       <div class="cutgrid">
@@ -838,7 +839,7 @@ const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_m
   "layer_colors",
   "n_layers", "detail", "color_mode", "layering", "skip_support", "protect_lines",
   "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_auto_color", "outline_color",
-  ...MAT_FIELDS, "merge_amount", "merge_channel_mm", "merge_channels", "merge_islands",
+  ...MAT_FIELDS, "merge_amount", "merge_channel_mm", "merge_channels", "merge_islands", "merge_line_islands",
   "tolerance_mm", "smooth_curves", "spray_mm", "px_per_mm"];
 const SUPPORT_COLORS = [["Blanc", "#ffffff"], ["Ivoire", "#f3ecd9"], ["Kraft", "#c8a26e"], ["Gris", "#9a9a9a"], ["Noir", "#1e1e1e"]];
 const REG_DEFAULT = { equerre: 10, croix: 8, rond: 5 };
@@ -1667,6 +1668,7 @@ const TIPS = {
   merge_channel_mm: "Seuls les passages d'ouverture plus étroits que cette largeur peuvent être fermés (au-delà, c'est une vraie zone peinte).",
   merge_channels: "Ferme les chenaux d'ouverture étroits qui séparent un îlot du reste de la matière (la peinture de ce chenal est perdue).",
   merge_islands: "Supprime les petits îlots de matière : ils sont peints avec la couche (le petit détail clair est perdu).",
+  merge_line_islands: "Quand les traits des détails clés sont mis dans une couche, ils encerclent souvent de petites zones claires qui demandent chacune un pont. Coché : ces petits îlots peuvent aussi être supprimés (peints), dans la même limite de surface ; le trait lui-même n'est jamais coupé. Attention : l'intérieur d'un petit motif cerclé (un œil…) peut alors être rempli.",
   min_bridges: "Nombre minimal de ponts par îlot (2 ou plus = îlot mieux tenu, mais plus de ponts visibles).",
   double_bridge_area_mm2: "Au-delà de cette surface (mm²), un îlot reçoit au moins 2 ponts.",
   cut_blade: "Profondeur de lame conseillée (réglage Silhouette Studio).",

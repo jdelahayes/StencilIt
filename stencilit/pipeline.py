@@ -79,6 +79,7 @@ class Params:
     merge_channel_mm: float = 2.5  # A: channels of opening narrower than this may be closed
     merge_channels: bool = True    # A: close narrow channels
     merge_islands: bool = True     # B: remove small islands
+    merge_line_islands: bool = False  # B also for islands touching key-detail lines cut into the layer
     # Vectorisation
     tolerance_mm: float = 0.12
     smooth_curves: bool = True
@@ -86,7 +87,7 @@ class Params:
     #   around = support + margin all around (registered on the support corners)
     #   fit    = inside the support, fitted to the design + border (registered on crosses drawn on the support)
     #   fixed  = inside the support, fixed size centred on the design
-    sheet_mode: str = "around"
+    sheet_mode: str = "fit"
     margin_mm: float = 15.0
     sheet_border_mm: float = 20.0
     sheet_w_mm: float = 304.8
@@ -99,8 +100,8 @@ class Params:
     mat_orient: str = "portrait"   # portrait = feed direction into the machine; landscape = mat turned a quarter turn
     # Registration
     reg_corners: int = 4           # 0, 3 (keyed) or 4
-    reg_shape: str = "equerre"     # equerre | croix | rond
-    reg_size_mm: float = 10.0
+    reg_shape: str = "croix"       # equerre | croix | rond
+    reg_size_mm: float = 8.0
     layer_notches: bool = True     # notches giving the layer number
     # Preview
     spray_mm: float = 0.4
@@ -133,7 +134,7 @@ class Params:
         p.image_pos_y = float(np.clip(p.image_pos_y, -100, 200))
         p.min_bridges = int(np.clip(p.min_bridges, 1, 4))
         p.reg_corners = p.reg_corners if p.reg_corners in (0, 3, 4) else 4
-        p.sheet_mode = p.sheet_mode if p.sheet_mode in ("around", "fit", "fixed") else "around"
+        p.sheet_mode = p.sheet_mode if p.sheet_mode in ("around", "fit", "fixed") else "fit"
         p.mat_orient = p.mat_orient if p.mat_orient in ("portrait", "landscape") else "portrait"
         p.margin_mm = float(np.clip(p.margin_mm, 0, 200))
         p.sheet_border_mm = float(np.clip(p.sheet_border_mm, 3, 200))
@@ -676,7 +677,8 @@ def merge_zones(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None
     Cost of a merge = changed area not repainted by a later layer (`hidden`) x `weight` (visibility
     of this layer's paint over what is under it, 0..1); merges are applied from the cheapest, while
     the cost stays under `merge_area_mm2(p.merge_amount)` and the merge links separate groups.
-    `protect`: areas no merge may change (key-detail lines cut into the layer).
+    `protect`: areas no merge may change (key-detail lines cut into the layer); the islands touching
+    them are kept too, unless `merge_line_islands` (the lines themselves are never closed).
     Modifies `opening` in place; returns (mask of the changed areas, number of merges).
     """
     merged = np.zeros(opening.shape, bool)
@@ -694,7 +696,7 @@ def merge_zones(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None
     if p.merge_islands:
         vis_lab = np.bincount(lab.ravel(), visible.ravel(), minlength=n) * w
         ring = set()
-        if protect is not None:          # islands bordering a protected line are kept
+        if protect is not None and not p.merge_line_islands:   # islands bordering a protected line are kept
             near = (cv2.dilate(protect.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0) & material
             ring = set(np.unique(lab[near]).tolist())
         for i in range(1, n):
