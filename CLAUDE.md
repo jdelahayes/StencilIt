@@ -28,15 +28,19 @@ are not obvious from the code.
 Hard-won constraints, verified by the author in Silhouette Studio – do not "clean up":
 - embedded images are JPEG at full resolution, with **no `clip-path`**;
 - hidden layers carry both `style="display:none"` and the `display="none"` attribute;
-- the occasional black/partial render image when zooming in Silhouette is a Silhouette bug.
+- the occasional black/partial render image when zooming in Silhouette is a Silhouette bug;
+- Silhouette skips part of the shapes of a layer made of many separate polygons: `…_silhouette.svg`
+  keeps **one single compound `<path>` per layer** (openings + sheet outline + marks). Generating
+  `.studio3` files directly was investigated and is not needed.
 
 ## Testing in the browser
 
 - Never alter the author's saved state: set `NO_REMEMBER = true` in the page before changing
   settings (otherwise localStorage `stencilit.*` is overwritten), and back up / restore
   `presets_utilisateur.json` if a test saves presets or palettes.
-- Use `samples/test_visage.png` (or `test_synthetique.png`). **Never use `samples/2400x0.jpg`**:
-  personal photo, git-ignored, must not appear in screenshots, commits or the README.
+- Use `samples/test_visage.png` (or `test_synthetique.png`). `samples/2400x0.jpg` is a personal
+  photo (git-ignored): it may be used for local tests and calibration, but **must never be
+  committed nor appear in screenshots, the README or any published output**.
 
 ## Conventions
 

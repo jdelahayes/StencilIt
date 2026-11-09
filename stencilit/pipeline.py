@@ -14,6 +14,10 @@ import cv2
 import numpy as np
 
 
+OUTLINE_METHODS = ("canny", "xdog", "ridge")
+OUTLINE_TARGETS = ("stencil", "darkest", "nearest")
+
+
 @dataclass
 class Params:
     # Support (painted surface)
@@ -47,9 +51,14 @@ class Params:
     detail: float = 50.0           # 0 (very simplified) .. 100 (very detailed)
     layering: str = "cumulative"   # cumulative | exclusive
     skip_support: bool = True      # the tone closest to the support gets no stencil
+    protect_lines: bool = False    # thin strokes (eyes, eyebrows…) escape the majority filter
     # Outline stencil (key details faded by the airbrush blur)
     outline: bool = False
-    outline_sensitivity: float = 50.0   # 0 = only the strongest details .. 100 = many details
+    outline_method: str = "canny"       # canny (sharp edges) | xdog (drawn line) | ridge (thin lines, centre line)
+    # where the lines go: stencil = separate outline stencil painted last;
+    # darkest = into the darkest layer; nearest = into the layer of the nearest (darker) tone
+    outline_target: str = "stencil"
+    outline_sensitivity: float = 50.0   # 0 = only the strongest details .. 100 = many details (progressive)
     outline_width_mm: float = 0.8       # line width (at least the material's minimum opening)
     outline_min_length_mm: float = 4.0  # minimum line length
     outline_auto_color: bool = True     # auto colour = tone with the most contrast against the support
@@ -65,6 +74,11 @@ class Params:
     double_bridge_area_mm2: float = 400.0
     min_bridges: int = 1           # minimum number of bridges per island (1 to 4)
     bridges: bool = True
+    # Merging zones instead of bridges (0 = off): see merge_zones
+    merge_amount: float = 0.0      # 0..100, progressive scale of the largest visible change accepted
+    merge_channel_mm: float = 2.5  # A: channels of opening narrower than this may be closed
+    merge_channels: bool = True    # A: close narrow channels
+    merge_islands: bool = True     # B: remove small islands
     # Vectorisation
     tolerance_mm: float = 0.12
     smooth_curves: bool = True
@@ -130,11 +144,15 @@ class Params:
         if not p.outline_color.startswith("#") or len(p.outline_color) != 7:
             p.outline_color = "#1e1e1e"
         p.outline_sensitivity = float(np.clip(p.outline_sensitivity, 0, 100))
+        p.outline_method = p.outline_method if p.outline_method in OUTLINE_METHODS else "canny"
+        p.outline_target = p.outline_target if p.outline_target in OUTLINE_TARGETS else "stencil"
         p.pre_clahe = float(np.clip(p.pre_clahe, 0, 100))
         p.pre_gamma = float(np.clip(p.pre_gamma, 0.3, 3.0))
         p.pre_saturation = float(np.clip(p.pre_saturation, 0, 300))
         p.pre_sharpen = float(np.clip(p.pre_sharpen, 0, 100))
         p.outline_width_mm = float(np.clip(p.outline_width_mm, 0.2, 10))
+        p.merge_amount = float(np.clip(p.merge_amount, 0, 100))
+        p.merge_channel_mm = float(np.clip(p.merge_channel_mm, 0.3, 30))
         p.outline_min_length_mm = float(np.clip(p.outline_min_length_mm, 0, 200))
         return p
 
@@ -469,6 +487,7 @@ def prepare(img: np.ndarray, p: Params, lay: Layout, fg_src: np.ndarray | None =
 
     k = p.n_layers + (1 if p.skip_support else 0)
     lab = cv2.cvtColor(sm, cv2.COLOR_BGR2LAB).astype(np.float32)
+    L100 = lab[..., 0] * (100.0 / 255.0)
     feat = lab[..., :1] if gray else lab
     X = feat.reshape(-1, feat.shape[-1])
 
@@ -483,7 +502,6 @@ def prepare(img: np.ndarray, p: Params, lay: Layout, fg_src: np.ndarray | None =
     _, _, centers = cv2.kmeans(X[idx], k_eff, None, crit, 3, cv2.KMEANS_PP_CENTERS)
 
     # L* luminance (0..100) of the smoothed image: histogram and equivalent automatic thresholds
-    L100 = lab[..., 0] * (100.0 / 255.0)
     Lh = L100[fg] if fg is not None else L100.ravel()
     hist = np.bincount(np.clip(Lh, 0, 99.999).astype(np.int32), minlength=100).astype(np.float64)
     hist = (hist / max(1.0, hist.max())).round(4).tolist()
@@ -510,7 +528,14 @@ def prepare(img: np.ndarray, p: Params, lay: Layout, fg_src: np.ndarray | None =
 
     # Majority filter (shape simplification)
     r = (0.15 + (1 - d) * 1.6) * p.px_per_mm
+    before = labels
     labels = majority_filter(labels, n_lab, r)
+    if p.protect_lines:
+        # thin strokes (dark or light) keep their own tone instead of being swallowed by the area around
+        prot = thin_features(L100, p.px_per_mm)
+        if fg is not None:
+            prot &= fg
+        labels = np.where(prot, before, labels)
 
     # Actual mean colours (on the smoothed image), sorted light -> dark
     lab_full = lab.reshape(H, W, 3)
@@ -631,6 +656,131 @@ def clean_mask(mask: np.ndarray, p: Params, extra_area_mm2: float = 0.0) -> np.n
         m = remove_small(m, amin)
         m = 255 - remove_small(255 - m, amin, keep_border=True)
     return m
+
+
+def merge_area_mm2(amount: float) -> float:
+    """Largest visible area (mm²) a merge may change, from the "merge instead of bridges" setting
+    (0..100, progressive scale): 0 = never merge, ~0.3 mm² at 1, ~5 mm² at 50, 90 mm² at 100."""
+    if amount <= 0:
+        return 0.0
+    return 0.3 * 300.0 ** (min(amount, 100.0) / 100.0)
+
+
+def merge_zones(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None,
+                weight: float = 1.0, protect: np.ndarray | None = None) -> tuple[np.ndarray, int]:
+    """Holds material islands by merging zones instead of bridges, when the change is small enough.
+
+    A. closes a narrow channel of opening (narrower than `merge_channel_mm`) separating an island
+       from the rest of the material: the island is welded along the whole narrow part;
+    B. removes a small island: the openings around it merge and it gets painted.
+    Cost of a merge = changed area not repainted by a later layer (`hidden`) x `weight` (visibility
+    of this layer's paint over what is under it, 0..1); merges are applied from the cheapest, while
+    the cost stays under `merge_area_mm2(p.merge_amount)` and the merge links separate groups.
+    `protect`: areas no merge may change (key-detail lines cut into the layer).
+    Modifies `opening` in place; returns (mask of the changed areas, number of merges).
+    """
+    merged = np.zeros(opening.shape, bool)
+    amax = merge_area_mm2(p.merge_amount) * p.px_per_mm ** 2
+    if amax <= 0 or not (p.merge_channels or p.merge_islands):
+        return merged, 0
+    material = opening == 0
+    n, lab = cv2.connectedComponents(material.astype(np.uint8), connectivity=4)
+    main = int(lab[0, 0])
+    if n <= 2:                          # no island
+        return merged, 0
+    visible = np.ones(opening.shape, np.float64) if hidden is None else (~hidden).astype(np.float64)
+    w = max(float(weight), 0.05)
+    actions = []                        # (cost, kind, index, material labels linked)
+    if p.merge_islands:
+        vis_lab = np.bincount(lab.ravel(), visible.ravel(), minlength=n) * w
+        ring = set()
+        if protect is not None:          # islands bordering a protected line are kept
+            near = (cv2.dilate(protect.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0) & material
+            ring = set(np.unique(lab[near]).tolist())
+        for i in range(1, n):
+            if i in ring:
+                continue
+            if i != main and vis_lab[i] <= amax:
+                actions.append((float(vis_lab[i]), 1, i, (i,)))
+    fill = flab = fstats = None
+    if p.merge_channels:
+        r = p.merge_channel_mm * p.px_per_mm / 2
+        if r >= 0.5:
+            closed = cv2.morphologyEx(material.astype(np.uint8), cv2.MORPH_CLOSE, disk(r)) > 0
+            fill = closed & ~material
+            if protect is not None:
+                fill &= ~protect
+            nf, flab, fstats, _ = cv2.connectedComponentsWithStats(fill.astype(np.uint8), connectivity=8)
+            if nf > 1:
+                vis_f = np.bincount(flab.ravel(), visible.ravel(), minlength=nf) * w
+                # material labels touching each filled part (4-neighbours)
+                pad = np.pad(lab, 1)
+                codes = []
+                for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                    nb = pad[1 + dy:1 + dy + lab.shape[0], 1 + dx:1 + dx + lab.shape[1]]
+                    m = (flab > 0) & (nb > 0)
+                    codes.append(flab[m].astype(np.int64) * n + nb[m])
+                codes = np.unique(np.concatenate(codes))
+                touch: dict[int, list] = {}
+                for c in codes.tolist():
+                    touch.setdefault(c // n, []).append(c % n)
+                for j, labs in touch.items():
+                    if len(labs) >= 2 and vis_f[j] <= amax:
+                        actions.append((float(vis_f[j]), 0, j, tuple(labs)))
+    if not actions:
+        return merged, 0
+
+    parent = list(range(n))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    size = [1] * n
+    removed = set()                     # islands removed (B): they no longer link anything
+    count = 0
+    filled_any = False
+    for cost, kind, idx, labs in sorted(actions):
+        if kind == 1:                   # B: remove an island still alone (not linked yet)
+            i = labs[0]
+            if i in removed or find(i) != i or size[i] != 1 or find(i) == find(main):
+                continue
+            x, y, bw, bh = cv2.boundingRect((lab == i).astype(np.uint8))
+            sub = lab[y:y + bh, x:x + bw] == i
+            opening[y:y + bh, x:x + bw][sub] = 255
+            merged[y:y + bh, x:x + bw] |= sub
+            removed.add(i)
+            count += 1
+        else:                           # A: close a channel if it links separate groups
+            roots = {find(a) for a in labs if a not in removed}
+            if len(roots) < 2:
+                continue
+            x, y, bw, bh = fstats[idx, :4]
+            sub = flab[y:y + bh, x:x + bw] == idx
+            opening[y:y + bh, x:x + bw][sub] = 0
+            merged[y:y + bh, x:x + bw] |= sub
+            rl = list(roots)
+            for a in rl[1:]:
+                ra, rb = find(rl[0]), find(a)
+                if ra != rb:
+                    parent[rb] = ra
+                    size[ra] += size[rb]
+            filled_any = True
+            count += 1
+    if filled_any:
+        # slivers of opening left too thin at the ends of the closed channels: material too
+        ro = p.min_opening_mm * p.px_per_mm / 2
+        if ro >= 0.5:
+            near = cv2.dilate(merged.astype(np.uint8), disk(ro * 2 + 1)) > 0
+            kept = cv2.morphologyEx(opening, cv2.MORPH_OPEN, disk(ro)) > 0
+            sliver = near & (opening > 0) & ~kept
+            if protect is not None:
+                sliver &= ~protect
+            opening[sliver] = 0
+            merged |= sliver
+    return merged, count
 
 
 def add_bridges(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None) -> list[tuple]:
@@ -933,6 +1083,8 @@ class Layer:
     islands: int = 0         # number of islands connected by bridges
     short_islands: int = 0   # islands that could not get the requested minimum of bridges
     kind: str = "color"      # "color" (flat colour) or "outline" (key-detail outlines)
+    merged: np.ndarray | None = None   # areas changed by merges instead of bridges (whole sheet)
+    n_merged: int = 0        # number of merges (closed channels + removed islands)
 
 
 @dataclass
@@ -949,6 +1101,9 @@ class Result:
     img_off_px: tuple            # (x, y) of the image in the sheet
     sup_off_px: tuple = (0, 0)   # (x, y) of the support's top-left corner in the sheet (may be < 0)
     sheet_rect_mm: tuple = (0.0, 0.0, 0.0, 0.0)  # sheet in support coordinates (x0, y0, x1, y1)
+    detect_sim: np.ndarray | None = None  # simulated render the key-detail search compared against
+    lines_added: int = 0         # key-detail lines merged into the colour layers
+    detect_painted: np.ndarray | None = None  # layer painting each pixel before the lines were merged
 
     @property
     def sup_off_mm(self) -> tuple:
@@ -961,10 +1116,12 @@ def _lab(bgr: np.ndarray) -> np.ndarray:
 
 
 def layer_job(job):
-    """Bridges + vectorisation of one layer (module-level function: can run in another process)."""
-    opening, hidden, p = job
+    """Merges + bridges + vectorisation of one layer (module-level function: can run in another process).
+    `protect`: areas no merge may change (lines added to the layer); `weight`: see merge_zones."""
+    opening, hidden, p, weight, protect = job
+    merged, n_merged = merge_zones(opening, p, hidden, weight, protect)
     bridges, n_isl, n_short = add_bridges(opening, p, hidden) if p.bridges else ([], 0, 0)
-    return opening, bridges, n_isl, n_short, vectorize(opening, p)
+    return opening, bridges, n_isl, n_short, vectorize(opening, p), merged, n_merged
 
 
 # Parallelism between layers: "thread" (default), "process" (separate processes), or "none" (serial)
@@ -1032,6 +1189,36 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
         targets.append(t)
         cleaned_all.append(clean_mask(t, p, extra_area))
 
+    paints = parse_layer_colors(p.layer_colors)
+    colors = [paints.get(li + 1, prep.palette[ci]) for li, ci in enumerate(color_ids)]
+
+    def make_result(layers, **kw):
+        return Result(params=p, prepared=prep, layers=layers, support_color=support, support_label=sup,
+                      sheet_mm=(sheet_shape[1] / ppm, sheet_shape[0] / ppm),
+                      support_mm=(SW / ppm, SH / ppm), image_mm=(W / ppm, H / ppm),
+                      support_px=(SW, SH), img_off_px=(X0, Y0), sup_off_px=(ox, oy),
+                      sheet_rect_mm=(sx0, sy0, sx0 + sheet_shape[1] / ppm, sy0 + sheet_shape[0] / ppm), **kw)
+
+    region = outline_region
+    if prep.fg is not None and p.outline:
+        region = prep.fg if region is None else (region.astype(bool) & prep.fg)
+
+    # Key-detail lines merged into the colour layers (instead of a separate outline stencil):
+    # searched against the render of the layers before bridges, then added to the chosen layer.
+    detect_sim, detect_painted, lines_added, strokes = None, None, 0, {}
+    if p.outline and p.outline_target != "stencil" and color_ids:
+        draft = make_result([Layer(index=li + 1, color=colors[li], target=targets[li], opening=place(c),
+                                   lost=c, bridges=[], paths=[]) for li, c in enumerate(cleaned_all)])
+        detect_sim = image_sim(draft)
+        painted = np.full((H, W), -1, np.int32)      # last layer painting each pixel (-1 = support)
+        for li, c in enumerate(cleaned_all):
+            painted[c > 0] = li
+        strokes, lines_added = lines_into_layers(prep, detect_sim, p, region, color_ids, painted)
+        detect_painted = painted
+        for li, stroke in strokes.items():
+            targets[li] = targets[li] | stroke
+            cleaned_all[li] = clean_mask(cleaned_all[li] | clean_mask(stroke, p), p)
+
     # Each layer (bridges + vectorisation) is independent of the others: computed in parallel
     jobs = []
     for li, ci in enumerate(color_ids):
@@ -1042,31 +1229,27 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
             for c2 in cleaned_all[li + 1:]:
                 later |= c2
             hidden = place(later) > 0
-        jobs.append((place(cleaned), hidden, p))
+        # visibility of a merge: contrast between this paint and what shows without it
+        under = colors[li - 1] if (p.layering == "cumulative" and li > 0) else support
+        de = float(np.linalg.norm(_lab(colors[li]) - _lab(under)))
+        protect = place(strokes[li]) > 0 if li in strokes else None
+        jobs.append((place(cleaned), hidden, p, float(np.clip(de / 40.0, 0.15, 1.0)), protect))
     results = run_layer_jobs(jobs)
     layers = []
     for li, ci in enumerate(color_ids):
-        opening, bridges, n_isl, n_short, paths = results[li]
+        opening, bridges, n_isl, n_short, paths, merged, n_merged = results[li]
         target, cleaned = targets[li], cleaned_all[li]
-        color = parse_layer_colors(p.layer_colors).get(li + 1, prep.palette[ci])   # chosen paint
-        layers.append(Layer(index=li + 1, color=color, target=target,
+        layers.append(Layer(index=li + 1, color=colors[li], target=target,
                             opening=opening, lost=cv2.bitwise_xor(cleaned, target), bridges=bridges, paths=paths,
-                            islands=n_isl, short_islands=n_short))
-    res = Result(params=p, prepared=prep, layers=layers, support_color=support, support_label=sup,
-                 sheet_mm=(sheet_shape[1] / ppm, sheet_shape[0] / ppm),
-                 support_mm=(SW / ppm, SH / ppm), image_mm=(W / ppm, H / ppm),
-                 support_px=(SW, SH), img_off_px=(X0, Y0), sup_off_px=(ox, oy),
-                 sheet_rect_mm=(sx0, sy0, sx0 + sheet_shape[1] / ppm, sy0 + sheet_shape[0] / ppm))
+                            islands=n_isl, short_islands=n_short, merged=merged, n_merged=n_merged))
+    res = make_result(layers, detect_sim=detect_sim, detect_painted=detect_painted, lines_added=lines_added)
 
     # Outline stencil: painted last, above all layers
-    if p.outline:
-        sim = image_sim(res)
-        region = outline_region
-        if prep.fg is not None:
-            region = prep.fg if region is None else (region.astype(bool) & prep.fg)
-        target = detect_key_details(prep, sim, p, region)
+    if p.outline and p.outline_target == "stencil":
+        sim = res.detect_sim = image_sim(res)
+        color = outline_color(prep, support, p)
+        target = detect_key_details(prep, sim, p, region, outline_is_dark(color, support))
         if target.any():
-            color = outline_color(prep, support, p)
             cleaned = clean_mask(target, p)
             lost = cv2.bitwise_xor(cleaned, target)
             opening = place(cleaned)
@@ -1086,19 +1269,150 @@ def outline_color(prep: Prepared, support: np.ndarray, p: Params) -> np.ndarray:
     return prep.palette[int(np.argmax(np.abs(L_pal - L_sup)))]
 
 
+def outline_is_dark(color: np.ndarray, support: np.ndarray) -> bool:
+    """True when the outline paint is darker than the support: the lines to find are dark ones."""
+    lc = _lab(np.asarray(color, np.uint8).reshape(1, 3))[0, 0]
+    ls = _lab(np.asarray(support, np.uint8).reshape(1, 3))[0, 0]
+    return float(lc) <= float(ls)
+
+
+def _crest(resp: np.ndarray, floor: float) -> np.ndarray:
+    """One-pixel-wide crest lines of a line strength map: points above `floor` that are a maximum
+    across the line (non-maximum suppression along the direction of strongest curvature)."""
+    g = cv2.GaussianBlur(resp, (0, 0), 1.0)
+    dxx = cv2.Sobel(g, cv2.CV_32F, 2, 0, ksize=3)
+    dyy = cv2.Sobel(g, cv2.CV_32F, 0, 2, ksize=3)
+    dxy = cv2.Sobel(g, cv2.CV_32F, 1, 1, ksize=3)
+    # direction across the crest = eigenvector of the most negative curvature
+    ang = 0.5 * np.arctan2(2 * dxy, dxx - dyy) + np.pi / 2
+    q = np.round(ang / (np.pi / 4)).astype(np.int32) % 4       # 0, 45, 90, 135 degrees
+    keep = resp > floor
+    pad = np.pad(g, 1, mode="edge")
+    H, W = g.shape
+    for k, (dx, dy) in enumerate(((1, 0), (1, 1), (0, 1), (-1, 1))):
+        a = pad[1 + dy:1 + dy + H, 1 + dx:1 + dx + W]
+        b = pad[1 - dy:1 - dy + H, 1 - dx:1 - dx + W]
+        keep &= (q != k) | ((g >= a) & (g >= b))
+    return keep
+
+
+def _line_response(L: np.ndarray, ppm: float, method: str, dark: bool,
+                   scales: tuple = (0.12, 0.25, 0.45)) -> np.ndarray:
+    """Line strength map (L* units, >= 0) for the "xdog" and "ridge" methods.
+
+    xdog : difference of Gaussians, positive on the dark (or light) side of an edge and inside thin
+           dark (light) lines -> a single line drawn along each contour, like a pen drawing.
+    ridge: multi-scale Hessian (largest curvature across the line, scale-normalised) -> the centre
+           line of thin dark (light) strokes (lashes, wrinkles, hair), where Canny finds both edges.
+    """
+    sign = 1.0 if dark else -1.0
+    if method == "xdog":
+        sig = max(0.8, 0.15 * ppm)
+        d = cv2.GaussianBlur(L, (0, 0), 1.6 * sig) - cv2.GaussianBlur(L, (0, 0), sig)
+        return np.maximum(sign * d, 0)
+    resp = np.zeros(L.shape, np.float32)
+    for smm in scales:                           # default: line widths of ~0.3 to ~1.2 mm
+        sig = max(0.8, smm * ppm)
+        g = cv2.GaussianBlur(L, (0, 0), sig)
+        dxx = cv2.Sobel(g, cv2.CV_32F, 2, 0, ksize=3)
+        dyy = cv2.Sobel(g, cv2.CV_32F, 0, 2, ksize=3)
+        dxy = cv2.Sobel(g, cv2.CV_32F, 1, 1, ksize=3)
+        tr, root = dxx + dyy, np.sqrt((dxx - dyy) ** 2 + 4 * dxy * dxy)
+        lam = (tr + root) / 2 if dark else -(tr - root) / 2   # curvature across the line
+        # a step edge also curves on one side: weaken where the slope is strong (off-centre)
+        gx = cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3) / 8
+        gy = cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3) / 8
+        r = np.maximum(lam, 0) * sig * sig
+        slope = np.sqrt(gx * gx + gy * gy) * sig
+        resp = np.maximum(resp, r * np.exp(-(slope / (r + 1e-3)) ** 2 / 2))
+    return resp
+
+
+# noise floor of each method (L* units): weaker responses are never candidates
+_LINE_FLOOR = {"xdog": 1.5, "ridge": 2.0}
+
+
+def thin_features(L100: np.ndarray, ppm: float, floor: float = 6.0) -> np.ndarray:
+    """Thin dark or light strokes (~0.5 to ~2.5 mm wide: eyes, eyebrows, nostrils, strands) that
+    the majority filter would swallow: band of strong Hessian ridge response, small specks removed."""
+    scales = (0.25, 0.5, 0.9)
+    r = np.maximum(_line_response(L100, ppm, "ridge", True, scales),
+                   _line_response(L100, ppm, "ridge", False, scales))
+    m = (r > floor).astype(np.uint8) * 255
+    return remove_small(m, max(4, int(1.0 * ppm * ppm))) > 0
+
+
+def lines_into_layers(prep: Prepared, sim: np.ndarray, p: Params, region: np.ndarray | None,
+                      color_ids: list, painted: np.ndarray, stages: bool = False):
+    """Key-detail lines to add to the colour layers: {layer position: stroke mask (image area)}.
+
+    `painted`: position of the last layer painting each pixel once cut (-1 = bare support).
+    Each line goes to a layer painted after the one(s) under it (darker tone, otherwise the paint
+    would not show): the darkest layer, or (`nearest`) the one whose tone is closest to the line's
+    colour in the original. Lines over an area already painted by the last layer are left out
+    (they are already cut). With `stages`, returns the detection stages instead, the stroke
+    limited to the lines added and `present` = lines already in the layers."""
+    st = detect_key_details(prep, sim, p, region, dark=True, stages=True)
+    n, comp = cv2.connectedComponents(st["kept"].astype(np.uint8), connectivity=8)
+    if n <= 1:
+        return dict(st, present=np.zeros_like(st["kept"])) if stages else ({}, 0)
+    ys, xs = np.nonzero(comp)
+    c = comp[ys, xs]
+    # layer painting the area in the cut stencils = most frequent one along the line
+    nl = len(color_ids) + 1
+    counts = np.bincount(c * nl + painted[ys, xs] + 1, minlength=n * nl).reshape(n, nl)
+    local = counts.argmax(axis=1) - 1
+    # mean colour of the line in the original
+    lab = _lab(prep.resized[ys, xs]).astype(np.float64)
+    tot = np.bincount(c, minlength=n).astype(np.float64)
+    mean = np.stack([np.bincount(c, lab[:, k], minlength=n) for k in range(3)], 1) / np.maximum(tot, 1)[:, None]
+    pal = _lab(prep.palette)
+    assign = np.full(n, -1, np.int32)
+    for i in range(1, n):
+        cands = list(range(local[i] + 1, len(color_ids)))         # layers are sorted light -> dark
+        if not cands:
+            continue
+        if p.outline_target == "nearest":
+            assign[i] = min(cands, key=lambda li: float(np.sum((pal[color_ids[li]] - mean[i]) ** 2)))
+        else:
+            assign[i] = cands[-1]
+    width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
+    k = disk(width * p.px_per_mm / 2)
+    out = {}
+    for li in sorted(set(assign[assign >= 0].tolist())):
+        m = (assign[comp] == li) & (comp > 0)
+        out[li] = cv2.dilate(m.astype(np.uint8) * 255, k)
+    if stages:
+        stroke = np.zeros(comp.shape, bool)
+        for m in out.values():
+            stroke |= m > 0
+        return dict(st, stroke=stroke, present=(assign[comp] < 0) & (comp > 0))
+    return out, int((assign >= 0).sum())
+
+
+def outline_keep_share(sensitivity: float) -> float:
+    """Share of the candidate edge points kept by the outline sensitivity (0..100), progressive
+    scale: 1 % at 0, 95 % at 100, each step multiplies it by ~1.05."""
+    return 0.01 * 95.0 ** (float(np.clip(sensitivity, 0, 100)) / 100.0)
+
+
 def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
-                       region: np.ndarray | None = None) -> np.ndarray:
+                       region: np.ndarray | None = None, dark: bool = True,
+                       stages: bool = False):
     """Key details of the image that the flat render (simplification + airbrush blur) makes disappear.
 
-    1. Sharp edges of the original (Canny, thresholds adapted to the image and the sensitivity).
+    1. Candidate lines of the original, by the chosen method (`p.outline_method`):
+       canny = sharp edges (thresholds on L*, a*, b*); xdog = drawn line (difference of Gaussians);
+       ridge = centre line of thin strokes (Hessian). `dark`: polarity of the lines for xdog / ridge.
     2. Only those where the local contrast of the simulated render is clearly lower than the
        original's are kept (lost or faded detail).
     3. Lines that are too short are removed, then thickened to the line width.
-    Returns a mask (image area) of the outline stencil openings.
+    Returns a mask (image area) of the outline stencil openings; with `stages`, a dict of the
+    intermediate masks (for the detection preview): detected, selected, kept, short, stroke.
     """
     ppm = p.px_per_mm
-    s = p.outline_sensitivity / 100.0
     ref = prep.resized
+    method = p.outline_method
 
     def lab(img):
         return cv2.cvtColor(img.astype(np.float32) / 255.0, cv2.COLOR_BGR2LAB)
@@ -1113,31 +1427,47 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
             g2 += gx * gx + gy * gy
         return np.sqrt(g2)
 
-    g_ref = grad(lab(ref))
+    lab_ref = lab(ref)
+    g_ref = grad(lab_ref)
     g_sim = grad(lab(sim))
 
-    # 1. Candidate edges: Canny on the luminance AND on the colour channels (a, b),
-    #    to also catch details as bright as their surroundings.
-    lab8 = cv2.cvtColor(cv2.bilateralFilter(ref, 7, 40, 5), cv2.COLOR_BGR2LAB)
-    edges = np.zeros(ref.shape[:2], bool)
-    for c, (lo, hi) in enumerate(((12, 32), (8, 20), (8, 20))):
-        edges |= cv2.Canny(lab8[..., c], lo, hi, L2gradient=True) > 0
+    # 1. Candidate lines
+    if method == "canny":
+        # Canny on the luminance AND on the colour channels (a, b), to also catch details as
+        # bright as their surroundings.
+        lab8 = cv2.cvtColor(cv2.bilateralFilter(ref, 7, 40, 5), cv2.COLOR_BGR2LAB)
+        edges = np.zeros(ref.shape[:2], bool)
+        for c, (lo, hi) in enumerate(((12, 32), (8, 20), (8, 20))):
+            edges |= cv2.Canny(lab8[..., c], lo, hi, L2gradient=True) > 0
+        strength = g_ref
+    else:
+        strength = _line_response(lab_ref[..., 0], ppm, method, dark)
+        edges = _crest(strength, _LINE_FLOOR[method])
     b = max(2, int(round(0.5 * ppm)))   # no line on the edge of the image itself
     edges[:b, :] = False; edges[-b:, :] = False; edges[:, :b] = False; edges[:, -b:] = False
     if region is not None:               # mask painted by the user: search only inside
         edges &= region.astype(bool)
 
+    def result(sel, kept, short, stroke):
+        if not stages:
+            return stroke
+        return dict(detected=edges, selected=sel, kept=kept, short=short, stroke=stroke > 0)
+
     # 2. Loss of sharpness: share of the original's local contrast missing from the simulated render
     loss = np.clip((g_ref - g_sim) / (g_ref + 1e-3), 0, 1)
     loss = cv2.dilate(loss, disk(max(1.0, 0.4 * ppm)))      # edge position tolerance
 
-    # 3. Point-by-point selection: importance = original contrast x lost share.
-    #    The sensitivity sets the share of edge points kept (from most to least important).
-    cand = edges & (loss >= 0.5 - 0.3 * s)
+    # 3. Point-by-point selection: importance = line strength x lost share.
+    #    The sensitivity sets the share of edge points kept (from most to least important), on a
+    #    progressive scale (1 % at 0, ~10 % at 50, 95 % at 100: fine control of the few-lines end).
+    #    Minimum lost share: 0.5 up to 15 % kept, then down to 0.2 at 95 % (as before version 1.2).
+    keep_share = outline_keep_share(p.outline_sensitivity)
+    cand = edges & (loss >= 0.5 - 0.3 * float(np.clip((keep_share - 0.15) / 0.8, 0, 1)))
     if not cand.any():
-        return np.zeros(ref.shape[:2], np.uint8)
-    score = g_ref * loss
-    thr = float(np.percentile(score[cand], 100 * (0.85 - 0.8 * s)))
+        z = np.zeros(ref.shape[:2], bool)
+        return result(z, z, z, np.zeros(ref.shape[:2], np.uint8))
+    score = strength * loss
+    thr = float(np.percentile(score[cand], 100 * (1 - keep_share)))
     sel = cand & (score >= thr)
     # rejoin small gaps along a same line, then remove pieces that are too short
     e8 = cv2.morphologyEx(sel.astype(np.uint8) * 255, cv2.MORPH_CLOSE, disk(max(1.0, 0.3 * ppm)))
@@ -1147,11 +1477,38 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     length = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
     keep = length >= min_px
     keep[0] = False
+    short = (e8 > 0) & ~keep[lab_e]
     e8 = keep[lab_e].astype(np.uint8) * 255
     # effective width: never less than the material's minimum opening (otherwise not cuttable)
     width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
     stroke = cv2.dilate(e8, disk(width * ppm / 2))
-    return stroke
+    return result(sel, e8 > 0, short, stroke)
+
+
+def outline_detection(res: Result, p: Params, region: np.ndarray | None = None) -> dict:
+    """Detection stages of the outline stencil for the preview, from a computed result and the
+    current outline settings of `p` (colour layers and simulated render are the result's)."""
+    p = replace(res.params, **{f.name: getattr(p, f.name) for f in fields(Params)
+                               if f.name.startswith("outline")})
+    prep = res.prepared
+    if prep.fg is not None:
+        region = prep.fg if region is None else (region.astype(bool) & prep.fg)
+    sim = res.detect_sim
+    if sim is None:      # outline off in the last computation: render of its colour layers
+        sim = image_sim(replace(res, layers=[L for L in res.layers if L.kind != "outline"]))
+    if p.outline_target == "stencil":
+        dark = outline_is_dark(outline_color(prep, res.support_color, p), res.support_color)
+        return dict(detect_key_details(prep, sim, p, region, dark, stages=True), present=None)
+    colour = [L for L in res.layers if L.kind != "outline"]
+    color_ids = [i for i in range(len(prep.palette)) if i != res.support_label][:len(colour)]
+    painted = res.detect_painted
+    if painted is None:  # lines not merged in the last computation: its colour layers as cut
+        H, W = prep.labels.shape
+        X0, Y0 = res.img_off_px
+        painted = np.full((H, W), -1, np.int32)
+        for li, L in enumerate(colour):
+            painted[L.opening[Y0:Y0 + H, X0:X0 + W] > 0] = li
+    return lines_into_layers(prep, sim, p, region, color_ids, painted, stages=True)
 
 # --------------------------------------------------------------------------
 # Registration marks (exact geometry in mm, sheet coordinates)
@@ -1392,6 +1749,8 @@ def layer_view(res: Result, L: Layer, sheet_bgr=(200, 211, 220), bridges: bool =
 BRIDGE_BGR = (40, 40, 230)
 LOST_BGR = (0, 140, 255)
 LOST_ALPHA = 0.6
+MERGE_BGR = (200, 60, 150)      # violet: zones merged instead of a bridge
+MERGE_ALPHA = 0.75
 
 
 def _lost_mask(res: Result, L: Layer, edge: np.ndarray | None = None) -> np.ndarray:
@@ -1410,8 +1769,8 @@ def _draw_bridges(img: np.ndarray, res: Result, L: Layer, color) -> None:
         cv2.line(img, (x1, y1), (x2, y2), color, thickness=bw)
 
 
-def layer_overlays(res: Result, L: Layer) -> tuple[np.ndarray, np.ndarray]:
-    """Transparent overlays (BGRA, sheet size) of the bridges and removed details,
+def layer_overlays(res: Result, L: Layer) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Transparent overlays (BGRA, sheet size) of the bridges, removed details and merged zones,
     to stack on `layer_view(..., bridges=False, lost=False)` so they can be shown or hidden."""
     # colour everywhere, only transparency varies: sharp edges once the image is downscaled
     shape = L.opening.shape
@@ -1423,7 +1782,10 @@ def layer_overlays(res: Result, L: Layer) -> tuple[np.ndarray, np.ndarray]:
     lo = np.empty(shape + (4,), np.uint8)
     lo[..., :3] = LOST_BGR
     lo[..., 3] = np.where(_lost_mask(res, L), int(round(255 * LOST_ALPHA)), 0).astype(np.uint8)
-    return br, lo
+    mg = np.empty(shape + (4,), np.uint8)
+    mg[..., :3] = MERGE_BGR
+    mg[..., 3] = 0 if L.merged is None else np.where(L.merged, int(round(255 * MERGE_ALPHA)), 0).astype(np.uint8)
+    return br, lo, mg
 
 
 def delta_e(res: Result, sheet_sim: np.ndarray | None = None) -> float:
@@ -1446,6 +1808,7 @@ def layer_stats(L: Layer) -> dict:
         "paths": len(L.paths),
         "nodes": nodes,
         "bridges": len(L.bridges),
+        "merged": L.n_merged,
         "islands": L.islands,
         "kind": L.kind,
         "short_islands": L.short_islands,

@@ -22,6 +22,9 @@ CUT = 'fill="none" stroke="#ff0000" stroke-width="0.1"'
 # ---------------------------------------------------------------- export language
 _LANG = contextvars.ContextVar("stencilit_export_lang", default="en")
 _FR = {
+    "StencilIt - Silhouette Studio file: one compound path per stencil (openings, sheet outline and marks)":
+        "StencilIt - fichier Silhouette Studio : un tracé composé par pochoir (ouvertures, contour de la feuille et repères)",
+    "Stencils for Silhouette Studio": "Pochoirs pour Silhouette Studio",
     "Layer": "Couche", "outline": "contours", "colour": "couleur", "material": "matériau", "custom": "personnalisé",
     "blade": "lame", "force": "force", "speed": "vitesse", "passes": "passes",
     "Stencil layer": "Pochoir couche", "Overview of all layers": "Aperçu de toutes les couches",
@@ -314,6 +317,59 @@ def inkscape_svg(res: Result, material: dict | None = None) -> str:
     return "\n".join(out)
 
 
+def _marks_d(res: Result, layer_index: int) -> list[str]:
+    """Sheet outline and registration marks as path data, one closed subpath each (circles as
+    4 cubic Béziers), to merge them with the openings into a single compound path."""
+    W, H = res.sheet_mm
+    out = []
+    if res.params.sheet_outline:
+        out.append(f"M0,0 L{_f(W)},0 L{_f(W)},{_f(H)} L0,{_f(H)} Z")
+    shapes, _ = registration_shapes(res, layer_index)
+    k = 0.5522847498                              # Bézier approximation of a quarter circle
+    for sh in shapes:
+        if sh["type"] == "poly":
+            out.append("M" + " L".join(f"{_f(x)},{_f(y)}" for x, y in sh["pts"]) + " Z")
+        else:
+            cx, cy, r = sh["cx"], sh["cy"], sh["r"]
+            c = k * r
+            out.append(f"M{_f(cx + r)},{_f(cy)} "
+                       f"C{_f(cx + r)},{_f(cy + c)} {_f(cx + c)},{_f(cy + r)} {_f(cx)},{_f(cy + r)} "
+                       f"C{_f(cx - c)},{_f(cy + r)} {_f(cx - r)},{_f(cy + c)} {_f(cx - r)},{_f(cy)} "
+                       f"C{_f(cx - r)},{_f(cy - c)} {_f(cx - c)},{_f(cy - r)} {_f(cx)},{_f(cy - r)} "
+                       f"C{_f(cx + c)},{_f(cy - r)} {_f(cx + r)},{_f(cy - c)} {_f(cx + r)},{_f(cy)} Z")
+    return out
+
+
+def silhouette_svg(res: Result, material: dict | None = None) -> str:
+    """Cut file for Silhouette Studio: only the stencils, one layer each, and in each layer a
+    SINGLE path holding all its cut lines (openings + sheet outline + registration marks).
+
+    Silhouette Studio ignores part of the shapes of a layer made of many separate polygons;
+    a single compound path per layer is cut entirely (verified by the author). No image, no
+    preview, no hidden layer: nothing that is not cut. Units: mm.
+    """
+    p = res.params
+    W, H = res.sheet_mm
+    out = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f"<!-- {T('StencilIt - Silhouette Studio file: one compound path per stencil (openings, sheet outline and marks)')} -->",
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
+        f'width="{_f(W)}mm" height="{_f(H)}mm" viewBox="0 0 {_f(W)} {_f(H)}">',
+        f"<title>{T('Stencils for Silhouette Studio')}</title>",
+    ]
+    n = len(res.layers)
+    for L in res.layers:
+        kind = f" - {T('outline')}" if L.kind == "outline" else ""
+        parts = [path_d(pts, p.smooth_curves, p.tolerance_mm) for pts in L.paths]
+        parts += _marks_d(res, L.index)
+        label = f"{T('Layer')} {L.index:02d}/{n:02d}{kind} ({bgr_hex(L.color)})"
+        out.append(_layer(label, [f'<path id="cut{L.index:02d}" {CUT} d="{" ".join(parts)}"/>'],
+                          f"layer{L.index:02d}"))
+    out.append("</svg>\n")
+    return "\n".join(out)
+
+
 SWATCH_MM = 50 * 25.4 / 96        # 50 px at 96 dpi ≈ 13.23 mm
 
 
@@ -378,6 +434,7 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
                            layer_svg(res, L, material))
             z.writestr(f"{name}_{T('overview')}.svg", overview_svg(res))
             z.writestr(f"{name}_inkscape.svg", inkscape_svg(res, material))
+            z.writestr(f"{name}_silhouette.svg", silhouette_svg(res, material))
             ok, png = cv2.imencode(".png", simulate(res))
             z.writestr(f"{name}_{T('simulated_render')}.png", png.tobytes())
             info = {

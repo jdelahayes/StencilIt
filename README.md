@@ -79,8 +79,8 @@ python -m venv .venv
 then open http://127.0.0.1:5000. Keep the console window open while you work; close it to stop
 the application. Nothing leaves your computer.
 
-The interface is in **English** by default; the language selector at the top right switches to
-**French** (the exported files follow the selected language).
+The interface is in **English** by default; the **⚙ Preferences** button at the top right holds the
+language selector (**French** is available; the exported files follow the selected language).
 
 ---
 
@@ -103,7 +103,7 @@ Open the SVG files of the zip in Silhouette Studio, cut, and spray layer 1, 2, 3
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│ StencilIt            status · language · Auto compute · Recompute · Default settings │  ← header
+│ StencilIt            status · Auto compute · Recompute · Default settings · ⚙        │  ← header
 ├────────────────────┬────────────────────────────────────────────┬────────────────────┤
 │ Image box          │ Crop | Layout | Masks | Preview |          │ Stencils           │
 │                    │ Compare with original | Original    1 2 3  │ palette menu       │
@@ -204,6 +204,10 @@ range (controlled posterisation). **Automatic thresholds** goes back to automati
   - **Cumulative** (recommended) – each stencil opens its own tone *and all darker ones*. Layers
     overlap, so small registration errors do not leave gaps.
   - **Exclusive** – each stencil opens only its own tone (useful for flat, poster-like colours).
+- **Protect thin strokes from simplification**: thin dark or light strokes (eyes, eyebrows,
+  nostrils, strands) keep their own tone instead of being absorbed by the area around them.
+  Strokes thinner than the material's minimum opening still disappear: redraw them with the
+  key-detail lines (below).
 
 ### 5.6 Masks: background removal and key details
 
@@ -222,10 +226,35 @@ Keyboard shortcuts: **B** brush, **E** eraser, **[** and **]** brush size. *Clea
 
 ![Masks tab: subject painted, background removed](docs/screenshots/masks.jpg)
 
-**Key-detail outlines** section: the outline stencil compares the original image with the simulated
-render of the other layers, and keeps the edges whose contrast has been lost. **Sensitivity**
-controls how many details are kept, **Line width** sets the thickness of the line (never less than
-the material's minimum opening). The line colour is automatic (the most contrasting tone) or chosen.
+**Key-detail outlines** section: *Redraw the faded key details* compares the original image with
+the simulated render of the layers, and keeps the lines whose contrast has been lost.
+**Where the lines go**:
+
+- **Separate outline stencil** – one more stencil, painted last, in the chosen line colour;
+- **In the darkest layer** – no extra stencil: the lines are cut into the last layer;
+- **In the layer of the nearest tone** – no extra stencil: each line goes into the layer whose tone
+  is closest to its own, among those darker than the area it crosses.
+
+In a layer, a line is always darker than the area it crosses (otherwise its paint would not show),
+and that layer gets more islands and bridges. **Detection method**:
+
+| Method | Finds | Best for |
+|---|---|---|
+| **Sharp edges (Canny)** | the edges of shapes, in luminance and colour | general use; a thin line gives two parallel edges |
+| **Drawn line (DoG)** | one line along each contour, on its dark side, like a pen drawing | graphic, clean line art |
+| **Thin lines (ridges)** | the centre line of thin strokes | lashes, eyebrows, wrinkles, hair strands |
+
+**Sensitivity** controls how many details are kept, on a progressive scale (1 % of the candidate
+lines at 0, about 10 % at 50, 95 % at 100: fine control when you want only a few lines); **Line width** sets the thickness of the line
+(never less than the material's minimum opening). The line colour is automatic (the most
+contrasting tone) or chosen (separate stencil only); with a line lighter than the support, DoG and
+ridges look for light lines.
+
+**Show detection…** opens the Masks tab with the **detection preview** over the image: red = line of
+the stencil, orange = too short, blue = detected but not kept (already visible in the render, or
+below the sensitivity); with the lines in a layer, purple = already cut in the layers (only blurred
+by the airbrush, nothing to add). It follows the outline settings live, using the layers of the last
+computation.
 
 ### 5.7 Stencil sheet & registration
 
@@ -252,6 +281,15 @@ Choose how the stencil sheet relates to the support:
 - **Bridges**: **Automatic bridges (islands)**, **Bridge width** and **Minimum bridges per island**.
   Bridges are placed short, away from other edges, and preferably where a darker layer will paint
   over them (invisible bridges).
+- **Merge instead of bridges** (0 = off): many islands can be held without a bridge, by
+  - **closing a narrow channel** of opening (narrower than *Max channel width*) that separates the
+    island from the rest of the sheet: the island is welded along the whole narrow part;
+  - **removing a small island**: it simply gets painted.
+
+  A merge is used when the visible area it changes stays below the limit set by the slider
+  (progressive scale, about 5 mm² at 50). Areas repainted later by a darker layer do not count, and
+  a change counts less when the two tones involved are close. The **merge** button of the legend
+  highlights the merged zones (violet) on the stencil cards.
 - **Cutting machine**: Cameo 4 / Cameo 5 (305 mm wide), Cameo Pro (610 mm) or another machine.
 - **Cutting mat**: standard 12 × 12″, long 12 × 24″, Cameo Pro 24 × 24″, custom, or **No mat**
   (roll material). **Mat orientation**: portrait (feed direction) or landscape. StencilIt warns you
@@ -270,7 +308,7 @@ Choose how the stencil sheet relates to the support:
 
 - **Stencil cards** (right column): each card shows the cut layer; in the legend, **bridge** and
   **removed detail** are buttons that highlight bridges (red) and details removed by the material
-  limits. A card warns you about remaining problems (for example an island that could not be
+  limits; **merge** highlights the zones merged instead of a bridge (violet). A card warns you about remaining problems (for example an island that could not be
   bridged).
 
 If many details are removed, increase the size of the image, lower the level of detail or choose a
@@ -302,6 +340,7 @@ Click **Export SVGs + project (.zip)**. The zip contains:
 | `…_overview.svg` | All layers stacked, to check the result. |
 | `…_simulated_render.png` | The simulated airbrush result. |
 | `…_inkscape.svg` | An **Inkscape document** with one layer per element (see below). |
+| `…_silhouette.svg` | **For Silhouette Studio**: only the stencils, one layer each, every layer being a **single compound path** (openings + sheet outline + marks). |
 | `…_original.<ext>` | Your original image, untouched. |
 | `…_outline_mask.png`, `…_subject_mask.png` | The painted masks, if any. |
 | `…_infos.json` | Sizes, colours, ruler measurements, and **all the settings** of the project. |
@@ -317,8 +356,11 @@ squares with their hex codes, placed left of the page, to prepare your paints.
 
 **Cutting (Silhouette Studio)**
 
-1. Open (or drag in) one `…_layerNN_of…svg` file. *SVG import requires Silhouette Studio Designer
-   Edition or higher.* The sizes are in mm: do not rescale the design.
+1. Open (or drag in) `…_silhouette.svg` (all the stencils, one layer each) or one
+   `…_layerNN_of…svg` file. *SVG import requires Silhouette Studio Designer Edition or higher.*
+   The sizes are in mm: do not rescale the design. Silhouette Studio may skip part of the shapes
+   of a layer made of many separate polygons: in `…_silhouette.svg` each layer is a single compound
+   path, cut entirely.
 2. Check the page / mat size and the orientation (if you chose *landscape* for the mat in
    StencilIt, rotate the design the same way).
 3. Select the material, blade and force (note your best values in the StencilIt material preset).
@@ -357,7 +399,7 @@ squares with their hex codes, placed left of the page, to prepare your paints.
 | Symptom | What to try |
 |---|---|
 | Details disappear | Make the image larger on the support, choose a material with a smaller minimum opening, add the outline stencil. |
-| Too many bridges / islands | Lower the level of detail or the number of stencils; use *Cumulative* mode. |
+| Too many bridges / islands | Raise *Merge instead of bridges*; lower the level of detail or the number of stencils; use *Cumulative* mode. |
 | Two colours merge into one tone | Increase the saturation, add a stencil, or set manual thresholds. |
 | Flat-looking face | Increase the local contrast (CLAHE) or adjust the midtones. |
 | The background gets painted | Use *Remove the background* with the subject mask. |
@@ -381,10 +423,14 @@ in `app.py` (Flask) and the interface in `static/index.html` (+ `static/i18n.js`
 3. **Simplification** – k-means clustering in the Lab colour space (or on luminance, or with manual
    thresholds) plus a majority filter; tones sorted from light to dark = spraying order.
 4. **Layers** – cumulative or exclusive masks, one per tone, plus the optional outline layer
-   (Canny edges whose contrast is lost in the simulated render).
+   (Canny edges, difference of Gaussians or Hessian ridges, kept where their contrast is lost in
+   the simulated render), or the same lines merged into a colour layer. Optionally, thin strokes
+   found by a Hessian ridge filter escape the majority filter of the simplification.
 5. **Material constraints** – morphological opening and closing, removal of tiny pieces.
-6. **Bridges** – each island is linked to the frame (or to a neighbouring island, in a chain) by
-   short bridges that stay clear of other edges, processed in passes from the nearest islands.
+6. **Merges and bridges** – optionally, islands are first held by merging zones (morphological
+   closing of narrow channels, removal of small islands), cheapest visible change first; each
+   remaining island is linked to the frame (or to a neighbouring island, in a chain) by short
+   bridges that stay clear of other edges, processed in passes from the nearest islands.
 7. **Vectorisation** – smoothed, simplified outlines turned into Bézier curves.
 8. **Export** – one SVG per layer with registration marks, overview, simulated render, Inkscape
    document and JSON project.

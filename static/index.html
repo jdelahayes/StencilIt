@@ -116,6 +116,9 @@
   .maskwrap { position: relative; display: inline-block; line-height: 0; touch-action: none; user-select: none; cursor: none; }
   .maskwrap img { max-width: 100%; max-height: 72vh; display: block; pointer-events: none; }
   .maskwrap img.fgov { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; pointer-events: none; }
+  .maskwrap img.detov { position: absolute; max-width: none; max-height: none; pointer-events: none; }
+  .detlegend { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+  .detlegend i { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin-left: 6px; }
   .maskwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; pointer-events: none; }
   .maskwrap .cropguide { position: absolute; border: 1.5px dashed rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.4); pointer-events: none; }
   .maskwrap .brush { position: absolute; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7);
@@ -141,6 +144,14 @@
   .card img { width: 100%; display: block; background: #ddd; }
   .card .meta { padding: 8px 10px; font-size: 12px; color: var(--muted); }
   .lcolor { width: 22px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; flex: none; }
+  header .gear { margin-left: 8px; background: none; border: 1px solid transparent; font-size: 18px; line-height: 1;
+                 padding: 2px 6px; color: var(--muted); cursor: pointer; }
+  header .gear:hover, header .gear[aria-expanded="true"] { border-color: var(--line); color: var(--ink); background: var(--soft); }
+  header.busy .gear { color: #fff; }
+  .prefpop { position: fixed; z-index: 60; top: 48px; right: 12px; width: 300px; max-width: calc(100vw - 24px);
+             background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px;
+             box-shadow: 0 10px 28px rgba(0,0,0,.4); font-size: 13px; }
+  .prefpop h4 { margin: 4px 0 6px; font-size: 13px; }
   .colorpop { position: fixed; z-index: 60; width: 236px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
               padding: 8px 10px 10px; box-shadow: 0 10px 28px rgba(0,0,0,.4); font-size: 12px; }
   .colorpop h4 { margin: 6px 0 4px; font-size: 11px; font-weight: 500; color: var(--muted); }
@@ -181,7 +192,7 @@
   .lv img.ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; background: transparent; }
   .stage .lv { max-width: 100%; }
   .stage .lv img { max-width: none; max-height: none; width: 100%; height: 100%; }
-  body.no-bridges .lv .ov-bridges, body.no-lost .lv .ov-lost { display: none; }
+  body.no-bridges .lv .ov-bridges, body.no-lost .lv .ov-lost, body.no-merged .lv .ov-merged { display: none; }
   .histo { margin: 6px 0 2px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; line-height: 0; }
   .histo canvas { width: 100%; height: 96px; display: block; touch-action: none; }
   .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
@@ -299,15 +310,23 @@
   <h1>StencilIt</h1>
   <span style="color:var(--muted)">pochoirs multicouches pour l'aérographe</span>
   <span class="status" id="status">Chargez une image pour commencer</span>
-  <select id="lang" data-noi18n aria-label="Language / Langue" title="Language / Langue" style="width:auto; font-size:12px; padding:3px 6px; margin-left:10px">
-    <option value="en">English</option>
-    <option value="fr">Français</option>
-  </select>
   <label class="autocalc" title="Coché : chaque modification relance le calcul. Décoché : le calcul ne se fait qu'à la demande (bouton à côté, ou Ctrl + Entrée).">
     <input type="checkbox" id="auto_calc" checked> Calcul auto</label>
   <button type="button" id="calcBtn" class="calcbtn" hidden>À jour ✓</button>
   <button type="button" class="link" id="resetAll" title="Oublier les derniers réglages utilisés (les réglages enregistrés sont conservés)">Réglages par défaut</button>
+  <button type="button" class="gear" id="prefsBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="prefPop"
+    title="Préférences (langue, chargement des images)" aria-label="Préférences">⚙</button>
 </header>
+<div class="prefpop" id="prefPop" role="dialog" aria-label="Préférences" hidden>
+  <h4>Préférences</h4>
+  <label class="row" data-noi18n>Language / Langue
+    <select id="lang" aria-label="Language / Langue" style="width:auto">
+      <option value="en">English</option>
+      <option value="fr">Français</option>
+    </select></label>
+  <div class="check"><input type="checkbox" id="auto_fit" checked><label for="auto_fit">Au chargement d'une image, l'ajuster au mieux dans le pochoir</label></div>
+  <p class="hint">Même effet que le bouton « Ajuster au mieux dans le pochoir » (section « Image : cadrage & taille »). Ne s'applique pas à l'ouverture d'un projet.</p>
+</div>
 <div class="colorpop" id="colorPop" role="dialog" aria-label="Couleur de la couche" hidden></div>
 <main>
 <div class="colgrip left" data-side="left" role="separator" aria-orientation="vertical" aria-label="Largeur du panneau des réglages" title="Glisser pour élargir / réduire (double-clic : largeur par défaut)"></div>
@@ -625,25 +644,43 @@
       <option value="exclusive">Exclusive (chaque couleur seule)</option>
     </select>
     <div class="check"><input type="checkbox" id="skip_support" checked><label for="skip_support">La teinte la plus proche du support reste nue (pas de pochoir)</label></div>
+    <div class="check"><input type="checkbox" id="protect_lines"><label for="protect_lines">Protéger les traits fins de la simplification (yeux, sourcils, mèches…)</label></div>
     <p class="hint">Cumulatif : chaque pochoir ouvre sa couleur + les plus foncées. Moins de pièces fragiles et pas de liseré entre couleurs.</p>
   </fieldset>
 
   <fieldset>
     <legend>Contours des détails clés</legend>
-    <div class="check"><input type="checkbox" id="outline"><label for="outline">Ajouter un pochoir de contours (peint en dernier)</label></div>
-    <p class="hint">Détecte automatiquement les détails nets de l'image que la simplification et le flou de l'aérographe estompent (yeux, traits fins, mèches…) et les redessine d'un trait fin, au-dessus de toutes les couches.</p>
+    <div class="check"><input type="checkbox" id="outline"><label for="outline">Retracer les détails clés estompés</label></div>
+    <label class="full">Où mettre les traits</label>
+    <select id="outline_target">
+      <option value="stencil">Pochoir de contours séparé (peint en dernier)</option>
+      <option value="darkest">Dans la couche la plus foncée</option>
+      <option value="nearest">Dans la couche de teinte la plus proche</option>
+    </select>
+    <p class="hint" id="outline_target_hint"></p>
+    <p class="hint">Détecte automatiquement les détails nets de l'image que la simplification et le flou de l'aérographe estompent (yeux, traits fins, mèches…) et les redessine d'un trait fin.</p>
     <p class="hint">Pour limiter la recherche à certaines zones (visage, yeux…), peignez-les dans l'onglet <b>« Masque contours »</b>.</p>
+    <label class="full">Méthode de détection</label>
+    <select id="outline_method">
+      <option value="canny">Bords nets (Canny)</option>
+      <option value="xdog">Trait dessiné (DoG)</option>
+      <option value="ridge">Lignes fines (crêtes)</option>
+    </select>
+    <p class="hint" id="outline_method_hint"></p>
+    <button type="button" id="showDetect" class="vt-small">Voir la détection…</button>
     <label class="row">Sensibilité <span class="v" id="outline_sensitivity_v"></span>
       <input type="range" id="outline_sensitivity" min="0" max="100" step="1" value="50"></label>
     <p class="hint" style="margin-top:-2px">Bas : seulement les détails les plus marqués · haut : beaucoup de détails.</p>
     <label class="row">Largeur du trait (mm) <input type="number" id="outline_width_mm" value="0.8" min="0.2" max="10" step="0.1"></label>
     <label class="row">Longueur mini d'un trait (mm) <input type="number" id="outline_min_length_mm" value="4" min="0" max="200" step="0.5"></label>
     <p class="hint" style="margin-top:-2px">Le trait n'est jamais plus fin que l'ouverture mini du matériau.</p>
+    <div id="outlineColorBox">
     <label class="full">Couleur du trait</label>
     <div class="check"><input type="checkbox" id="outline_auto_color" checked><label for="outline_auto_color">Automatique (teinte la plus contrastée avec le support)</label></div>
     <div style="display:flex; gap:8px; align-items:center">
       <input type="color" id="outline_color" value="#1e1e1e" aria-label="Couleur du trait" style="width:84px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px" disabled>
       <div class="palette" id="outlineSwatches"></div>
+    </div>
     </div>
   </fieldset>
 
@@ -661,6 +698,12 @@
       </select></label>
     <label class="row">2 ponts au-delà de (mm²) <input type="number" id="double_bridge_area_mm2" step="50" min="0" max="100000"></label>
     <p class="hint">Les ponts d'un même îlot sont répartis tout autour. Plus de ponts = îlots mieux tenus (papier, grands îlots), mais plus de traces à retoucher.</p>
+    <label class="row">Fusion au lieu des ponts <span class="v" id="merge_amount_v"></span>
+      <input type="range" id="merge_amount" min="0" max="100" step="1" value="0"></label>
+    <p class="hint" id="merge_hint" style="margin-top:-2px"></p>
+    <label class="row">Largeur max d'un chenal (mm) <input type="number" id="merge_channel_mm" value="2.5" min="0.3" max="30" step="0.5"></label>
+    <div class="check"><input type="checkbox" id="merge_channels" checked><label for="merge_channels">Fermer les chenaux étroits</label></div>
+    <div class="check"><input type="checkbox" id="merge_islands" checked><label for="merge_islands">Supprimer les petits îlots</label></div>
     <div class="cut">
       <b>Réglages de la machine</b>
       <div class="cutgrid">
@@ -747,6 +790,8 @@
     <label class="vt-size">Taille <input type="range" id="mSize" min="4" max="160" value="40" aria-label="Taille du pinceau"> <span id="mSizeV">40</span> px</label>
     <label class="vt-sim" style="margin-left:0"><input type="checkbox" id="mShow" checked> Afficher le masque</label>
     <button type="button" id="mClear" class="vt-small">Tout effacer</button>
+    <label class="vt-sim mdet" style="margin-left:0"><input type="checkbox" id="mDetect"> Aperçu de la détection</label>
+    <span class="mdet detlegend" id="detLegend" hidden><span id="detInfo"></span><i style="background:#e11e28"></i>trait du pochoir <i style="background:#ff9600"></i>trop court <i style="background:#2896eb"></i>détecté, non retenu<span id="detPresentLeg"> <i style="background:#be3cc8"></i>déjà dans la couche</span></span>
     <span class="hint" id="mInfo"></span>
   </div>
   <div class="stage" id="stage"><div class="empty">Aucune image chargée.</div></div>
@@ -775,6 +820,7 @@
     <span><i style="background:#e6a98b"></i>ouverture</span>
     <button type="button" class="lgbtn" id="lgBridges" aria-pressed="true" title="Afficher / masquer les ponts sur les vues des couches"><i style="background:#e62828"></i>pont</button>
     <button type="button" class="lgbtn" id="lgLost" aria-pressed="true" title="Afficher / masquer les détails supprimés par les contraintes du matériau"><i style="background:#ff8c00"></i>détail supprimé</button>
+    <button type="button" class="lgbtn" id="lgMerged" aria-pressed="true" title="Afficher / masquer les zones fusionnées au lieu d'un pont (chenal fermé ou petit îlot supprimé)"><i style="background:#963cc8"></i>fusion</button>
   </div>
   <div class="layers" id="layers"><p class="hint">Les pochoirs apparaîtront ici, dans l'ordre de pulvérisation.</p></div>
 </div>
@@ -790,9 +836,9 @@ const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_m
   "image_scale", "image_height_factor", "image_pos_x", "image_pos_y", "margin_mm", "sheet_mode", "sheet_border_mm", "sheet_w_mm", "sheet_h_mm", "reg_dims", "machine_max_mm", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline",
   "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds", "pre_saturation", "pre_sharpen", "pre_remove_bg",
   "layer_colors",
-  "n_layers", "detail", "color_mode", "layering", "skip_support",
-  "outline", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_auto_color", "outline_color",
-  ...MAT_FIELDS,
+  "n_layers", "detail", "color_mode", "layering", "skip_support", "protect_lines",
+  "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_auto_color", "outline_color",
+  ...MAT_FIELDS, "merge_amount", "merge_channel_mm", "merge_channels", "merge_islands",
   "tolerance_mm", "smooth_curves", "spray_mm", "px_per_mm"];
 const SUPPORT_COLORS = [["Blanc", "#ffffff"], ["Ivoire", "#f3ecd9"], ["Kraft", "#c8a26e"], ["Gris", "#9a9a9a"], ["Noir", "#1e1e1e"]];
 const REG_DEFAULT = { equerre: 10, croix: 8, rond: 5 };
@@ -1277,6 +1323,7 @@ function setVals(o) {
     if (e.type === "checkbox") e.checked = !!v; else e.value = v;
   }
   syncSheetMode(); syncMat();   // state of the fields, sheet and cutting mat
+  methodHint(); syncOutlineTarget();
 }
 async function presetCall(method, url, body) {
   try {
@@ -1405,8 +1452,16 @@ function rememberSettings() {
     PARAMS.filter(k => !NOT_REMEMBERED.has(k)).forEach(k => s[k] = val(k));
     CUT_FIELDS.forEach(f => s["cut_" + f] = $("cut_" + f).value);
     ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "auto_calc"].forEach(k => s[k] = val(k));
+    s.sens_scale = 2;
     localStorage.setItem(LS_KEY, JSON.stringify(s));
   } catch (e) { /* storage unavailable: ignored */ }
+}
+// Outline sensitivity: progressive scale since 1.2 (marker sens_scale = 2). Older saved values
+// (linear scale: 15 % to 95 % of the candidate lines kept) are converted to the same result.
+function migrateSens(o) {
+  if (!o || o.sens_scale >= 2 || !("outline_sensitivity" in o)) return o;
+  const share = 0.15 + 0.8 * Math.min(100, Math.max(0, +o.outline_sensitivity || 0)) / 100;
+  return { ...o, outline_sensitivity: Math.round(100 * Math.log(share / 0.01) / Math.log(95)) };
 }
 function restoreSettings() {
   let s = null;
@@ -1416,15 +1471,23 @@ function restoreSettings() {
   if (mat && [...$("material").options].some(o => o.value === mat)) $("material").value = mat;
   delete s.material;
   if (s.user_support && !UP.support[s.user_support]) delete s.user_support;
-  setVals(s);
+  setVals(migrateSens(s));
   if (!("machine" in s)) { machineFromWidth(); syncMat(); }
   return true;
 }
 function showValues() {
-  ["n_layers", "detail", "tolerance_mm", "spray_mm", "px_per_mm", "image_scale", "image_pos_x", "image_pos_y", "outline_sensitivity", "pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen"].forEach(k => {
+  ["n_layers", "detail", "tolerance_mm", "spray_mm", "px_per_mm", "image_scale", "image_pos_x", "image_pos_y", "outline_sensitivity", "pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen", "merge_amount"].forEach(k => {
     const o = $(k + "_v");
     if (o) o.textContent = k.startsWith("image_") ? (+$(k).value).toFixed(1) : k === "pre_gamma" ? (+$(k).value).toFixed(2) : $(k).value;
   });
+  mergeHint();
+}
+// "Merge instead of bridges": largest visible area changed (same scale as merge_area_mm2 on the server)
+function mergeHint() {
+  const a = val("merge_amount");
+  if (!a) { $("merge_hint").textContent = "Désactivée : les îlots sont toujours tenus par des ponts."; return; }
+  const mm2 = 0.3 * Math.pow(300, Math.min(a, 100) / 100);
+  $("merge_hint").textContent = `Fusion acceptée jusqu'à ${mm2 < 10 ? mm2.toFixed(1) : Math.round(mm2)} mm² modifiés (zone visible), sinon un pont.`;
 }
 function cutInfo() {
   // Machine settings are editable fields (see applyMaterial); update the save bar
@@ -1552,6 +1615,7 @@ const TIPS = {
   image_pos_x: "Position horizontale du centre de l'image, en % de la largeur du support (50 % = centrée).",
   image_pos_y: "Position verticale du centre de l'image, en % de la hauteur du support (50 % = centrée).",
   layCenter: "Centre l'image sur le support sans changer sa taille.",
+  auto_fit: "Au chargement d'une image, la taille et la position sont choisies pour que l'image soit la plus grande possible dans le pochoir (support, feuille ou tapis selon la mise en page).",
   inner_margin_mm: "Marge gardée libre tout autour de l'image par « Ajuster » (et la taille 100 %).",
   pre_auto_levels: "Étire les tons de l'image du plus sombre au plus clair avant le découpage en teintes (utile pour les photos ternes).",
   pre_clahe: "Contraste local : accentue les volumes (visage, plis) zone par zone. 0 = désactivé.",
@@ -1581,9 +1645,14 @@ const TIPS = {
   detail: "Niveau de détail : bas = formes simples et lisses, haut = plus de petits détails (plus de découpe et de ponts).",
   color_mode: "Couleur, noir et blanc, ou automatique (détecté selon l'image).",
   layering: "Cumulatif : chaque pochoir ouvre sa couleur et toutes les plus foncées (moins de raccords). Exclusif : chaque pochoir n'ouvre que sa couleur.",
+  protect_lines: "Les traits fins, sombres ou clairs (yeux, sourcils, narines, mèches), gardent leur teinte au lieu d'être absorbés par la zone voisine lors de la simplification. Les traits plus fins que l'ouverture mini disparaissent quand même : utilisez alors « Retracer les détails clés estompés ».",
+  outline_target: "Pochoir séparé : un pochoir de plus, peint en dernier, de la couleur choisie. Dans une couche : pas de pochoir en plus, les traits sont découpés dans une couche de couleur (plus foncée que la zone qu'ils traversent).",
   skip_support: "La teinte de l'image la plus proche de la couleur du support n'a pas de pochoir : le support reste visible à la place.",
-  outline: "Ajoute un dernier pochoir qui retrace les détails fins estompés par la simplification et le flou de l'aérographe.",
-  outline_sensitivity: "Quantité de détails retenus pour le pochoir de contours (bas = seulement les plus marqués).",
+  outline: "Retrace d'un trait fin les détails estompés par la simplification et le flou de l'aérographe, dans un pochoir séparé ou dans une couche de couleur.",
+  outline_method: "Comment les détails sont trouvés : bords nets (Canny), trait dessiné le long des contours (DoG) ou ligne centrale des traits fins (crêtes).",
+  showDetect: "Ouvre l'onglet Masques avec l'aperçu de la détection : traits retenus, trop courts et non retenus, en direct.",
+  mDetect: "Superpose les traits détectés pour le pochoir de contours (calculés avec les couches du dernier calcul et les réglages de contours actuels).",
+  outline_sensitivity: "Quantité de détails retenus (bas = seulement les plus marqués). Échelle progressive : de 1 % des traits candidats à 0 jusqu'à 95 % à 100, environ 10 % à 50.",
   outline_width_mm: "Largeur du trait du pochoir de contours, en mm (jamais moins que l'ouverture mini du matériau).",
   outline_min_length_mm: "Les traits plus courts que cette longueur sont ignorés.",
   outline_auto_color: "Couleur du trait choisie automatiquement : la teinte de l'image la plus contrastée avec le support.",
@@ -1594,6 +1663,10 @@ const TIPS = {
   min_area_mm2: "Surface minimale d'une ouverture ou d'un morceau de matière, en mm².",
   bridges: "Ajoute des ponts pour que les îlots de matière (centre d'un O…) restent attachés à la feuille.",
   bridge_width_mm: "Largeur des ponts, en mm.",
+  merge_amount: "Au lieu d'un pont, ferme un chenal étroit (l'îlot se soude au reste de la feuille) ou supprime un petit îlot (il est peint), si la zone modifiée reste petite. 0 = toujours des ponts. Une zone repeinte ensuite par une couche plus foncée ne compte pas ; la modification compte moins si les deux teintes sont proches.",
+  merge_channel_mm: "Seuls les passages d'ouverture plus étroits que cette largeur peuvent être fermés (au-delà, c'est une vraie zone peinte).",
+  merge_channels: "Ferme les chenaux d'ouverture étroits qui séparent un îlot du reste de la matière (la peinture de ce chenal est perdue).",
+  merge_islands: "Supprime les petits îlots de matière : ils sont peints avec la couche (le petit détail clair est perdu).",
   min_bridges: "Nombre minimal de ponts par îlot (2 ou plus = îlot mieux tenu, mais plus de ponts visibles).",
   double_bridge_area_mm2: "Au-delà de cette surface (mm²), un îlot reçoit au moins 2 ponts.",
   cut_blade: "Profondeur de lame conseillée (réglage Silhouette Studio).",
@@ -1641,6 +1714,7 @@ async function init() {
   // Language: English by default; the choice is remembered and applies without reloading the page.
   // Started after the sections are built (they read the original French titles).
   I18N.start();
+  setupPrefs();
   $("lang").value = I18N.lang;
   $("lang").addEventListener("change", () => { I18N.setLang($("lang").value); drawHisto(); if (LAST) render(); });
   document.querySelector("aside").addEventListener("change", updateSummaries);
@@ -1755,16 +1829,19 @@ async function init() {
     const ov = JSON.parse(localStorage.getItem("stencilit.surlignages") || "{}");
     setOverlay("lgBridges", "no-bridges", ov.bridges !== false);
     setOverlay("lgLost", "no-lost", ov.lost !== false);
+    setOverlay("lgMerged", "no-merged", ov.merged !== false);
   } catch (e) { /* storage unavailable */ }
   const saveOverlays = () => {
     try {
       localStorage.setItem("stencilit.surlignages", JSON.stringify({
         bridges: $("lgBridges").getAttribute("aria-pressed") === "true",
-        lost: $("lgLost").getAttribute("aria-pressed") === "true" }));
+        lost: $("lgLost").getAttribute("aria-pressed") === "true",
+        merged: $("lgMerged").getAttribute("aria-pressed") === "true" }));
     } catch (e) { /* storage unavailable */ }
   };
   $("lgBridges").onclick = () => { setOverlay("lgBridges", "no-bridges", $("lgBridges").getAttribute("aria-pressed") !== "true"); saveOverlays(); };
   $("lgLost").onclick = () => { setOverlay("lgLost", "no-lost", $("lgLost").getAttribute("aria-pressed") !== "true"); saveOverlays(); };
+  $("lgMerged").onclick = () => { setOverlay("lgMerged", "no-merged", $("lgMerged").getAttribute("aria-pressed") !== "true"); saveOverlays(); };
   $("optPre").onclick = () => { SHOW_PRE = !SHOW_PRE; render(); };
   [["optSupport", "show_support"], ["optMat", "show_mat"]].forEach(([b, c]) => $(b).onclick = () => {
     $(c).checked = !$(c).checked;
@@ -1823,6 +1900,19 @@ async function init() {
   $("mErase").onclick = () => setMaskTool("erase");
   $("mSize").addEventListener("input", () => { $("mSizeV").textContent = $("mSize").value; });
   $("mShow").addEventListener("change", () => { if (VIEW === "mask") render(); });
+  // Outline detection preview (Masks tab)
+  $("mDetect").addEventListener("change", detectPreview);
+  $("outline_method").addEventListener("change", methodHint);
+  $("showDetect").onclick = () => {
+    $("maskKind").value = "outline"; $("mDetect").checked = true; VIEW = "mask"; SEL = null;
+    enableOutline(); render();
+  };
+  // changing an outline setting = wanting the outline stencil (otherwise it has no effect on the layers)
+  $("outline_method").addEventListener("change", enableOutline);
+  $("outline_target").addEventListener("change", () => { syncOutlineTarget(); enableOutline(); detectPreview(); });
+  ["outline_sensitivity", "outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("change", enableOutline));
+  ["outline_method", "outline_auto_color", "outline_color"].forEach(k => $(k).addEventListener("change", detectPreview));
+  ["outline_sensitivity", "outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("input", detectPreview));
   $("mClear").onclick = () => {
     const c = maskKind() === "subject" ? SUBJ : MASK;
     if (!c) return;
@@ -1846,6 +1936,7 @@ async function init() {
   ["outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("input", schedule));
   $("outline_color").disabled = $("outline_auto_color").checked;
   renderOutlineSwatches();
+  methodHint(); syncOutlineTarget();
 
   const drop = $("drop");
   drop.onclick = () => $("file").click();
@@ -1864,6 +1955,24 @@ async function init() {
   $("export").onclick = () => { if (SID) location.href = "/api/export/" + SID + "?lang=" + I18N.lang; };
 }
 
+// ---------------- Preferences (gear button in the header) ----------------
+// Application preferences, not project settings: kept apart from the last settings (localStorage).
+const PREFS_KEY = "stencilit.preferences";
+function prefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") || {}; } catch (e) { return {}; }
+}
+function savePref(k, v) {
+  try { const o = prefs(); o[k] = v; localStorage.setItem(PREFS_KEY, JSON.stringify(o)); } catch (e) { /* storage unavailable */ }
+}
+function setupPrefs() {
+  const btn = $("prefsBtn"), pop = $("prefPop");
+  $("auto_fit").checked = prefs().auto_fit !== false;
+  $("auto_fit").addEventListener("change", () => savePref("auto_fit", $("auto_fit").checked));
+  const show = on => { pop.hidden = !on; btn.setAttribute("aria-expanded", String(on)); if (on) $("lang").focus(); };
+  btn.onclick = e => { e.stopPropagation(); show(pop.hidden); };
+  document.addEventListener("pointerdown", e => { if (!pop.hidden && !pop.contains(e.target) && e.target !== btn) show(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !pop.hidden) { show(false); btn.focus(); } });
+}
 async function upload(file) {
   status("Chargement…");
   const fd = new FormData(); fd.append("image", file);
@@ -1883,6 +1992,7 @@ async function upload(file) {
     }
     syncWidth();
     await recommend(true);
+    if (prefs().auto_fit !== false) { fitToStencil(); clearTimeout(timer); }   // computed just below
   }
   render();
   process();
@@ -1911,6 +2021,7 @@ function uiState() {
   const values = {};
   [...PARAMS, ...UI_EXTRA].forEach(k => values[k] = val(k));
   CUT_FIELDS.forEach(f => values["cut_" + f] = $("cut_" + f).value);
+  values.sens_scale = 2;
   return { version: 1, values, crop: { ...CROP }, hidden_layers: [...HIDDEN] };
 }
 function applyProjectSettings(info) {
@@ -1926,7 +2037,7 @@ function applyProjectSettings(info) {
   }
   const mat = vals.material; delete vals.material;
   if (mat && [...$("material").options].some(o => o.value === mat)) $("material").value = mat;
-  setVals(vals);
+  setVals(migrateSens(vals));
   if (!("machine" in vals)) { machineFromWidth(); syncMat(); }
   if (crop && crop.w > 0 && crop.h > 0) CROP = { x: +crop.x, y: +crop.y, w: +crop.w, h: +crop.h };
   HIDDEN.clear();
@@ -2162,7 +2273,63 @@ async function sendMask() {
       status("Pochoir de contours activé (masque peint)");
     }
     if ($("outline").checked) schedule();
+    detectPreview();
   } catch (e) { status("Serveur injoignable : " + e.message, true); }
+}
+// Outline detection preview: lines found by the chosen method over the source image (colour layers
+// of the last computation, current outline settings), refreshed live while settings change.
+const METHOD_HINTS = {
+  canny: "Bords nets de l'image (luminance et couleur). Polyvalent, mais un trait fin donne deux bords parallèles.",
+  xdog: "Un seul trait le long de chaque contour, du côté sombre, comme un dessin à la plume. Peu sensible au bruit.",
+  ridge: "Ligne centrale des traits fins (cils, sourcils, rides, mèches) : un seul trait là où Canny en trouve deux.",
+};
+function enableOutline() {
+  if ($("outline").checked) return;
+  $("outline").checked = true; updateSummaries(); schedule();
+  status("Pochoir de contours activé");
+}
+const TARGET_HINTS = {
+  stencil: "Un pochoir de plus, peint en dernier, de la couleur du trait choisie ci-dessous.",
+  darkest: "Pas de pochoir en plus : les traits sont découpés dans la dernière couche (la plus foncée). Elle aura plus d'îlots et de ponts.",
+  nearest: "Pas de pochoir en plus : chaque trait va dans la couche de teinte la plus proche de la sienne, parmi celles plus foncées que la zone qu'il traverse.",
+};
+function syncOutlineTarget() {
+  const t = $("outline_target").value;
+  $("outline_target_hint").textContent = TARGET_HINTS[t] || "";
+  $("outlineColorBox").hidden = t !== "stencil";
+}
+function methodHint() { $("outline_method_hint").textContent = METHOD_HINTS[$("outline_method").value] || ""; }
+let DET = null, DET_TIMER = null, DET_REQ = 0;
+const detectOn = () => VIEW === "mask" && SEL === null && maskKind() === "outline" && $("mDetect").checked;
+function showDet() {
+  const ov = document.querySelector("#stage .detov");
+  if (!ov) return;
+  if (!detectOn() || !DET || !LAST) { ov.hidden = true; return; }
+  const [x, y, w, h] = DET.rect;
+  ov.src = DET.image; ov.hidden = false;
+  Object.assign(ov.style, { left: x * 100 + "%", top: y * 100 + "%", width: w * 100 + "%", height: h * 100 + "%" });
+}
+function detectPreview() {
+  document.querySelectorAll(".mdet").forEach(e => e.hidden = maskKind() !== "outline");
+  $("detLegend").hidden = !detectOn();
+  $("detPresentLeg").hidden = val("outline_target") === "stencil";
+  showDet();
+  if (!detectOn() || !SID) return;
+  if (!LAST) { $("detInfo").textContent = "Lancez d'abord un calcul."; return; }
+  clearTimeout(DET_TIMER);
+  DET_TIMER = setTimeout(async () => {
+    const id = ++DET_REQ;
+    try {
+      const r = await fetch("/api/outline_preview", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: SID, params: params() }) });
+      const j = await r.json();
+      if (id !== DET_REQ) return;
+      if (!r.ok) { $("detInfo").textContent = j.error || "Erreur de l'aperçu de la détection"; return; }
+      DET = j; showDet();
+      $("detInfo").textContent = j.present == null ? `Traits retenus : ${j.lines}`
+        : `Traits ajoutés : ${j.lines - j.present} · déjà découpés : ${j.present}`;
+    } catch (e) { status("Serveur injoignable : " + e.message, true); }
+  }, 150);
 }
 function maskEditor(st) {
   if (!MASK) createMask();
@@ -2172,6 +2339,7 @@ function maskEditor(st) {
   wrap.className = "maskwrap";
   wrap.innerHTML = `<img src="${IMG.src}" alt="Image source — ${kind === "subject" ? "peignez le sujet à garder" : "peignez les zones à détailler"}" draggable="false">
     <img class="fgov" alt="" ${kind === "subject" && FG_OVERLAY ? `src="${FG_OVERLAY}"` : "hidden"}>
+    <img class="detov" alt="" hidden>
     <div class="cropguide" title="Partie de l'image utilisée (recadrage)"></div><div class="brush"></div>`;
   wrap.insertBefore(CV, wrap.querySelector(".cropguide"));
   [MASK, SUBJ].forEach(c => c.style.display = (c === CV && $("mShow").checked) ? "" : "none");
@@ -2182,6 +2350,7 @@ function maskEditor(st) {
   });
   st.replaceChildren(wrap);
   frameSource(st, wrap);
+  detectPreview();
   const brush = wrap.querySelector(".brush"), ctx = CV.getContext("2d");
   let last = null;
   const toMask = e => {
@@ -2375,7 +2544,9 @@ function render() {
   const warns = [...(LAST.warnings || [])];
   if (LAST.support_tone && lum(LAST.base) < 90 && LAST.layers.length)
     warns.push("Support foncé : les zones sombres laissées au support deviennent des îlots dans les couches claires, et leurs ponts resteront visibles. Pour des aplats foncés sans pont, décochez « La teinte la plus proche du support reste nue ».");
-  if (val("outline") && !LAST.layers.some(L => L.kind === "outline"))
+  if (val("outline") && val("outline_target") !== "stencil" && !LAST.lines_added)
+    warns.push(`Traits dans les couches : aucun détail clé ajouté${MASK_EMPTY ? "" : " dans les zones peintes du masque"}. Augmentez la sensibilité (actuellement ${val("outline_sensitivity")}) ou réduisez la longueur mini d'un trait.`);
+  if (val("outline") && val("outline_target") === "stencil" && !LAST.layers.some(L => L.kind === "outline"))
     warns.push(`Pochoir de contours : aucun détail clé trouvé${MASK_EMPTY ? "" : " dans les zones peintes du masque"}. Augmentez la sensibilité (actuellement ${val("outline_sensitivity")}) ou réduisez la longueur mini d'un trait.`);
   $("warnings").innerHTML = warns.map(w => `<div class="warn">⚠ ${w}</div>`).join("");
 
@@ -2406,7 +2577,7 @@ function render() {
           : `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur de la peinture de la couche ${L.index}${layerColors()[L.index] ? " (choisie)" : " (calculée)"} — cliquer pour changer"></button>`}Couche ${L.index}${L.kind === "outline" ? " — contours ✎" : ""} — ${L.color}${layerColors()[L.index]
           ? ` <button type="button" class="lcreset vt-small" data-idx="${L.index}" title="Revenir à la teinte calculée">auto</button>` : ""}
           <button type="button" class="eye" aria-pressed="${!HIDDEN.has(L.index)}" title="Afficher / masquer dans la prévisualisation">${HIDDEN.has(L.index) ? "masquée" : "visible"}</button></div>
-        ${L.paths} tracés · ${L.nodes} nœuds · ${L.islands} îlot${L.islands > 1 ? "s" : ""} · ${L.bridges} ponts<br>
+        ${L.paths} tracés · ${L.nodes} nœuds · ${L.islands} îlot${L.islands > 1 ? "s" : ""} · ${L.bridges} ponts${L.merged ? ` · ${L.merged} fusion${L.merged > 1 ? "s" : ""}` : ""}<br>
         ${L.short_islands ? `<span style="color:#d97706">⚠ ${L.short_islands} îlot(s) sans place pour ${val("min_bridges")} ponts</span><br>` : ""}
         Coupe : ${L.cut_length_m} m · détails supprimés : ${L.lost_pct} %
       </div>
@@ -2443,6 +2614,7 @@ function renderCalage() {
 function layerStack(L, attrs = "") {
   return `<div class="lv" ${attrs}><img src="${L.image}" alt="Pochoir ${L.index}">` +
     (L.img_lost ? `<img class="ov ov-lost" src="${L.img_lost}" alt="">` : "") +
+    (L.img_merged ? `<img class="ov ov-merged" src="${L.img_merged}" alt="">` : "") +
     (L.img_bridges ? `<img class="ov ov-bridges" src="${L.img_bridges}" alt="">` : "") + `</div>`;
 }
 function setOverlay(btn, cls, on) {

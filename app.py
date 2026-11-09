@@ -29,7 +29,7 @@ LOCK = threading.Lock()
 
 PREP_KEYS = ("support_w_mm", "support_h_mm", "px_per_mm", "detail", "n_layers", "color_mode", "skip_support",
              "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds",
-             "pre_saturation", "pre_sharpen", "pre_remove_bg")
+             "pre_saturation", "pre_sharpen", "pre_remove_bg", "protect_lines")
 
 
 def materials() -> dict:
@@ -358,7 +358,8 @@ def api_process():
             # layer view without highlights + bridges and removed details as separate overlays
             # (shown / hidden in the browser)
             "image": png_b64(pl.layer_view(res, L, sheet, bridges=False, lost=False), 900),
-            **dict(zip(("img_bridges", "img_lost"), (png_b64(o, 900) for o in pl.layer_overlays(res, L)))),
+            **{k: (png_b64(o, 900) if k != "img_merged" or L.n_merged else None)
+               for k, o in zip(("img_bridges", "img_lost", "img_merged"), pl.layer_overlays(res, L))},
             "mask_flat": rgba_b64(L.color, to_preview(mask)),
             "mask_sim": rgba_b64(L.color, to_preview(cv2.GaussianBlur(mask, (0, 0), sig) * 0.97)),
             **pl.layer_stats(L),
@@ -400,7 +401,58 @@ def api_process():
         image_mm=[round(v, 1) for v in lay.img_mm],
         visible_mm=[round(lay.vis_mm[2] - lay.vis_mm[0], 1), round(lay.vis_mm[3] - lay.vis_mm[1], 1)],
         delta_e=round(pl.delta_e(res, sheet_sim), 1),
+        lines_added=res.lines_added,
         seconds=round(time.perf_counter() - t0, 2),
+    )
+
+
+@app.post("/api/outline_preview")
+def api_outline_preview():
+    """Outline stencil detection preview, over the computed image area of the source image preview
+    (Masks tab): detected lines not kept (blue), lines too short (orange), final stroke (red).
+    Uses the colour layers of the last computation and the current outline settings."""
+    data = request.get_json(force=True)
+    sess = SESSIONS.get(data.get("id", ""))
+    if not sess:
+        return jsonify(error="Session inconnue, rechargez l'image"), 404
+    res = sess.get("result")
+    if res is None:
+        return jsonify(error="Aperçu de la détection : lancez d'abord un calcul"), 409
+    p = pl.Params.from_dict(data.get("params", {}))
+    lay, _ = pl.resolve_layout(res.params, sess["img"].shape)
+    x0, y0, x1, y1 = lay.src_rect
+    H, W = res.prepared.labels.shape
+    region = None
+    if sess.get("mask") is not None:
+        region = cv2.resize(sess["mask"][y0:y1, x0:x1], (W, H), interpolation=cv2.INTER_NEAREST) > 0
+    st = pl.outline_detection(res, p, region)
+    # size of the computed area in the source image preview (same scale as the mask canvas)
+    h, w = sess["img"].shape[:2]
+    s = min(1.0, 1100 / max(h, w))
+    size = (max(1, round((x1 - x0) * s)), max(1, round((y1 - y0) * s)))
+    k = size[0] / W                                   # preview px per computed px
+    grow = np.ones((max(1, round(1.2 / k)),) * 2, np.uint8)   # thin lines stay visible once reduced
+    rgba = np.zeros((H, W, 4), np.uint8)
+    layers = [(st["detected"] & ~st["selected"], (235, 150, 40, 200), True),
+              (st["short"], (0, 150, 255, 235), True)]
+    if st.get("present") is not None:      # lines merged into the layers: those already cut there
+        layers.append((cv2.dilate(st["present"].astype(np.uint8), np.ones((3, 3), np.uint8)) > 0,
+                       (200, 60, 190, 225), True))
+    layers.append((st["stroke"], (40, 30, 225, 215), False))
+    for m, col, thick in layers:
+        if thick:
+            m = cv2.dilate(m.astype(np.uint8), grow) > 0
+        rgba[m] = col
+    small = cv2.resize(rgba, size, interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".png", small, [cv2.IMWRITE_PNG_COMPRESSION, 6])
+    n_lines = cv2.connectedComponents(st["kept"].astype(np.uint8), connectivity=8)[0] - 1
+    return jsonify(
+        image="data:image/png;base64," + base64.b64encode(buf.tobytes()).decode(),
+        rect=[x0 / w, y0 / h, (x1 - x0) / w, (y1 - y0) / h],
+        lines=int(n_lines),
+        present=int(cv2.connectedComponents(st["present"].astype(np.uint8), connectivity=8)[0] - 1)
+        if st.get("present") is not None else None,
+        stroke_pct=round(100 * float(st["stroke"].mean()), 1),
     )
 
 
