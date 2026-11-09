@@ -1779,7 +1779,12 @@ async function init() {
     location.reload();
   };
   window.addEventListener("beforeunload", rememberSettings);
-  PARAMS.forEach(k => $(k).addEventListener(($(k).type === "range") ? "input" : "change", () => { showValues(); schedule(); }));
+  // sliders: the value is shown live while dragging, the computation starts once the handle is
+  // released ("change" also fires after a keyboard step)
+  PARAMS.forEach(k => {
+    if ($(k).type === "range") $(k).addEventListener("input", showValues);
+    $(k).addEventListener("change", () => { showValues(); schedule(); });
+  });
   ["margin_mm", ...MAT_FIELDS].forEach(k => $(k).addEventListener("input", schedule));
   $("n_layers").addEventListener("input", renderReco);
   $("calcBtn").onclick = () => process();
