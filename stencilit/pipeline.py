@@ -6,6 +6,7 @@ in mm.
 """
 from __future__ import annotations
 
+import io
 import math
 import os
 from dataclasses import dataclass, fields, replace
@@ -280,10 +281,25 @@ def hex_to_bgr(h: str) -> np.ndarray:
 # Utilities
 # --------------------------------------------------------------------------
 
+def _decode_pillow(data: bytes) -> np.ndarray | None:
+    """Fallback decoder (Pillow): AVIF and other formats missing from OpenCV's wheels.
+    Returns BGR or BGRA (uint8), or None if the data cannot be read."""
+    try:
+        from PIL import Image, ImageOps
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(data)))
+        alpha = im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info)
+        a = np.asarray(im.convert("RGBA" if alpha else "RGB"))
+    except Exception:                  # Pillow missing, unknown or damaged file
+        return None
+    return cv2.cvtColor(a, cv2.COLOR_RGBA2BGRA if alpha else cv2.COLOR_RGB2BGR)
+
+
 def decode_image(data: bytes) -> np.ndarray:
     """Decodes an image (transparency handled -> white background)."""
     arr = np.frombuffer(data, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
+    if img is None:
+        img = _decode_pillow(data)          # formats OpenCV does not read (AVIF…)
     if img is None:
         raise ValueError("Image illisible")
     if img.dtype != np.uint8:

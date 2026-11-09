@@ -138,7 +138,7 @@ striped.
 
 ### 5.1 Load an image
 
-Drop a JPEG/PNG/WebP file on the image box, or click it to browse. Colour and black & white images
+Drop a JPEG/PNG/WebP/AVIF file on the image box, or click it to browse. Colour and black & white images
 are both supported. **Open a project…** below the box reloads a previous export (see
 [§7](#7-projects-and-saved-settings)).
 
@@ -336,11 +336,11 @@ By default each layer gets the tone computed from the image. To paint with your 
 - click the **colour swatch** of a layer card: choose a colour of the current palette, one of the
   image tones, one of the 6 recently used colours, or any colour with the built-in picker (hex code
   accepted). **Auto (computed tone)** goes back to the image tone;
-- or use the **Colour palette…** menu at the top of the stencil column: 46 harmonious palettes in 7
-  families (Classics, Vivid, Modern vivid, Soft, Modern soft, Nature, Monochromes), of 8 colours
-  each, from the lightest (layer 1) to the darkest. Up to 8 layers, each layer gets a real colour
-  of the palette (always including the lightest and the darkest); beyond that, intermediate tones
-  are blended. **＋ Save the current colours…** creates your own palette (*My palettes*).
+- or use the **Colour palette…** menu at the top of the stencil column: 91 harmonious palettes in 10
+  families (Classics, Vivid, Modern vivid, Soft, Modern soft, Trending, Cold, Warm, Nature,
+  Monochromes), of 8 colours each, from the lightest (layer 1) to the darkest. Up to 8 layers,
+  each layer gets a real colour of the palette (always including the lightest and the darkest);
+  beyond that, intermediate tones are blended. **＋ Save the current colours…** creates your own palette (*My palettes*).
 
 The chosen colours are used in the preview, the simulated render, the export and the file names.
 
