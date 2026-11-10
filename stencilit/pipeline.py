@@ -1089,6 +1089,7 @@ class Layer:
     kind: str = "color"      # "color" (flat colour) or "outline" (key-detail outlines)
     merged: np.ndarray | None = None   # areas changed by merges instead of bridges (whole sheet)
     n_merged: int = 0        # number of merges (closed channels + removed islands)
+    tone: int | None = None  # index of the tone it paints in prepared.palette (colour layers)
 
 
 @dataclass
@@ -1245,7 +1246,7 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
         target, cleaned = targets[li], cleaned_all[li]
         layers.append(Layer(index=li + 1, color=colors[li], target=target,
                             opening=opening, lost=cv2.bitwise_xor(cleaned, target), bridges=bridges, paths=paths,
-                            islands=n_isl, short_islands=n_short, merged=merged, n_merged=n_merged))
+                            islands=n_isl, short_islands=n_short, merged=merged, n_merged=n_merged, tone=ci))
     res = make_result(layers, detect_sim=detect_sim, detect_painted=detect_painted, lines_added=lines_added)
 
     # Outline stencil: painted last, above all layers

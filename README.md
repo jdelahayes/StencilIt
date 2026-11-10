@@ -201,6 +201,8 @@ preprocessed image instantly (even in on-demand mode), with its luminance histog
 **Manual thresholds**: the histogram shows one line per boundary between two tones (dotted lines =
 automatic thresholds). Drag a line to switch to manual thresholds: each tone becomes a luminance
 range (controlled posterisation). **Automatic thresholds** goes back to automatic mode.
+Under the histogram, two strips show for each range its tone and the colour of the layer that paints
+it, with the layer number (**S** = tone left to the support).
 
 ![Preprocessing with the histogram and manual thresholds](docs/screenshots/preprocessing.jpg)
 

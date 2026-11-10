@@ -174,7 +174,7 @@
     "Aucun sujet peint.": "No subject painted.", "Seuils manuels entre les teintes": "Manual thresholds between tones",
     "Seuils automatiques": "Automatic thresholds", "Revenir aux seuils calculés automatiquement": "Back to the automatically computed thresholds",
     "Réinitialiser": "Reset", "Aucun prétraitement": "No preprocessing",
-    "Faites glisser un trait de l'histogramme pour déplacer la frontière entre deux teintes (les seuils manuels s'activent alors). Le bandeau du bas montre la teinte de chaque plage.": "Drag a line on the histogram to move the boundary between two tones (manual thresholds then turn on). The bottom strip shows each range's tone.",
+    "Faites glisser un trait de l'histogramme pour déplacer la frontière entre deux teintes (les seuils manuels s'activent alors). Sous l'histogramme : la teinte de chaque plage, puis la couleur de la couche qui la peint (son numéro ; S = laissée au support).": "Drag a line on the histogram to move the boundary between two tones (manual thresholds then turn on). Under the histogram: each range's tone, then the colour of the layer painting it (its number; S = left to the support).",
     "Le nombre de teintes a changé : seuils repartis depuis le calcul automatique. Ajustez-les sur l'histogramme.": "The number of tones changed: thresholds restarted from the automatic computation. Adjust them on the histogram.",
     // Sheet & registration
     "Feuille du pochoir & calage": "Stencil sheet & registration",

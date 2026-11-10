@@ -214,7 +214,7 @@
   body.no-reg .regov, body.no-reg .lay .regmark { display: none; }
   body.no-stock .sframe .sf-sheet, body.no-stock .lay .sheetol { display: none; }   /* "Sheet" button */
   .histo { margin: 6px 0 2px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; line-height: 0; }
-  .histo canvas { width: 100%; height: 96px; display: block; touch-action: none; }
+  .histo canvas { width: 100%; height: 112px; display: block; touch-action: none; }
   .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
   .empty { color: var(--muted); text-align: center; padding: 80px 20px; }
   .reco { background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
@@ -577,13 +577,14 @@
       <span class="hint" id="subjInfoSide">Aucun sujet peint.</span>
     </div>
     <label class="full"><input type="checkbox" id="manual_thresholds"> Seuils manuels entre les teintes</label>
-    <div class="histo"><canvas id="histo" width="300" height="96" aria-label="Histogramme de luminance et seuils entre les teintes"></canvas></div>
+    <div class="histo"><canvas id="histo" width="300" height="112" aria-label="Histogramme de luminance et seuils entre les teintes"></canvas></div>
     <div style="display:flex; gap:6px; margin:4px 0">
       <button type="button" id="thrAuto" class="vt-small" title="Revenir aux seuils calculés automatiquement">Seuils automatiques</button>
       <button type="button" id="preReset" class="vt-small" title="Aucun prétraitement">Réinitialiser</button>
     </div>
     <p class="hint" id="thrHint">Faites glisser un trait de l'histogramme pour déplacer la frontière entre deux teintes
-      (les seuils manuels s'activent alors). Le bandeau du bas montre la teinte de chaque plage.</p>
+      (les seuils manuels s'activent alors). Sous l'histogramme : la teinte de chaque plage, puis la couleur de la
+      couche qui la peint (son numéro ; S = laissée au support).</p>
     <input type="hidden" id="thresholds" value="">
   </fieldset>
 
@@ -3063,7 +3064,8 @@ function currentThr() {
   return (val("manual_thresholds") && man.length === LAST.auto_thresholds.length) ? man : LAST.auto_thresholds.slice();
 }
 function drawHisto() {
-  const cv = $("histo"), ctx = cv.getContext("2d"), W = cv.width, H = cv.height, strip = 14;
+  // under the histogram: tone strip (tone of each range) + layer strip (colour of the layer painting it)
+  const cv = $("histo"), ctx = cv.getContext("2d"), W = cv.width, H = cv.height, toneH = 8, layH = 16, strip = toneH + layH;
   ctx.clearRect(0, 0, W, H);
   const css = getComputedStyle(document.body);
   if (!LAST || !LAST.histogram) {
@@ -3071,12 +3073,32 @@ function drawHisto() {
     ctx.fillText(I18N.t("Chargez une image pour voir l'histogramme"), 8, H / 2); return;
   }
   const h = LAST.histogram, bw = W / 100, thr = currentThr(), man = val("manual_thresholds");
-  // strip: tone of each range (darkest range = last palette colour)
+  // range j (dark -> light) = palette tone n-1-j (the palette goes light -> dark)
   const pal = LAST.palette || [], edges = [0, ...thr, 100];
+  const byTone = new Map((LAST.layers || []).filter(L => L.tone != null).map(L => [L.tone, L]));
+  const lum = hex => { const n = parseInt(String(hex).slice(1), 16); return (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; };
+  ctx.font = "bold 10px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   for (let j = 0; j < edges.length - 1; j++) {
-    ctx.fillStyle = pal[pal.length - 1 - j] || `hsl(0,0%,${(edges[j] + edges[j + 1]) / 2}%)`;
-    ctx.fillRect(edges[j] / 100 * W, H - strip, (edges[j + 1] - edges[j]) / 100 * W + 1, strip);
+    const x = edges[j] / 100 * W, w = (edges[j + 1] - edges[j]) / 100 * W, tone = pal.length - 1 - j;
+    ctx.fillStyle = pal[tone] || `hsl(0,0%,${(edges[j] + edges[j + 1]) / 2}%)`;
+    ctx.fillRect(x, H - strip, w + 1, toneH);
+    // layer painting this tone, or the support when the tone is left to it
+    const L = byTone.get(tone), col = L ? L.color : (LAST.base || "#ffffff");
+    ctx.fillStyle = col;
+    ctx.fillRect(x, H - layH, w + 1, layH);
+    if (!L) {   // left to the support: hatched
+      ctx.save(); ctx.beginPath(); ctx.rect(x, H - layH, w, layH); ctx.clip();
+      ctx.strokeStyle = lum(col) > 0.5 ? "rgba(0,0,0,.18)" : "rgba(255,255,255,.25)"; ctx.lineWidth = 1;
+      for (let s = x - layH; s < x + w; s += 5) { ctx.beginPath(); ctx.moveTo(s, H); ctx.lineTo(s + layH, H - layH); ctx.stroke(); }
+      ctx.restore();
+    }
+    if (w >= 12) {
+      ctx.fillStyle = lum(col) > 0.55 ? "#111" : "#fff";
+      ctx.fillText(L ? String(L.index) : "S", x + w / 2, H - layH / 2 + 0.5);
+    }
   }
+  // separation between the two strips and between ranges
+  ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(0, H - layH - 1, W, 1);
   // luminance histogram (dark on the left, light on the right)
   ctx.fillStyle = "rgba(150,160,175,.85)";
   for (let i = 0; i < 100; i++) {

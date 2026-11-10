@@ -410,6 +410,7 @@ def api_process():
         layers.append({
             "index": L.index,
             "color": pl.bgr_hex(L.color),
+            "tone": L.tone,     # tone (index in `palette`) painted by this layer; None for the outline layer
             # layer view without highlights + bridges and removed details as separate overlays
             # (shown / hidden in the browser)
             "image": png_b64(pl.layer_view(res, L, sheet, bridges=False, lost=False, marks=False), 900),
