@@ -123,9 +123,9 @@
   .detlegend i { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin-left: 6px; }
   .maskwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; pointer-events: none; }
   .maskwrap .cropguide { position: absolute; border: 1.5px dashed rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.4); pointer-events: none; }
-  .maskwrap .brush { position: absolute; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7);
+  .stage .brush { position: absolute; z-index: 7; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7);
                      transform: translate(-50%, -50%); pointer-events: none; display: none; }
-  .maskwrap .brush.erase { border-style: dashed; }
+  .stage .brush.erase { border-style: dashed; }
   .maskwrap.select { cursor: crosshair; }
   .maskwrap.select.wait { cursor: progress; }
   .seg { display: inline-flex; }
@@ -139,8 +139,9 @@
   #compareRange { display: block; width: 100%; margin: 6px 0 0; accent-color: var(--accent); }
   /* Zoom of the computed views (preview, comparison, original, layer) */
   .stage { position: relative; }
-  .stage.zoomed { overflow: hidden; cursor: grab; touch-action: none; }
-  .stage.zoomed.panning { cursor: grabbing; }
+  .stage.zoomed { overflow: hidden; touch-action: none; }
+  .stage.dragpan, .stage.spacepan, .stage.spacepan * { cursor: grab !important; }
+  .stage.panning, .stage.panning * { cursor: grabbing !important; }
   .stage.zoomed > :first-child { user-select: none; }
   .stage > .tag { position: absolute; top: 16px; z-index: 6; font: 600 11px/1.4 system-ui, sans-serif; background: rgba(0,0,0,.55);
                   color: #fff; padding: 1px 6px; border-radius: 4px; pointer-events: none; }
@@ -207,6 +208,11 @@
   .stage .lv { max-width: 100%; }
   .stage .lv img { max-width: none; max-height: none; width: 100%; height: 100%; }
   body.no-bridges .lv .ov-bridges, body.no-lost .lv .ov-lost, body.no-merged .lv .ov-merged { display: none; }
+  /* registration marks (vector overlay, "Marks" button) */
+  .regov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 5; }
+  .regov polygon, .regov circle { fill: rgba(255,255,255,.9); stroke: #222; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  body.no-reg .regov, body.no-reg .lay .regmark { display: none; }
+  body.no-stock .sframe .sf-sheet, body.no-stock .lay .sheetol { display: none; }   /* "Sheet" button */
   .histo { margin: 6px 0 2px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; line-height: 0; }
   .histo canvas { width: 100%; height: 96px; display: block; touch-action: none; }
   .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
@@ -544,9 +550,9 @@
       <button type="button" id="layCenter">Centrer</button>
     </div>
     <button type="button" id="layFitStencil" style="width:100%; margin-bottom:6px"
-      title="Agrandit ou réduit l'image au maximum que permet le pochoir : support (feuille autour du support), feuille de taille fixe ou tapis de découpe (feuille ajustée au motif), bordure comprise. Choisit au besoin l'orientation de la feuille ou du tapis qui donne la plus grande image.">Ajuster au mieux dans le pochoir</button>
+      title="Agrandit ou réduit l'image au maximum que permet le pochoir : support (feuille autour du support) ou tapis de découpe (feuille ajustée au motif), bordure comprise. Choisit au besoin l'orientation du tapis qui donne la plus grande image.">Ajuster au mieux dans le pochoir</button>
     <label class="row">Marge intérieure pour « Ajuster » (mm) <input type="number" id="inner_margin_mm" value="10" min="0" max="200" step="1"></label>
-    <p class="hint">Faites glisser l'image dans l'onglet « Mise en page » ; molette = taille.</p>
+    <p class="hint">Faites glisser l'image dans l'onglet « Mise en page » ; poignée en bas à droite = taille.</p>
   </fieldset>
 
   <fieldset>
@@ -587,17 +593,9 @@
     <select id="sheet_mode" style="width:100%">
       <option value="around">Autour du support (support + marge)</option>
       <option value="fit" selected>Dans le support, ajustée au motif (+ bordure)</option>
-      <option value="fixed">Dans le support, taille fixe</option>
     </select>
     <div id="rowMargin"><label class="row">Marge autour du support (mm) <input type="number" id="margin_mm" value="15" min="0" max="80" step="1"></label></div>
     <div id="rowBorder" hidden><label class="row">Bordure autour du motif (mm) <input type="number" id="sheet_border_mm" value="20" min="3" max="200" step="1"></label></div>
-    <div id="rowFixed" hidden>
-      <div style="display:flex; gap:6px; align-items:center">
-        <label class="row" style="flex:1">L <input type="number" id="sheet_w_mm" value="304.8" min="30" max="3000" step="0.1"></label>
-        <label class="row" style="flex:1">H <input type="number" id="sheet_h_mm" value="304.8" min="30" max="3000" step="0.1"></label>
-        <button type="button" id="sheetFromMat" class="vt-small" title="Prendre la taille du tapis de découpe">= tapis</button>
-      </div>
-    </div>
     <div id="rowDims" hidden>
       <label class="full"><input type="checkbox" id="reg_dims" checked> Cotes à la règle pour tracer les croix sur le support</label>
     </div>
@@ -847,9 +845,12 @@
       <button type="button" class="vt-opt" id="optMat" aria-pressed="false"
         title="Tapis de découpe (feuille posée dans son coin) dans toutes les vues, à la même échelle">Tapis</button>
       <button type="button" class="vt-opt" id="optStock" aria-pressed="false"
-        title="Feuille de matière (posée dans le même coin que la feuille du pochoir) dans toutes les vues, à la même échelle">Feuille</button>
+        title="Contour de la feuille du pochoir (pointillés verts) et feuille de matière (posée dans le même coin) dans toutes les vues, à la même échelle">Feuille</button>
       <input type="checkbox" id="show_support" checked hidden>
+      <button type="button" class="vt-opt" id="optReg" aria-pressed="true"
+        title="Repères de calage (croix, équerres ou trous) et encoches du numéro de couche, dans toutes les vues">Repères</button>
       <input type="checkbox" id="show_stock" hidden>
+      <input type="checkbox" id="show_reg" checked hidden>
       <input type="checkbox" id="show_mat" hidden>
     </span>
     <button type="button" class="vt-opt vt-pre" id="optPre" aria-pressed="true" hidden
@@ -860,7 +861,7 @@
     <label class="vt-sim vt-layers"><input type="checkbox" id="preview_sim"> Rendu simulé <span class="hint">(flou de l'aérographe)</span></label>
     <span class="vt-zoom" id="zoomTools" role="group" aria-label="Zoom" hidden>
       <button type="button" id="zoomOut" title="Zoom arrière (molette vers le bas)" aria-label="Zoom arrière">−</button>
-      <button type="button" id="zoomLevel" title="Ajuster à la vue (double-clic sur l'image)">100 %</button>
+      <button type="button" id="zoomLevel" title="Ajuster à la vue (double-clic sur l'image). Zoomé : glisser (Cadrage, Mise en page, Masques : bouton du milieu ou Espace + glisser) pour se déplacer">100 %</button>
       <button type="button" id="zoomIn" title="Zoom avant (molette vers le haut)" aria-label="Zoom avant">+</button>
     </span>
   </div>
@@ -921,7 +922,7 @@ let SID = null, MATS = {}, LAST = null, VIEW = "preview", SEL = null, timer = nu
 
 const MAT_FIELDS = ["min_opening_mm", "min_strip_mm", "bridge_width_mm", "min_area_mm2", "double_bridge_area_mm2", "min_bridges", "bridges"];
 const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_mm",
-  "image_scale", "image_height_factor", "image_pos_x", "image_pos_y", "margin_mm", "sheet_mode", "sheet_border_mm", "sheet_w_mm", "sheet_h_mm", "reg_dims", "machine_max_mm", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline",
+  "image_scale", "image_height_factor", "image_pos_x", "image_pos_y", "margin_mm", "sheet_mode", "sheet_border_mm", "reg_dims", "machine_max_mm", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline",
   "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds", "pre_saturation", "pre_sharpen", "pre_remove_bg",
   "layer_colors",
   "n_layers", "detail", "color_mode", "layering", "skip_support", "protect_lines",
@@ -977,15 +978,15 @@ function sheetRectMM(L = layoutCalc()) {
   const mode = $("sheet_mode").value;
   if (mode === "around") { const m = val("margin_mm"); return { x0: -m, y0: -m, x1: L.SW + m, y1: L.SH + m }; }
   const vx0 = Math.max(0, L.x), vy0 = Math.max(0, L.y), vx1 = Math.min(L.SW, L.x + L.w), vy1 = Math.min(L.SH, L.y + L.h);
-  if (mode === "fit") { const b = Math.max(3, val("sheet_border_mm")); return { x0: vx0 - b, y0: vy0 - b, x1: vx1 + b, y1: vy1 + b }; }
-  const cx = (vx0 + vx1) / 2, cy = (vy0 + vy1) / 2, w = val("sheet_w_mm"), h = val("sheet_h_mm");
-  return { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
+  const b = Math.max(3, val("sheet_border_mm"));
+  return { x0: vx0 - b, y0: vy0 - b, x1: vx1 + b, y1: vy1 + b };
 }
 function syncSheetMode() {
+  // old settings / projects with the removed "fixed size" mode: sheet fitted to the design
+  if (![...$("sheet_mode").options].some(o => o.value === $("sheet_mode").value)) $("sheet_mode").value = "fit";
   const mode = $("sheet_mode").value, inside = mode !== "around";
   $("rowMargin").hidden = inside;
   $("rowBorder").hidden = !inside;
-  $("rowFixed").hidden = mode !== "fixed";
   $("rowDims").hidden = !inside;
   // L-brackets aim at the support corners: impossible when the sheet is laid inside it
   const eq = $("reg_shape").querySelector('option[value="equerre"]');
@@ -1147,7 +1148,23 @@ function cropChanged() { cropInfo(); syncWidth(); if (editorFollowsLayout()) ren
 // All views then share the same frame in mm (support in the middle, stencil sheet dashed,
 // whole source image placed according to crop and layout), at the same scale.
 // Common frame (same scale everywhere): requested by the support OR the mat option
-function showSup() { return $("show_support").checked || $("show_mat").checked || $("show_stock").checked; }
+function showSup() { return $("show_support").checked || $("show_mat").checked || $("show_stock").checked || $("show_reg").checked; }
+// Registration shapes (sheet coordinates of the last computation, mm) as an SVG overlay.
+// viewBox = area covered by the element in mm; (dx, dy) = shift from sheet to viewBox coordinates.
+function regSVG(shapes, vb, dx = 0, dy = 0, style = "") {
+  if (!shapes || !shapes.length) return "";
+  const f = v => (Math.round(v * 100) / 100);
+  const body = shapes.map(s => s.type === "poly"
+    ? `<polygon points="${s.pts.map(([x, y]) => `${f(x + dx)},${f(y + dy)}`).join(" ")}"/>`
+    : `<circle cx="${f(s.cx + dx)}" cy="${f(s.cy + dy)}" r="${s.r}"/>`).join("");
+  return `<svg class="regov" viewBox="${vb.map(f).join(" ")}" preserveAspectRatio="none" style="${style}" aria-hidden="true">${body}</svg>`;
+}
+// Marks of the last computation in a support frame (px = mm -> px of the frame)
+function frameRegSVG(px, py, k, W, H) {
+  if (!LAST || !LAST.reg) return "";
+  const [sx, sy] = LAST.sheet_rect_mm;
+  return regSVG(LAST.reg, [-px(0) / k, -py(0) / k, W / k, H / k], sx, sy, `width:${W}px;height:${H}px`);
+}
 function showMatAll() { return $("show_mat").checked && !!cutMat(); }
 function showStockAll() { return $("show_stock").checked && !!stockSheet(); }
 // Editors whose display depends on crop / layout / support
@@ -1192,6 +1209,7 @@ function supportFrame(st) {
       `<span>${mat.label}${over ? " — la feuille dépasse !" : ""}</span></div>`;
   }
   w.stockEdge = showStockAll() ? stockEdgeHTML(sr, box) : "";
+  w.regOv = SEL === null ? frameRegSVG(w.px, w.py, k, w.W, w.H) : "";
   w.frame = fr;
   w.place = (el, x, y, bw, bh) => {
     el.classList.add("sf-item");
@@ -1201,7 +1219,7 @@ function supportFrame(st) {
   // support outline above everything (guide, does not catch the mouse)
   // the support is only drawn when "Support" is on (the mat alone may request the frame)
   w.edge = () => fr.insertAdjacentHTML("beforeend", ($("show_support").checked
-    ? `<div class="sf-edge" title="Bord du support" style="${box(0, 0, L.SW, L.SH)}"></div>` : "") + (w.matEdge || "") + w.stockEdge);
+    ? `<div class="sf-edge" title="Bord du support" style="${box(0, 0, L.SW, L.SH)}"></div>` : "") + (w.matEdge || "") + w.stockEdge + w.regOv);
   return w;
 }
 // Material sheet outline (laid in the stencil sheet's corner), dashed orange when the stencil overflows
@@ -1234,9 +1252,19 @@ function frameView(st) {
   st.replaceChildren(w.frame);
 }
 
+// Crop in source pixels, rounded exactly as the server does (pipeline.crop_rect): the aspect ratio
+// (hence the image size in mm) must be the same on both sides, or a stencil fitted to the mat in the
+// browser can come out a few hundredths of a mm too large on the server.
+function cropPx() {
+  const r = v => { const f = Math.floor(v), d = v - f; return d > 0.5 || (d === 0.5 && f % 2) ? f + 1 : f; };  // Python round()
+  const x0 = r(CROP.x * IMG.w), y0 = r(CROP.y * IMG.h);
+  const x1 = Math.max(x0 + 2, Math.min(IMG.w, r((CROP.x + CROP.w) * IMG.w)));
+  const y1 = Math.max(y0 + 2, Math.min(IMG.h, r((CROP.y + CROP.h) * IMG.h)));
+  return { w: x1 - x0, h: y1 - y0 };
+}
 function layoutCalc() {
   const SW = val("support_w_mm"), SH = val("support_h_mm"), im = val("inner_margin_mm");
-  const ar = IMG ? (CROP.h * IMG.h) / (CROP.w * IMG.w) : 1;
+  const ar = IMG ? (c => c.h / c.w)(cropPx()) : 1;
   const fitW = Math.min(Math.max(5, SW - 2 * im), Math.max(5, SH - 2 * im) / ar);
   const hf = parseFloat($("image_height_factor").value) || 1;
   const w = fitW * val("image_scale") / 100, h = w * ar * hf;
@@ -1273,29 +1301,26 @@ function alignTo(hx, vy) {
 }
 // Largest possible image in the stencil, depending on the sheet mode:
 //  around the support -> the support (inner margin included);
-//  fixed size        -> the sheet minus its border;
-//  fitted to design  -> the mat (or the cutting width without a mat) minus the border.
-// In the last two cases, the orientation (sheet or mat) giving the largest image is chosen,
-// and the image stays entirely on the support.
+//  fitted to design  -> the mat (or the cutting width without a mat) minus the border;
+//                       the mat orientation giving the largest image is chosen, and the image
+//                       stays entirely on the support.
 function fitToStencil() {
   if (!IMG) return status("Chargez d'abord une image", true);
   const L = layoutCalc(), mode = $("sheet_mode").value, k = L.ar * L.hf;   // height = width × k
   const b = Math.max(3, val("sheet_border_mm"));
   const widthIn = (TW, TH) => Math.max(5, Math.min(TW, TH / k));
+  // largest scale on the slider step (0.01 %) whose width does not exceed w: never too large,
+  // and exactly 100 % when the image fills the "fitted" size
+  const scaleFor = w => Math.floor(w / L.fitW * 1e4 + 1e-6) / 100;
   if (mode === "around") {
     const w = widthIn(L.SW - 2 * L.im, L.SH - 2 * L.im);
-    setLayout(w / L.fitW * 100, 50, 50);
+    setLayout(scaleFor(w), 50, 50);
     return status(`Image ajustée au support : ${Math.round(w)} × ${Math.round(w * k)} mm`);
   }
   let boxes, what;
-  if (mode === "fixed") {
-    const sw = val("sheet_w_mm"), sh = val("sheet_h_mm");
-    boxes = [[sw, sh, false], [sh, sw, true]]; what = "à la feuille";
-  } else {
-    const mat = cutMat();
-    if (mat) { boxes = [[mat.w, mat.h, false], [mat.h, mat.w, true]]; what = "au tapis"; }
-    else { const mw = val("machine_max_mm"); boxes = [[mw, 1e5, false], [1e5, mw, true]]; what = "à la largeur de coupe"; }
-  }
+  const mat = cutMat();
+  if (mat) { boxes = [[mat.w, mat.h, false], [mat.h, mat.w, true]]; what = "au tapis"; }
+  else { const mw = val("machine_max_mm"); boxes = [[mw, 1e5, false], [1e5, mw, true]]; what = "à la largeur de coupe"; }
   let best = null;
   for (const [BW, BH, swap] of boxes) {
     // the sheet (image + border) must also stay on the support
@@ -1304,23 +1329,21 @@ function fitToStencil() {
   }
   let turned = "";
   if (best.swap) {
-    if (mode === "fixed") {
-      const sw = $("sheet_w_mm").value; $("sheet_w_mm").value = $("sheet_h_mm").value; $("sheet_h_mm").value = sw;
-      turned = " (feuille tournée d'un quart de tour)";
-    } else if (cutMat()) {
+    if (mat) {
       $("mat_orient").value = $("mat_orient").value === "landscape" ? "portrait" : "landscape";
       turned = ` (tapis passé en ${$("mat_orient").value === "landscape" ? "paysage" : "portrait"})`;
     }
     syncSheetMode(); syncMat();
   }
-  const w = Math.max(5, best.w - 0.2), h = w * k;     // 0.2 mm slack: rounding of the scale must not crop
+  const scale = scaleFor(best.w), w = scale * L.fitW / 100, h = w * k;
   // keep the current centre, moved so that the image fits entirely on the support
   const cx = clamp(L.x + L.w / 2, w / 2 + b, L.SW - w / 2 - b), cy = clamp(L.y + L.h / 2, h / 2 + b, L.SH - h / 2 - b);
-  setLayout(w / L.fitW * 100, cx / L.SW * 100, cy / L.SH * 100);
+  setLayout(scale, cx / L.SW * 100, cy / L.SH * 100);
   status(`Image ajustée ${what}, bordure comprise : ${Math.round(w)} × ${Math.round(h)} mm${turned}`);
 }
 function setLayout(scale, px, py) {
-  if (scale != null) $("image_scale").value = Math.ceil(clamp(scale, 5, 500) * 100) / 100;
+  // rounded up to the slider step (0.01 %), ignoring floating-point noise (87.53 must stay 87.53)
+  if (scale != null) $("image_scale").value = Math.ceil(clamp(scale, 5, 500) * 100 - 1e-6) / 100;
   if (px != null) $("image_pos_x").value = clamp(px, -50, 150);
   if (py != null) $("image_pos_y").value = clamp(py, -50, 150);
   showValues(); syncWidth();
@@ -1403,6 +1426,7 @@ function layoutEditor(st) {
   // stencil sheet (above the support when laid inside it) + dimensioned crosses of the last computation
   mattop += `<div class="sheetol" title="Feuille du pochoir" style="left:${ox + sr.x0 * k}px;top:${oy + sr.y0 * k}px;width:${(sr.x1 - sr.x0) * k}px;height:${(sr.y1 - sr.y0) * k}px"></div>`;
   const pos = LAST && LAST.positioning;
+  mattop += frameRegSVG(x => ox + x * k, y => oy + y * k, k, totW * k, totH * k);
   if (sheetInside() && pos && pos.mode !== "around" && val("reg_dims")) {
     pos.reperes.forEach(r => {
       const left = r.coin.endsWith("gauche");
@@ -1443,12 +1467,14 @@ function layoutEditor(st) {
     if (!isRz && !e.target.classList.contains("pic")) return;
     e.preventDefault();
     DRAGGING = true;
-    drag = { rz: isRz, sx: e.clientX, sy: e.clientY, px: val("image_pos_x"), py: val("image_pos_y"), L: layoutCalc() };
+    // px per mm on screen (zoom included)
+    const ks = k * lay.getBoundingClientRect().width / lay.offsetWidth;
+    drag = { rz: isRz, sx: e.clientX, sy: e.clientY, px: val("image_pos_x"), py: val("image_pos_y"), L: layoutCalc(), ks };
     lay.setPointerCapture(e.pointerId);
   };
   lay.onpointermove = e => {
     if (!drag) return;
-    const dx = (e.clientX - drag.sx) / k, dy = (e.clientY - drag.sy) / k, L = drag.L;
+    const dx = (e.clientX - drag.sx) / drag.ks, dy = (e.clientY - drag.sy) / drag.ks, L = drag.L;
     if (drag.rz) {
       // top-left corner fixed
       const w = Math.max(5, L.w + dx);
@@ -1468,7 +1494,6 @@ function layoutEditor(st) {
     showValues(); syncWidth(); paint();
   };
   lay.onpointerup = lay.onpointercancel = () => { DRAGGING = false; if (drag) { drag = null; syncWidth(); schedule(); } };
-  lay.onwheel = e => { e.preventDefault(); setLayout(val("image_scale") * (e.deltaY < 0 ? 1.05 : 1 / 1.05)); };
 }
 const CUT_FIELDS = ["blade", "force", "speed", "passes", "notes"];
 function material() {
@@ -1483,7 +1508,7 @@ function material() {
 // ---------------- Saved presets (presets_utilisateur.json file on the server) ----------------
 let UP = { support: {}, material: {}, sheet: {} };
 const SUPPORT_FIELDS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_mm",
-  "margin_mm", "sheet_mode", "sheet_border_mm", "sheet_w_mm", "sheet_h_mm", "reg_dims", "mat_preset", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline"];
+  "margin_mm", "sheet_mode", "sheet_border_mm", "reg_dims", "mat_preset", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline"];
 function setVals(o) {
   for (const [k, v] of Object.entries(o || {})) {
     const e = $(k); if (!e) continue;
@@ -1630,7 +1655,7 @@ function rememberSettings() {
     const s = {};
     PARAMS.filter(k => !NOT_REMEMBERED.has(k)).forEach(k => s[k] = val(k));
     CUT_FIELDS.forEach(f => s["cut_" + f] = $("cut_" + f).value);
-    ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "auto_calc", "show_stock", "stock_preset", "stock_orient", "stock_w_mm", "stock_h_mm"].forEach(k => s[k] = val(k));
+    ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "auto_calc", "show_stock", "show_reg", "stock_preset", "stock_orient", "stock_w_mm", "stock_h_mm"].forEach(k => s[k] = val(k));
     s.sens_scale = 2;
     localStorage.setItem(LS_KEY, JSON.stringify(s));
   } catch (e) { /* storage unavailable: ignored */ }
@@ -1808,11 +1833,9 @@ const TIPS = {
   pre_remove_bg: "Le fond détouré (masque Sujet) reste support nu : aucun pochoir n'y est découpé.",
   paintSubject: "Ouvre l'onglet Masques sur le masque Sujet : peignez grossièrement le sujet à garder.",
   manual_thresholds: "Chaque teinte devient une plage de luminance que vous réglez en glissant les traits de l'histogramme.",
-  sheet_mode: "Feuille autour du support (calage sur ses angles) ou posée dans le support (ajustée au motif ou de taille fixe, calage par croix et cotes).",
+  sheet_mode: "Feuille autour du support (calage sur ses angles) ou posée dans le support (ajustée au motif, calage par croix et cotes).",
   margin_mm: "Marge de la feuille autour du support : elle porte les repères de calage et le numéro de couche.",
   sheet_border_mm: "Bordure de matière autour du motif (feuille dans le support) : elle protège le support et porte les croix.",
-  sheet_w_mm: "Largeur de la feuille de taille fixe, en mm.",
-  sheet_h_mm: "Hauteur de la feuille de taille fixe, en mm.",
   reg_dims: "Affiche les cotes à la règle pour tracer les croix de calage sur le support (feuille posée dans le support).",
   machine: "Machine de découpe : fixe la largeur de coupe et les tapis utilisables.",
   stock_preset: "Format de la feuille de matière dans laquelle le pochoir est découpé : sert uniquement à vérifier que le pochoir y tient en entier (il ne change pas le pochoir).",
@@ -2064,20 +2087,16 @@ async function init() {
   $("lgLost").onclick = () => { setOverlay("lgLost", "no-lost", $("lgLost").getAttribute("aria-pressed") !== "true"); saveOverlays(); };
   $("lgMerged").onclick = () => { setOverlay("lgMerged", "no-merged", $("lgMerged").getAttribute("aria-pressed") !== "true"); saveOverlays(); };
   $("optPre").onclick = () => { SHOW_PRE = !SHOW_PRE; render(); };
-  [["optSupport", "show_support"], ["optMat", "show_mat"], ["optStock", "show_stock"]].forEach(([b, c]) => $(b).onclick = () => {
+  $("show_reg").addEventListener("change", () => { render(); rememberSettings(); });
+  [["optSupport", "show_support"], ["optMat", "show_mat"], ["optStock", "show_stock"], ["optReg", "show_reg"]].forEach(([b, c]) => $(b).onclick = () => {
     $(c).checked = !$(c).checked;
     $(c).dispatchEvent(new Event("change"));
   });
   $("machine_max_mm").addEventListener("input", syncMat);
   const sheetChanged = () => { syncSheetMode(); syncMat(); if (VIEW === "layout" || (showSup() && editorFollowsLayout())) render(); schedule(); };
   $("sheet_mode").addEventListener("change", sheetChanged);
-  ["sheet_border_mm", "sheet_w_mm", "sheet_h_mm"].forEach(k => $(k).addEventListener("input", sheetChanged));
+  $("sheet_border_mm").addEventListener("input", sheetChanged);
   $("reg_dims").addEventListener("change", () => { renderCalage(); if (VIEW === "layout") render(); schedule(); });
-  $("sheetFromMat").onclick = () => {
-    const mat = cutMat();
-    if (!mat) return status("Choisissez d'abord un tapis de découpe", true);
-    $("sheet_w_mm").value = mat.w; $("sheet_h_mm").value = mat.h; sheetChanged();
-  };
   syncSheetMode();
   ["mat_w_mm", "mat_h_mm"].forEach(k => $(k).addEventListener("input", () => { syncMat(); if (VIEW === "layout") render(); schedule(); }));
   ["support_w_mm", "support_h_mm", "margin_mm", "support_preset", "orientation"].forEach(k => $(k).addEventListener("change", syncMat));
@@ -2241,7 +2260,7 @@ function setSession(j, name) {
 // ("projet" key), with the original image and the mask. "Open a project" reads the zip back
 // (everything is restored) or only the .json (settings; the image is asked for next).
 const UI_EXTRA = ["material", "support_preset", "orientation", "crop_ratio", "keep_ratio", "align_margin_mm",
-  "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "show_stock", "stock_preset", "stock_orient", "stock_w_mm", "stock_h_mm"];
+  "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "show_stock", "show_reg", "stock_preset", "stock_orient", "stock_w_mm", "stock_h_mm"];
 let PENDING_PROJECT = null;
 function uiState() {
   const values = {};
@@ -2460,7 +2479,7 @@ function setMaskTool(t) {
   $("mErase").setAttribute("aria-pressed", String(t === "erase"));
   $("mSelect").setAttribute("aria-pressed", String(t === "select"));
   const w = document.querySelector("#stage .maskwrap");
-  if (w) { w.classList.toggle("select", t === "select"); const b = w.querySelector(".brush"); if (b && t === "select") b.style.display = "none"; }
+  if (w) { w.classList.toggle("select", t === "select"); const b = $("stage").querySelector(".brush"); if (b && t === "select") b.style.display = "none"; }
   if (t === "select") semanticPrepare();
 }
 function maskIsEmpty(c = MASK) {
@@ -2655,6 +2674,7 @@ function maskEditor(st) {
   frameSource(st, wrap);
   detectPreview();
   const brush = wrap.querySelector(".brush"), ctx = CV.getContext("2d");
+  st.append(brush);    // outside the zoomed content: same screen size whatever the zoom
   let last = null;
   const toMask = e => {
     const r = wrap.getBoundingClientRect();
@@ -2663,8 +2683,9 @@ function maskEditor(st) {
   };
   const moveBrush = e => {
     if (MASK_TOOL === "select") { brush.style.display = "none"; return; }
-    const q = toMask(e), size = val("mSize");
-    Object.assign(brush.style, { display: "block", left: q.sx + "px", top: q.sy + "px", width: size + "px", height: size + "px" });
+    const size = val("mSize"), sr = st.getBoundingClientRect();
+    Object.assign(brush.style, { display: "block", left: e.clientX - sr.left - st.clientLeft + "px",
+      top: e.clientY - sr.top - st.clientTop + "px", width: size + "px", height: size + "px" });
     brush.classList.toggle("erase", MASK_TOOL === "erase");
   };
   const paint = q => {
@@ -2774,15 +2795,18 @@ async function renderPreview(st) {
   applyZoom();
 }
 
-// ---------------- Zoom of the computed views ----------------
-// Wheel = zoom around the cursor, drag = move, double-click or the "%" button = fit to the view.
-// The zoom is a CSS transform of the displayed content (support frame and overlays included), so
-// it is kept across recomputations and between the views, which share the same scale.
+// ---------------- Zoom of every view ----------------
+// Wheel = zoom around the cursor, in every view. Moving the zoomed view: left drag in the computed
+// views (preview, comparison, original, layer); middle-button drag or Space + drag everywhere (in
+// Crop / Layout / Masks the left button edits). Double-click (except in Masks) or the "%" button =
+// fit to the view. The zoom is a CSS transform of the displayed content (support frame and overlays
+// included), kept across recomputations and between the views.
 const ZOOM = { z: 1, tx: 0, ty: 0, MAX: 16 };
-function zoomable() { return !!LAST && (SEL !== null || VIEW === "preview" || VIEW === "compare" || VIEW === "reference"); }
+function editorView() { return SEL === null && (VIEW === "crop" || VIEW === "layout" || VIEW === "mask"); }
+function zoomable() { return editorView() ? !!IMG : !!LAST; }
 function zoomTarget() {
   const el = $("stage").firstElementChild;
-  return zoomable() && el && !el.classList.contains("empty") && !el.classList.contains("tag") ? el : null;
+  return zoomable() && el && !el.classList.contains("empty") && !el.classList.contains("tag") && !el.classList.contains("brush") ? el : null;
 }
 function clampPan() {
   const el = zoomTarget();
@@ -2799,6 +2823,7 @@ function applyZoom() {
   el.style.transformOrigin = "50% 50%";
   el.style.transform = ZOOM.z > 1 ? `translate(${ZOOM.tx}px, ${ZOOM.ty}px) scale(${ZOOM.z})` : "";
   st.classList.toggle("zoomed", ZOOM.z > 1);
+  st.classList.toggle("dragpan", ZOOM.z > 1 && !editorView());
   st.style.setProperty("--zoom", ZOOM.z);
   $("zoomLevel").textContent = `${Math.round(ZOOM.z * 100)} %`;
   $("zoomOut").disabled = ZOOM.z <= 1;
@@ -2825,13 +2850,25 @@ function setupZoom() {
     e.preventDefault();
     zoomTo(ZOOM.z * Math.pow(1.0015, -e.deltaY * (e.deltaMode === 1 ? 33 : 1)), e.clientX, e.clientY);
   }, { passive: false });
-  let pan = null;
+  let pan = null, space = false, over = false;
+  st.addEventListener("pointerenter", () => { over = true; });
+  st.addEventListener("pointerleave", () => { over = false; });
+  const typing = () => { const a = document.activeElement; return a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "range" && a.type !== "checkbox"); };
+  document.addEventListener("keydown", e => {
+    if (e.code !== "Space" || !over || typing() || ZOOM.z <= 1) return;
+    e.preventDefault();                         // no page scroll
+    if (!space) { space = true; st.classList.add("spacepan"); }
+  });
+  document.addEventListener("keyup", e => { if (e.code === "Space") { space = false; st.classList.remove("spacepan"); } });
+  // capture phase: the pan takes over before the editors' own handlers
   st.addEventListener("pointerdown", e => {
-    if (e.button !== 0 || ZOOM.z <= 1 || !zoomTarget()) return;
+    if (ZOOM.z <= 1 || !zoomTarget()) return;
+    const ok = e.button === 1 || (e.button === 0 && (space || !editorView()));
+    if (!ok) return;
     pan = { x: e.clientX - ZOOM.tx, y: e.clientY - ZOOM.ty, id: e.pointerId };
     st.setPointerCapture(e.pointerId); st.classList.add("panning");
-    e.preventDefault();
-  });
+    e.preventDefault(); e.stopPropagation();
+  }, true);
   st.addEventListener("pointermove", e => {
     if (!pan || e.pointerId !== pan.id) return;
     ZOOM.tx = e.clientX - pan.x; ZOOM.ty = e.clientY - pan.y;
@@ -2839,7 +2876,12 @@ function setupZoom() {
   });
   const end = () => { pan = null; st.classList.remove("panning"); };
   st.addEventListener("pointerup", end); st.addEventListener("pointercancel", end);
-  st.addEventListener("dblclick", e => { if (zoomTarget()) { e.preventDefault(); ZOOM.z = 1; applyZoom(); } });
+  st.addEventListener("auxclick", e => { if (e.button === 1) e.preventDefault(); });   // no middle-click autoscroll / paste
+  st.addEventListener("mousedown", e => { if (e.button === 1 && zoomTarget()) e.preventDefault(); });
+  // double-click = fit, except in Masks (a quick double stroke of the brush must not unzoom)
+  st.addEventListener("dblclick", e => {
+    if (zoomTarget() && !(SEL === null && VIEW === "mask")) { e.preventDefault(); ZOOM.z = 1; applyZoom(); }
+  });
   $("zoomIn").onclick = () => zoomTo(ZOOM.z * 1.5);
   $("zoomOut").onclick = () => zoomTo(ZOOM.z / 1.5);
   $("zoomLevel").onclick = () => { ZOOM.z = 1; applyZoom(); };
@@ -2875,6 +2917,9 @@ function renderToolbar() {
   $("optPre").setAttribute("aria-pressed", String(SHOW_PRE));
   $("optMat").setAttribute("aria-pressed", String($("show_mat").checked));
   $("optStock").setAttribute("aria-pressed", String($("show_stock").checked));
+  $("optReg").setAttribute("aria-pressed", String($("show_reg").checked));
+  document.body.classList.toggle("no-reg", !$("show_reg").checked);
+  document.body.classList.toggle("no-stock", !$("show_stock").checked);
   if (!LAST) return;
   // forget layers that no longer exist
   [...HIDDEN].forEach(i => { if (!LAST.layers.some(L => L.index === i)) HIDDEN.delete(i); });
@@ -2908,12 +2953,13 @@ function render() {
   $("masktools").hidden = !(IMG && SEL === null && VIEW === "mask");
   renderToolbar();
   const editor = SEL === null && (VIEW === "crop" || VIEW === "layout" || VIEW === "mask");
-  if (editor || !LAST) applyZoom();     // editors keep their own mouse gestures: no zoom
   if (editor) {
     if (IMG && !DRAGGING) { st.style.minHeight = ""; st.style.alignItems = "";
       (VIEW === "crop" ? cropEditor : VIEW === "layout" ? layoutEditor : maskEditor)(st); }
+    applyZoom();
     if (!LAST) return;
   } else if (!LAST) {
+    applyZoom();
     return;
   } else if (SEL !== null) {
     const L = LAST.layers[SEL];
@@ -3002,7 +3048,8 @@ function layerStack(L, attrs = "") {
   return `<div class="lv" ${attrs}><img src="${L.image}" alt="Pochoir ${L.index}">` +
     (L.img_lost ? `<img class="ov ov-lost" src="${L.img_lost}" alt="">` : "") +
     (L.img_merged ? `<img class="ov ov-merged" src="${L.img_merged}" alt="">` : "") +
-    (L.img_bridges ? `<img class="ov ov-bridges" src="${L.img_bridges}" alt="">` : "") + `</div>`;
+    (L.img_bridges ? `<img class="ov ov-bridges" src="${L.img_bridges}" alt="">` : "") +
+    (LAST && L.reg ? regSVG(L.reg, [0, 0, LAST.sheet_mm[0], LAST.sheet_mm[1]]) : "") + `</div>`;
 }
 function setOverlay(btn, cls, on) {
   $(btn).setAttribute("aria-pressed", String(on));

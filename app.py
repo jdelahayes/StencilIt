@@ -412,14 +412,16 @@ def api_process():
             "color": pl.bgr_hex(L.color),
             # layer view without highlights + bridges and removed details as separate overlays
             # (shown / hidden in the browser)
-            "image": png_b64(pl.layer_view(res, L, sheet, bridges=False, lost=False), 900),
+            "image": png_b64(pl.layer_view(res, L, sheet, bridges=False, lost=False, marks=False), 900),
+            # registration marks + layer-number notches (sheet coordinates, mm), drawn by the browser
+            "reg": pl.reg_shapes_json(pl.registration_shapes(res, L.index)[0]),
             **{k: (png_b64(o, 900) if k != "img_merged" or L.n_merged else None)
                for k, o in zip(("img_bridges", "img_lost", "img_merged"), pl.layer_overlays(res, L))},
             "mask_flat": rgba_b64(L.color, to_preview(mask)),
             "mask_sim": rgba_b64(L.color, to_preview(cv2.GaussianBlur(mask, (0, 0), sig) * 0.97)),
             **pl.layer_stats(L),
         })
-    _, reg_warn = pl.registration_shapes(res)
+    reg_shapes, reg_warn = pl.registration_shapes(res)
     # Original placed on the support, to compare at scale (raw and preprocessed)
     H, W = res.prepared.labels.shape
     ix, iy = res.prepared.off_px
@@ -452,6 +454,7 @@ def api_process():
         sheet_mm=[round(v, 1) for v in res.sheet_mm],
         sheet_rect_mm=[round(v, 2) for v in res.sheet_rect_mm],
         positioning=pl.positioning(res),
+        reg=pl.reg_shapes_json(reg_shapes),
         support_mm=[round(v, 1) for v in res.support_mm],
         image_mm=[round(v, 1) for v in lay.img_mm],
         visible_mm=[round(lay.vis_mm[2] - lay.vis_mm[0], 1), round(lay.vis_mm[3] - lay.vis_mm[1], 1)],

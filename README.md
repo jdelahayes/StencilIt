@@ -112,7 +112,7 @@ Open the SVG files of the zip in Silhouette Studio, cut, and spray layer 1, 2, 3
 ├────────────────────┬────────────────────────────────────────────┬────────────────────┤
 │ Image box          │ Crop | Layout | Masks | Preview |          │ Stencils           │
 │ Open a project…    │ Compare with original | Original    1 2 3  │ palette menu       │
-│ Default settings   │ Support  Mat  Sheet                        │ legend             │
+│ Default settings   │ Support  Mat  Sheet  Marks                 │ legend             │
 │ Settings sections  │                                            │ one card per layer │
 │  (accordion)       │            main view                       │  (click = enlarge) │
 │ Export button      │ summary: sizes, ΔE, bridges, cut length    │                    │
@@ -122,11 +122,13 @@ Open the SVG files of the zip in Silhouette Studio, cut, and spray layer 1, 2, 3
 - **Left column – settings**, grouped in sections. Each closed section shows a summary of its
   values. Hover any setting to get a tooltip explaining it.
 - **Centre – the views** (tabs) and, above the view, the layer buttons **1 2 3 …** to hide/show
-  layers, plus the **Support**, **Mat** and **Sheet** buttons to show the support, the cutting mat and
-  the material sheet in every view.
-  In the computed views (Preview, Compare, Original, a single layer) the **mouse wheel zooms** around
-  the cursor, **dragging moves** the zoomed image and a **double-click** (or the *%* button) fits it
-  back; the zoom is kept when you switch between these views.
+  layers, plus the **Support**, **Mat**, **Sheet** and **Marks** buttons to show the support, the
+  cutting mat, the material sheet and the registration marks in every view.
+  In every view the **mouse wheel zooms** around the cursor. To move the zoomed image, drag it in the
+  computed views (Preview, Compare, Original, a single layer); in Crop, Layout and Masks, where the
+  left button edits, drag with the **middle button** or hold **Space** while dragging. A
+  **double-click** (except in Masks) or the *%* button fits it back; the zoom is kept when you
+  switch views.
 - **Right column – the stencils**: one card per layer with its colour, statistics (paths, nodes,
   islands, bridges, cut length) and warnings. Click a card to see that layer alone in the main view.
 - Both side columns can be **resized** by dragging their inner edge (double-click = default width).
@@ -169,7 +171,7 @@ ratio can be free, the support's, or fixed (1:1, 4:3, 3:4, 16:9, 9:16).
 
 **Layout** tab – place the image on the support:
 
-- drag the image to move it, **mouse wheel** to resize it, the bottom-right handle to resize it
+- drag the image to move it, the bottom-right handle to resize it
   (hold **Shift** for free proportions);
 - buttons **Fit / Fill / Centre**, or type the size in mm or in % of "fitted to the support";
 - **alignment** on 9 positions (corners, edge middles, centre) at a chosen distance from the edge;
@@ -281,7 +283,6 @@ Choose how the stencil sheet relates to the support:
 |---|---|---|
 | **Around the support** (support + margin) | Small supports (paper, small canvas): the sheet is larger than the support. | **Corner brackets** cut around the corners of the support – lay each corner of the support into its bracket. Or crosses / holes in the margin. |
 | **Inside the support, fitted to the design** (+ border) – default | Large surfaces (big canvas, wall, furniture): the sheet only covers the design. | **Crosses** in the border, with **ruler measurements** telling where to pencil each cross on the support. |
-| **Inside the support, fixed size** | Same, with a sheet of a given size (the **= mat** button uses the mat size). | Same as above. |
 
 - **Registration marks** on **3 corners** (the empty bottom-right corner prevents putting a sheet
   upside down) or **4 corners**; shape: brackets, crosses or round holes (for registration pins).

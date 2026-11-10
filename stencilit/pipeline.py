@@ -87,12 +87,10 @@ class Params:
     # Stencil sheet:
     #   around = support + margin all around (registered on the support corners)
     #   fit    = inside the support, fitted to the design + border (registered on crosses drawn on the support)
-    #   fixed  = inside the support, fixed size centred on the design
+    #   (the former "fixed" mode - fixed size centred on the design - is read as "fit")
     sheet_mode: str = "fit"
     margin_mm: float = 15.0
     sheet_border_mm: float = 20.0
-    sheet_w_mm: float = 304.8
-    sheet_h_mm: float = 304.8
     reg_dims: bool = True          # ruler dimensions of the crosses (sheet inside the support)
     sheet_outline: bool = True
     machine_max_mm: float = 305.0  # usable cutting width of the machine
@@ -135,12 +133,10 @@ class Params:
         p.image_pos_y = float(np.clip(p.image_pos_y, -100, 200))
         p.min_bridges = int(np.clip(p.min_bridges, 1, 4))
         p.reg_corners = p.reg_corners if p.reg_corners in (0, 3, 4) else 4
-        p.sheet_mode = p.sheet_mode if p.sheet_mode in ("around", "fit", "fixed") else "fit"
+        p.sheet_mode = p.sheet_mode if p.sheet_mode in ("around", "fit") else "fit"
         p.mat_orient = p.mat_orient if p.mat_orient in ("portrait", "landscape") else "portrait"
         p.margin_mm = float(np.clip(p.margin_mm, 0, 200))
         p.sheet_border_mm = float(np.clip(p.sheet_border_mm, 3, 200))
-        p.sheet_w_mm = float(np.clip(p.sheet_w_mm, 30, 3000))
-        p.sheet_h_mm = float(np.clip(p.sheet_h_mm, 30, 3000))
         if not p.support_color.startswith("#") or len(p.support_color) != 7:
             p.support_color = "#ffffff"
         if not p.outline_color.startswith("#") or len(p.outline_color) != 7:
@@ -175,11 +171,8 @@ def sheet_rect(p: Params, vis_mm: tuple) -> tuple[float, float, float, float]:
         m = p.margin_mm
         return (-m, -m, SW + m, SH + m)
     vx0, vy0, vx1, vy1 = vis_mm
-    if p.sheet_mode == "fit":
-        b = p.sheet_border_mm
-        return (vx0 - b, vy0 - b, vx1 + b, vy1 + b)
-    cx, cy = (vx0 + vx1) / 2, (vy0 + vy1) / 2
-    return (cx - p.sheet_w_mm / 2, cy - p.sheet_h_mm / 2, cx + p.sheet_w_mm / 2, cy + p.sheet_h_mm / 2)
+    b = p.sheet_border_mm
+    return (vx0 - b, vy0 - b, vx1 + b, vy1 + b)
 
 
 def crop_rect(p: Params, img_shape) -> tuple[int, int, int, int]:
@@ -217,16 +210,8 @@ def resolve_layout(p: Params, img_shape) -> tuple[Layout, list[str]]:
         vx1, vy1 = min(SW, x0 + img_w), min(SH, y0 + img_h)
     if (vx0 > x0 + 0.05) or (vy0 > y0 + 0.05) or (vx1 < x0 + img_w - 0.05) or (vy1 < y0 + img_h - 0.05):
         warnings.append("L'image dépasse du support : elle est rognée à ses bords (impression à fond perdu).")
-    # Stencil sheet; at fixed size, the design is limited to the inside of the sheet (minus the border)
+    # Stencil sheet
     sh_rect = sheet_rect(p, (vx0, vy0, vx1, vy1))
-    if p.sheet_mode == "fixed":
-        b = min(p.sheet_border_mm, (sh_rect[2] - sh_rect[0]) / 2 - 2, (sh_rect[3] - sh_rect[1]) / 2 - 2)
-        ix0, iy0, ix1, iy1 = sh_rect[0] + b, sh_rect[1] + b, sh_rect[2] - b, sh_rect[3] - b
-        nvx0, nvy0, nvx1, nvy1 = max(vx0, ix0), max(vy0, iy0), min(vx1, ix1), min(vy1, iy1)
-        if max(nvx0 - vx0, nvy0 - vy0, vx1 - nvx1, vy1 - nvy1) > 0.05:
-            warnings.append(f"Le motif est plus grand que la feuille ({p.sheet_w_mm:.0f} × {p.sheet_h_mm:.0f} mm, "
-                            f"bordure {b:.0f} mm comprise) : il est rogné aux bords de la feuille.")
-        vx0, vy0, vx1, vy1 = nvx0, nvy0, max(nvx1, nvx0 + 2), max(nvy1, nvy0 + 2)
     # part of the source matching the visible area
     sx = (cx1 - cx0) / img_w
     sy = (cy1 - cy0) / img_h
@@ -252,9 +237,10 @@ def resolve_layout(p: Params, img_shape) -> tuple[Layout, list[str]]:
         if p.mat_w_mm > p.machine_max_mm + 1:
             warnings.append(f"Le {mat} est plus large que la largeur de coupe de la machine "
                             f"({p.machine_max_mm:.0f} mm) : il ne passera pas dans la machine.")
-        if sheet_w <= mw + 1e-6 and sheet_h <= mh + 1e-6:
+        tol = 0.05   # mm: rounding of the scale (0.01 %) and of the crop, nothing physical
+        if sheet_w <= mw + tol and sheet_h <= mh + tol:
             pass
-        elif sheet_h <= mw + 1e-6 and sheet_w <= mh + 1e-6:
+        elif sheet_h <= mw + tol and sheet_w <= mh + tol:
             warnings.append(f"La feuille ({sheet_w:.0f} × {sheet_h:.0f} mm) ne tient sur le {mat} qu'en la "
                             f"tournant d'un quart de tour : passez le tapis en "
                             f"{'portrait' if land else 'paysage'} (section Feuille du pochoir & calage).")
@@ -1626,6 +1612,17 @@ def registration_shapes(res: Result, layer_index: int | None = None) -> tuple[li
     return shapes, warns
 
 
+def reg_shapes_json(shapes: list[dict]) -> list[dict]:
+    """Registration shapes (sheet coordinates, mm) rounded for the browser."""
+    out = []
+    for s in shapes:
+        if s["type"] == "poly":
+            out.append({"type": "poly", "pts": [[round(x, 2), round(y, 2)] for x, y in s["pts"]]})
+        else:
+            out.append({"type": "circle", "cx": round(s["cx"], 2), "cy": round(s["cy"], 2), "r": round(s["r"], 2)})
+    return out
+
+
 def positioning(res: Result) -> dict:
     """Ruler dimensions (sheet laid inside the support), origin = support's top-left corner (mm).
 
@@ -1725,10 +1722,11 @@ def quantized_view(res: Result) -> np.ndarray:
 
 
 def layer_view(res: Result, L: Layer, sheet_bgr=(200, 211, 220), bridges: bool = True,
-               lost: bool = True) -> np.ndarray:
+               lost: bool = True, marks: bool = True) -> np.ndarray:
     """Stencil view: material, openings, bridges (red), lost details (orange), registration.
 
     `bridges` / `lost` = False: view without these highlights (see `layer_overlays` to get them separately).
+    `marks` = False: without the registration marks (see `reg_shapes_json` to draw them separately).
     """
     p = res.params
     ppm = p.px_per_mm
@@ -1748,7 +1746,7 @@ def layer_view(res: Result, L: Layer, sheet_bgr=(200, 211, 220), bridges: bool =
         img[sel] = (img[sel] * (1 - LOST_ALPHA) + np.array(LOST_BGR) * LOST_ALPHA).astype(np.uint8)
     if bridges:
         _draw_bridges(img, res, L, BRIDGE_BGR)
-    shapes, _ = registration_shapes(res, L.index)
+    shapes, _ = registration_shapes(res, L.index) if marks else ([], [])
     for s in shapes:
         if s["type"] == "poly":
             pts = (np.array(s["pts"]) * ppm).round().astype(np.int32)
