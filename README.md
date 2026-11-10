@@ -95,7 +95,8 @@ language selector (**French** is available; the exported files follow the select
 2. In **Surface to paint**, pick the size of your support (e.g. *A4*, *24 × 30 cm* or *6F*) and
    its colour.
 3. In **Simplification**, choose the **Number of stencils** (3 is a good start).
-4. In **Material & cutting**, pick your material (e.g. *Mylar*) and your **Cutting mat**.
+4. In **Cutting machine**, pick your machine and **Cutting mat**, then in **Material & cutting** your
+   material (e.g. *Mylar*).
 5. Look at the **Preview** tab and the stencil cards on the right. Happy? Click
    **Export SVGs + project (.zip)**.
 
@@ -107,13 +108,13 @@ Open the SVG files of the zip in Silhouette Studio, cut, and spray layer 1, 2, 3
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│ StencilIt            status · Auto compute · Recompute · Default settings · ⚙        │  ← header
+│ StencilIt            status · Auto compute · Recompute · ⚙                           │  ← header
 ├────────────────────┬────────────────────────────────────────────┬────────────────────┤
 │ Image box          │ Crop | Layout | Masks | Preview |          │ Stencils           │
-│                    │ Compare with original | Original    1 2 3  │ palette menu       │
-│ Settings sections  │ Support  Mat                               │ legend             │
-│  (accordion)       │                                            │ one card per layer │
-│                    │            main view                       │  (click = enlarge) │
+│ Open a project…    │ Compare with original | Original    1 2 3  │ palette menu       │
+│ Default settings   │ Support  Mat  Sheet                        │ legend             │
+│ Settings sections  │                                            │ one card per layer │
+│  (accordion)       │            main view                       │  (click = enlarge) │
 │ Export button      │ summary: sizes, ΔE, bridges, cut length    │                    │
 └────────────────────┴────────────────────────────────────────────┴────────────────────┘
 ```
@@ -121,8 +122,11 @@ Open the SVG files of the zip in Silhouette Studio, cut, and spray layer 1, 2, 3
 - **Left column – settings**, grouped in sections. Each closed section shows a summary of its
   values. Hover any setting to get a tooltip explaining it.
 - **Centre – the views** (tabs) and, above the view, the layer buttons **1 2 3 …** to hide/show
-  layers, plus the **Support** and **Mat** buttons to show the support and the cutting mat in every
-  view.
+  layers, plus the **Support**, **Mat** and **Sheet** buttons to show the support, the cutting mat and
+  the material sheet in every view.
+  In the computed views (Preview, Compare, Original, a single layer) the **mouse wheel zooms** around
+  the cursor, **dragging moves** the zoomed image and a **double-click** (or the *%* button) fits it
+  back; the zoom is kept when you switch between these views.
 - **Right column – the stencils**: one card per layer with its colour, statistics (paths, nodes,
   islands, bridges, cut length) and warnings. Click a card to see that layer alone in the main view.
 - Both side columns can be **resized** by dragging their inner edge (double-click = default width).
@@ -285,7 +289,21 @@ Choose how the stencil sheet relates to the support:
 - For "inside the support" modes, the ruler measurements are shown under the preview (*Ruler
   positioning*) and in the Layout view, and are exported in the files.
 
-### 5.8 Material & cutting
+### 5.8 Cutting machine
+
+- **Machine**: Cameo 4 / Cameo 5 (305 mm wide), Cameo Pro (610 mm) or another machine.
+- **Cutting mat**: standard 12 × 12″, long 12 × 24″, Cameo Pro 24 × 24″, custom, or **No mat**
+  (roll material). **Mat orientation**: portrait (feed direction) or landscape. StencilIt warns you
+  when the stencil sheet does not fit on the mat or exceeds the machine width.
+- **Material sheet**: the format of the sheet of material you cut the stencil from (A5 to A2, US
+  Letter / Legal / Tabloid, 12 × 12″, 12 × 24″, 24 × 24″, custom, or *Not specified*), with its
+  orientation. It is **only a check**: the stencil is never changed. The hint tells you whether the
+  stencil fits on it (or only once the sheet is turned) and warns when the sheet is larger than the
+  mat. Your own sizes can be kept with **Save / Save as… / Rename… / Delete** (★ *My formats*).
+  The **Sheet** button above the views shows its outline (orange and dashed when the stencil
+  overflows), laid in the same corner as the stencil sheet.
+
+### 5.9 Material & cutting
 
 - **Material**: presets for thick paper, vinyl and Mylar. They set the cutting constraints:
   - **Minimum opening** – narrower openings are removed;
@@ -305,13 +323,9 @@ Choose how the stencil sheet relates to the support:
   (progressive scale, about 5 mm² at 50). Areas repainted later by a darker layer do not count, and
   a change counts less when the two tones involved are close. The **merge** button of the legend
   highlights the merged zones (violet) on the stencil cards.
-- **Cutting machine**: Cameo 4 / Cameo 5 (305 mm wide), Cameo Pro (610 mm) or another machine.
-- **Cutting mat**: standard 12 × 12″, long 12 × 24″, Cameo Pro 24 × 24″, custom, or **No mat**
-  (roll material). **Mat orientation**: portrait (feed direction) or landscape. StencilIt warns you
-  when the sheet does not fit on the mat or exceeds the machine width.
 - Blade, force, speed and passes can be noted with the material preset for your own reference.
 
-### 5.9 Check the result
+### 5.10 Check the result
 
 - **Preview** – the real stencils (with cutting constraints and bridges) stacked on the support
   colour in spraying order. Tick **Simulated render** to add the soft airbrush blur. Use the layer
@@ -329,7 +343,7 @@ Choose how the stencil sheet relates to the support:
 If many details are removed, increase the size of the image, lower the level of detail or choose a
 finer material; if there are too many bridges, lower the level of detail or the number of stencils.
 
-### 5.10 Paint colours and palettes
+### 5.11 Paint colours and palettes
 
 By default each layer gets the tone computed from the image. To paint with your own colours:
 
@@ -346,7 +360,7 @@ The chosen colours are used in the preview, the simulated render, the export and
 
 ![Layer colour picker](docs/screenshots/colors.jpg)
 
-### 5.11 Export
+### 5.12 Export
 
 Click **Export SVGs + project (.zip)**. The zip contains:
 
@@ -402,12 +416,13 @@ squares with their hex codes, placed left of the page, to prepare your paints.
 - **Re-open a project**: *Open a project…* (or drop the file on the image box)
   - the **.zip** restores everything: image, masks, settings, crop, colours – then recomputes;
   - the **_infos.json** alone applies the settings to the loaded image (or to the next one you load).
-- **Presets**: the *Surface to paint* and *Material & cutting* sections have **Save / Save as… /
+- **Presets**: the *Surface to paint* and *Material & cutting* sections, and the material sheet
+  formats (*Cutting machine*), have **Save / Save as… /
   Rename… / Delete** buttons. A "● modified" marker shows unsaved changes. Your presets and palettes
   are stored in `presets_utilisateur.json` (created on first save, editable by hand). The built-in
   materials are in `stencilit/materials.json`.
 - The **last settings used** are remembered by the browser and restored at the next start.
-  **Default settings** (top right) starts again from scratch.
+  **Default settings** (under the image box, next to *Open a project…*) starts again from scratch.
 
 ---
 

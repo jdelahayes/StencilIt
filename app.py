@@ -39,7 +39,7 @@ def materials() -> dict:
 
 # ---------------- User-saved presets ----------------
 USER_PRESETS_FILE = ROOT / "presets_utilisateur.json"
-PRESET_KINDS = ("support", "material", "palette")
+PRESET_KINDS = ("support", "material", "palette", "sheet")
 
 
 def load_user_presets() -> dict:
