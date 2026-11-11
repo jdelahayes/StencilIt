@@ -43,7 +43,8 @@ _FR = {
     "top-left": "haut-gauche", "top-right": "haut-droite", "bottom-left": "bas-gauche", "bottom-right": "bas-droite",
     # file names
     "layer": "couche", "of": "sur", "overview": "apercu", "simulated_render": "rendu_simule",
-    "outline_mask": "masque_contours", "subject_mask": "masque_sujet", "_outline": "_contours",
+    "outline_mask": "masque_contours", "subject_mask": "masque_sujet", "silhouette_mask": "masque_silhouette",
+    "_outline": "_contours",
     "spray_sheet": "fiche_pulverisation",
     # PDF spraying sheet
     "Spraying sheet": "Fiche de pulvérisation", "Stencil sheet": "Feuille du pochoir", "Image": "Image",
@@ -549,6 +550,7 @@ PROJECT_VERSION = 1
 
 def export_zip(res: Result, material: dict | None, name: str = "stencil",
                original: tuple[bytes | None, str] | None = None, mask_png: bytes | None = None,
+               sil_png: bytes | None = None,
                ui: dict | None = None, subject_png: bytes | None = None, lang: str = "en",
                subject_exact: bool = False) -> bytes:
     """Zip of the stencils + reloadable project (original image, masks, interface settings).
@@ -563,6 +565,7 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
         img_file = f"{name}_original{ext}" if raw else None
         mask_file = f"{name}_{T('outline_mask')}.png" if mask_png else None
         subject_file = f"{name}_{T('subject_mask')}.png" if subject_png else None
+        sil_file = f"{name}_{T('silhouette_mask')}.png" if sil_png else None
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
             if raw:
                 z.writestr(img_file, raw)
@@ -570,6 +573,8 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
                 z.writestr(mask_file, mask_png)
             if subject_png:
                 z.writestr(subject_file, subject_png)
+            if sil_png:
+                z.writestr(sil_file, sil_png)
             n = len(res.layers)
             for L in res.layers:
                 kind = T("_outline") if L.kind == "outline" else ""
@@ -591,6 +596,7 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
                     "masque": mask_file,
                     "masque_sujet": subject_file,
                     "masque_sujet_exact": bool(subject_png and subject_exact),
+                    "masque_silhouette": sil_file,
                     "interface": ui,
                 },
                 "format_feuille_mm": [round(v, 1) for v in res.sheet_mm],

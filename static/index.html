@@ -761,6 +761,18 @@
     <label class="row">Largeur du trait (mm) <input type="number" id="outline_width_mm" value="0.8" min="0.2" max="10" step="0.1"></label>
     <label class="row">Longueur mini d'un trait (mm) <input type="number" id="outline_min_length_mm" value="4" min="0" max="200" step="0.5"></label>
     <p class="hint" style="margin-top:-2px">Le trait n'est jamais plus fin que l'ouverture mini du matériau.</p>
+    <div class="check"><input type="checkbox" id="outline_subject"><label for="outline_subject">Tracer la silhouette (contour d'un masque)</label></div>
+    <div id="silSrcBox" hidden>
+      <label class="full" for="outline_subject_mask">Masque de la silhouette</label>
+      <div style="display:flex; gap:8px; align-items:center">
+        <select id="outline_subject_mask" style="flex:1">
+          <option value="subject">Masque sujet (objet sélectionné ou détouré)</option>
+          <option value="silhouette">Masque silhouette (dédié)</option>
+          <option value="outline">Masque contours (détails clés)</option>
+        </select>
+        <button type="button" id="paintSilhouette" class="vt-small" title="Ouvre ce masque dans l'onglet Masques pour le peindre ou y sélectionner des objets">Peindre…</button>
+      </div>
+    </div>
     <div id="outlineColorBox">
     <label class="full">Couleur du trait</label>
     <div class="check"><input type="checkbox" id="outline_auto_color" checked><label for="outline_auto_color">Automatique (teinte la plus contrastée avec le support)</label></div>
@@ -882,6 +894,7 @@
     <select id="maskKind" aria-label="Masque à peindre" title="Masque à peindre" style="width:auto; flex:none">
       <option value="outline">Masque contours (détails clés)</option>
       <option value="subject">Masque sujet (fond supprimé)</option>
+      <option value="silhouette">Masque silhouette (contour tracé)</option>
     </select>
     <div class="seg" role="group" aria-label="Outil">
       <button type="button" id="mBrush" aria-pressed="true" title="Peindre une zone (B)">Pinceau</button>
@@ -891,6 +904,12 @@
     <label class="vt-size">Taille <input type="range" id="mSize" min="4" max="160" value="40" aria-label="Taille du pinceau"> <span id="mSizeV">40</span> px</label>
     <label class="vt-sim" style="margin-left:0"><input type="checkbox" id="mShow" checked> Afficher le masque</label>
     <button type="button" id="mClear" class="vt-small">Tout effacer</button>
+    <select id="mCopy" aria-label="Copier ce masque dans un autre masque" title="Copie le masque affiché dans un autre masque (son contenu est remplacé)" style="width:auto; flex:none">
+      <option value="">Copier vers…</option>
+      <option value="outline">Masque contours</option>
+      <option value="subject">Masque sujet</option>
+      <option value="silhouette">Masque silhouette</option>
+    </select>
     <label class="vt-sim mdet" style="margin-left:0"><input type="checkbox" id="mDetect"> Aperçu de la détection</label>
     <span class="mdet detlegend" id="detLegend" hidden><span id="detInfo"></span><i style="background:#e11e28"></i>trait du pochoir <i style="background:#ff9600"></i>trop court <i style="background:#2896eb"></i>détecté, non retenu<span id="detPresentLeg"> <i style="background:#be3cc8"></i>déjà dans la couche</span></span>
     <span class="hint" id="mInfo"></span>
@@ -941,7 +960,7 @@ const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_m
   "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds", "pre_saturation", "pre_sharpen", "pre_remove_bg",
   "layer_colors",
   "n_layers", "detail", "hue_weight", "color_vividness", "color_mode", "layering", "skip_support", "protect_lines",
-  "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_auto_color", "outline_color",
+  "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_subject", "outline_subject_mask", "outline_auto_color", "outline_color",
   ...MAT_FIELDS, "merge_amount", "merge_channel_mm", "merge_channels", "merge_islands", "merge_line_islands",
   "tolerance_mm", "smooth_curves", "spray_mm", "px_per_mm"];
 const SUPPORT_COLORS = [["Blanc", "#ffffff"], ["Ivoire", "#f3ecd9"], ["Kraft", "#c8a26e"], ["Gris", "#9a9a9a"], ["Noir", "#1e1e1e"]];
@@ -1531,7 +1550,7 @@ function setVals(o) {
   }
   if (!$("stock_preset").value) $("stock_preset").value = "custom";   // deleted ★ format
   syncSheetMode(); syncStockPreset(); syncMat();   // state of the fields, sheet, cutting mat and material sheet
-  methodHint(); syncOutlineTarget();
+  methodHint(); syncOutlineTarget(); syncSilhouetteSource();
 }
 async function presetCall(method, url, body) {
   try {
@@ -1912,6 +1931,8 @@ const TIPS = {
   outline_sensitivity: "Quantité de détails retenus (bas = seulement les plus marqués). Échelle progressive : de 1 % des traits candidats à 0 jusqu'à 95 % à 100, environ 10 % à 50.",
   outline_width_mm: "Largeur du trait du pochoir de contours, en mm (jamais moins que l'ouverture mini du matériau).",
   outline_min_length_mm: "Les traits plus courts que cette longueur sont ignorés.",
+  outline_subject: "Ajoute au trait le contour d'un masque (le sujet sélectionné, un masque dédié à la silhouette ou le masque des détails clés), en plus des détails détectés. Utile quand le sujet se détache mal du fond. Le bord de l'image n'est pas tracé.",
+  outline_subject_mask: "Masque dont le contour est tracé : le masque sujet (objet sélectionné ou zone détourée), le masque silhouette dédié (onglet Masques), ou le masque des détails clés.",
   outline_auto_color: "Couleur du trait choisie automatiquement : la teinte de l'image la plus contrastée avec le support.",
   outline_color: "Couleur du trait du pochoir de contours (si la couleur automatique est décochée).",
   material: "Matériau du pochoir : fixe les contraintes de découpe et les réglages machine conseillés.",
@@ -2203,14 +2224,17 @@ async function init() {
   $("outline_method").addEventListener("change", enableOutline);
   $("outline_target").addEventListener("change", () => { syncOutlineTarget(); enableOutline(); detectPreview(); });
   ["outline_sensitivity", "outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("change", enableOutline));
-  ["outline_method", "outline_auto_color", "outline_color"].forEach(k => $(k).addEventListener("change", detectPreview));
+  ["outline_method", "outline_auto_color", "outline_color", "outline_subject", "outline_subject_mask"].forEach(k => $(k).addEventListener("change", detectPreview));
+  ["outline_subject", "outline_subject_mask"].forEach(k => $(k).addEventListener("change", () => { syncSilhouetteSource(); if (val("outline_subject")) enableOutline(); }));
+  $("paintSilhouette").onclick = () => { $("maskKind").value = val("outline_subject_mask"); VIEW = "mask"; SEL = null; render(); };
+  $("mCopy").onchange = () => { const to = $("mCopy").value; $("mCopy").value = ""; copyMask(maskKind(), to); };
   ["outline_sensitivity", "outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("input", detectPreview));
   $("mClear").onclick = () => {
-    const c = maskKind() === "subject" ? SUBJ : MASK;
+    const kind = maskKind(), c = maskCv(kind);
     if (!c) return;
     c.getContext("2d").clearRect(0, 0, c.width, c.height); SEM_LAST = null;
-    if (c === SUBJ) SUBJ_EXACT = false;
-    sendMask();
+    if (kind === "subject") SUBJ_EXACT = false; else MASK_OBJ[kind] = false;
+    sendMask(kind);
   };
   document.addEventListener("keydown", e => {
     if (VIEW !== "mask" || e.target.closest("input, textarea, select")) return;
@@ -2297,7 +2321,7 @@ function setSession(j, name) {
   DIRTY = false; updateCalcBtn();
   IMG = { w: j.width, h: j.height, src: j.original };
   CROP = { x: 0, y: 0, w: 1, h: 1 };
-  createMask(); createSubj();
+  createMask(); createSubj(); createSil();
   $("crop_ratio").value = "free";
   $("image_scale").value = 100; $("image_pos_x").value = 50; $("image_pos_y").value = 50;
   setHF(1); $("keep_ratio").checked = true;
@@ -2344,8 +2368,8 @@ function loadMaskImage(src, coverage, kind = "outline") {
   return new Promise(done => {
     const im = new Image();
     im.onload = () => {
-      if (kind === "subject") createSubj(); else createMask();
-      const CV = kind === "subject" ? SUBJ : MASK, c = CV.getContext("2d");
+      if (kind === "subject") createSubj(); else if (kind === "silhouette") createSil(); else createMask();
+      const CV = maskCv(kind), c = CV.getContext("2d");
       const [r, g, b] = MASK_COLORS[kind].match(/\w\w/g).map(h => parseInt(h, 16));
       c.drawImage(im, 0, 0, CV.width, CV.height);
       const d = c.getImageData(0, 0, CV.width, CV.height);
@@ -2355,6 +2379,7 @@ function loadMaskImage(src, coverage, kind = "outline") {
       }
       c.putImageData(d, 0, 0);
       if (kind === "subject") { SUBJ_EMPTY = !(coverage > 0); }
+      else if (kind === "silhouette") { SIL_EMPTY = !(coverage > 0); silInfo(coverage); }
       else { MASK_EMPTY = !(coverage > 0); maskInfo(coverage); }
       done();
     };
@@ -2394,6 +2419,7 @@ async function openProject(file) {
     SUBJ_EXACT = !!j.subject.exact;
     FG_OVERLAY = j.subject.overlay; subjInfo(j.subject);
   }
+  if (j.silmask) await loadMaskImage(j.silmask, j.silmask_coverage, "silhouette");
   status(`Projet ouvert : ${file.name}`);
   render();
   await recommend(false);
@@ -2489,7 +2515,14 @@ let SUBJ = null, SUBJ_EMPTY = true, FG_OVERLAY = null, SUBJ_SENDING = null;
 let SUBJ_EXACT = false;
 let OUT_INFO = "", SUBJ_INFO = "";
 const maskKind = () => $("maskKind").value;
-const MASK_COLORS = { outline: "#e61e1e", subject: "#1fbf4f" };
+const MASK_COLORS = { outline: "#e61e1e", subject: "#1fbf4f", silhouette: "#1f6fe6" };
+const MASK_NAMES = { outline: "contours", subject: "sujet", silhouette: "silhouette" };
+// Third mask: area whose outline the outline stencil draws (option "Draw the silhouette")
+let SIL = null, SIL_EMPTY = true, SIL_INFO = "", SIL_SENDING = null;
+// masks containing an object selection (exact outline): kept exact when copied into the subject mask
+const MASK_OBJ = { outline: false, silhouette: false };
+const maskCv = k => k === "subject" ? SUBJ : k === "silhouette" ? SIL : MASK;
+const silFrom = k => val("outline") && val("outline_subject") && val("outline_subject_mask") === k;
 function maskCanvas() {
   const s = Math.min(1, 1100 / Math.max(IMG.w, IMG.h));   // same size as the preview sent by the server
   const c = document.createElement("canvas");
@@ -2500,15 +2533,27 @@ function maskCanvas() {
 }
 function createMask() {
   MASK = maskCanvas();
-  MASK_EMPTY = true; SEM_LAST = null;
+  MASK_EMPTY = true; SEM_LAST = null; MASK_OBJ.outline = false;
   maskInfo(0);
 }
+function createSil() {
+  SIL = maskCanvas();
+  SIL_EMPTY = true; SEM_LAST = null; MASK_OBJ.silhouette = false;
+  silInfo(0);
+}
+function silInfo(coverage) {
+  SIL_INFO = SIL_EMPTY
+    ? "Peignez ou sélectionnez (outil Objet) la zone dont le contour sera tracé : option « Tracer la silhouette » des contours, masque silhouette."
+    : `Zone peinte : ${coverage} % de l'image — son contour est tracé par les contours (masque silhouette).`;
+  showMaskInfo();
+}
+function syncSilhouetteSource() { $("silSrcBox").hidden = !val("outline_subject"); }
 function createSubj() {
   SUBJ = maskCanvas();
   SUBJ_EMPTY = true; SUBJ_EXACT = false; FG_OVERLAY = null; SEM_LAST = null;
   subjInfo(null);
 }
-function showMaskInfo() { $("mInfo").textContent = maskKind() === "subject" ? SUBJ_INFO : OUT_INFO; }
+function showMaskInfo() { $("mInfo").textContent = { subject: SUBJ_INFO, silhouette: SIL_INFO }[maskKind()] ?? OUT_INFO; }
 function maskInfo(coverage) {
   OUT_INFO = MASK_EMPTY
     ? "Aucune zone peinte : les détails clés sont cherchés sur toute l'image."
@@ -2557,11 +2602,68 @@ async function sendSubject() {
       $("pre_remove_bg").checked = true; updateSummaries();
       status("Fond supprimé (sujet peint)");
     } else status(SUBJ_EMPTY ? "Masque sujet effacé" : "Sujet détouré");
-    if ($("pre_remove_bg").checked) schedule();
+    if ($("pre_remove_bg").checked || silFrom("subject")) schedule();
   } catch (e) { status("Serveur injoignable : " + e.message, true); }
 }
-async function sendMask() {
-  if (maskKind() === "subject") return sendSubject();
+async function sendSil() {
+  if (!SID || !SIL) return;
+  SIL_EMPTY = maskIsEmpty(SIL);
+  const png = SIL_EMPTY ? null : SIL.toDataURL("image/png");
+  const req = fetch("/api/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png, kind: "silhouette" }) });
+  SIL_SENDING = req;
+  try {
+    const r = await req, j = await r.json();
+    if (!r.ok) { status(j.error || "Erreur du masque", true); return; }
+    if (SIL_SENDING !== req) return;
+    silInfo(j.coverage);
+    if (!SIL_EMPTY && !silFrom("silhouette")) {        // painting the silhouette mask = wanting its outline drawn
+      $("outline").checked = true; $("outline_subject").checked = true; $("outline_subject_mask").value = "silhouette";
+      syncSilhouetteSource(); updateSummaries();
+      status("Contours : silhouette tracée d'après le masque silhouette");
+    }
+    if (silFrom("silhouette")) schedule();
+    detectPreview();
+  } catch (e) { status("Serveur injoignable : " + e.message, true); }
+}
+// Copies a mask into another one (its content is replaced). The subject mask gives its cut-out
+// (what is kept) when it was painted roughly; an object selection stays exact in the subject mask.
+async function copyMask(from, to) {
+  if (!to || to === from || !IMG) return;
+  if (!MASK) createMask();
+  if (!SUBJ) createSubj();
+  if (!SIL) createSil();
+  const src = maskCv(from), dst = maskCv(to), W = dst.width, H = dst.height;
+  let alpha;
+  if (from === "subject" && !SUBJ_EXACT && FG_OVERLAY) {      // GrabCut cut-out: overlay = darkened background
+    const im = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = FG_OVERLAY; });
+    if (im) {
+      const t = document.createElement("canvas"); t.width = W; t.height = H;
+      const g = t.getContext("2d"); g.drawImage(im, 0, 0, W, H);
+      const d = g.getImageData(0, 0, W, H).data;
+      alpha = i => d[i * 4 + 3] < 64;
+    }
+  }
+  if (!alpha) {
+    const d = src.getContext("2d").getImageData(0, 0, W, H).data;
+    alpha = i => d[i * 4 + 3] > 127;
+  }
+  const [r, g, b] = MASK_COLORS[to].match(/\w\w/g).map(h => parseInt(h, 16));
+  const ctx = dst.getContext("2d"), out = ctx.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) {
+    out.data[i * 4] = r; out.data[i * 4 + 1] = g; out.data[i * 4 + 2] = b; out.data[i * 4 + 3] = alpha(i) ? 255 : 0;
+  }
+  ctx.putImageData(out, 0, 0);
+  const exact = from === "subject" ? true : MASK_OBJ[from];   // a subject cut-out is exact once copied
+  if (to === "subject") SUBJ_EXACT = !!exact; else MASK_OBJ[to] = !!exact;
+  SEM_LAST = null;
+  $("maskKind").value = to;                                    // show the copy
+  render();
+  await sendMask(to);
+  status(`Masque ${MASK_NAMES[from]} copié dans le masque ${MASK_NAMES[to]}`);
+}
+async function sendMask(kind = maskKind()) {
+  if (kind === "subject") return sendSubject();
+  if (kind === "silhouette") return sendSil();
   if (!SID || !MASK) return;
   MASK_EMPTY = maskIsEmpty();
   const png = MASK_EMPTY ? null : MASK.toDataURL("image/png");
@@ -2695,7 +2797,7 @@ async function semanticClick(CV, kind, fx, fy, remove, wrap) {
     ctx.drawImage(m.canvas, 0, 0);
     ctx.globalCompositeOperation = "source-over";
     SEM_LAST = remove ? null : { canvas: CV, sid: SID, before, data: m.data, level, fx, fy };
-    if (kind === "subject") SUBJ_EXACT = true;
+    if (kind === "subject") SUBJ_EXACT = true; else MASK_OBJ[kind] = true;
     status(remove ? `Objet retiré du masque (${j.pct} % de l'image)`
       : level ? `Autre découpage : ${j.pct} % de l'image (recliquez pour en changer encore)`
       : `Objet ajouté : ${j.pct} % de l'image (recliquez dessus pour changer de découpage, Alt + clic pour retirer)`);
@@ -2706,15 +2808,17 @@ async function semanticClick(CV, kind, fx, fy, remove, wrap) {
 function maskEditor(st) {
   if (!MASK) createMask();
   if (!SUBJ) createSubj();
-  const kind = maskKind(), CV = kind === "subject" ? SUBJ : MASK;
+  if (!SIL) createSil();
+  const kind = maskKind(), CV = maskCv(kind);
+  [...$("mCopy").options].forEach(o => { o.hidden = o.value === kind; });
   const wrap = document.createElement("div");
   wrap.className = "maskwrap" + (MASK_TOOL === "select" ? " select" : "");
-  wrap.innerHTML = `<img src="${IMG.src}" alt="Image source — ${kind === "subject" ? "peignez le sujet à garder" : "peignez les zones à détailler"}" draggable="false">
+  wrap.innerHTML = `<img src="${IMG.src}" alt="Image source — ${kind === "subject" ? "peignez le sujet à garder" : kind === "silhouette" ? "peignez la zone dont le contour sera tracé" : "peignez les zones à détailler"}" draggable="false">
     <img class="fgov" alt="" ${kind === "subject" && FG_OVERLAY ? `src="${FG_OVERLAY}"` : "hidden"}>
     <img class="detov" alt="" hidden>
     <div class="cropguide" title="Partie de l'image utilisée (recadrage)"></div><div class="brush"></div>`;
   wrap.insertBefore(CV, wrap.querySelector(".cropguide"));
-  [MASK, SUBJ].forEach(c => c.style.display = (c === CV && $("mShow").checked) ? "" : "none");
+  [MASK, SUBJ, SIL].forEach(c => c.style.display = (c === CV && $("mShow").checked) ? "" : "none");
   showMaskInfo();
   Object.assign(wrap.querySelector(".cropguide").style, {
     left: CROP.x * 100 + "%", top: CROP.y * 100 + "%", width: CROP.w * 100 + "%", height: CROP.h * 100 + "%",
@@ -3079,8 +3183,8 @@ function render() {
       ${layerStack(L)}
       <div class="meta">
         <div class="t">${L.kind === "outline"
-          ? `<span class="sw" style="background:${L.color}"></span>`
-          : `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur de la peinture de la couche ${L.index}${layerColors()[L.index] ? " (choisie)" : " (calculée)"} — cliquer pour changer"></button>`}Couche ${L.index}${L.kind === "outline" ? " — contours ✎" : ""} — ${L.color}${layerColors()[L.index]
+          ? `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur du trait des contours${val("outline_auto_color") ? " (automatique)" : " (choisie)"} — cliquer pour changer"></button>`
+          : `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur de la peinture de la couche ${L.index}${layerColors()[L.index] ? " (choisie)" : " (calculée)"} — cliquer pour changer"></button>`}Couche ${L.index}${L.kind === "outline" ? " — contours ✎" : ""} — ${L.color}${customColor(L)
           ? ` <button type="button" class="lcreset vt-small" data-idx="${L.index}" title="Revenir à la teinte calculée">auto</button>` : ""}
           <button type="button" class="eye" aria-pressed="${!HIDDEN.has(L.index)}" title="Afficher / masquer dans la prévisualisation">${HIDDEN.has(L.index) ? "masquée" : "visible"}</button></div>
         ${L.paths} tracés · ${L.nodes} nœuds · ${L.islands} îlot${L.islands > 1 ? "s" : ""} · ${L.bridges} ponts${L.merged ? ` · ${L.merged} fusion${L.merged > 1 ? "s" : ""}` : ""}<br>
@@ -3617,7 +3721,7 @@ function openColorPop(btn) {
         <input class="cphex" maxlength="7" spellcheck="false" aria-label="Code couleur hexadécimal">
         <button type="button" data-act="apply">Appliquer</button></div>
     </div>
-    <div class="acts"><button type="button" data-act="auto" ${layerColors()[idx] ? "" : "disabled"} title="Revenir à la teinte calculée">Auto (teinte calculée)</button></div>`;
+    <div class="acts"><button type="button" data-act="auto" ${customColor(L) ? "" : "disabled"} title="Revenir à la teinte calculée">Auto (teinte calculée)</button></div>`;
   setupPicker(pop, cur || "#888888");
   const r = btn.getBoundingClientRect(), w = 236;
   pop.hidden = false;
@@ -3647,10 +3751,26 @@ function setupColorPop() {
   window.addEventListener("resize", closeColorPop);
   document.querySelector(".layercol").addEventListener("scroll", closeColorPop);
 }
+// Colour chosen by hand? (outline layer: "automatic" unticked in the outline section)
+function customColor(L) {
+  return L && (L.kind === "outline" ? !val("outline_auto_color") : !!layerColors()[L.index]);
+}
 function setLayerColor(idx, color) {
+  const L = LAST && LAST.layers.find(x => x.index === idx);
+  if (L && L.kind === "outline") {     // outline stencil: its colour is the outline section's line colour
+    $("outline_auto_color").checked = !color; $("outline_color").disabled = !color;
+    if (color) { $("outline_color").value = color.toLowerCase(); rememberColor(color); }
+    updateSummaries(); detectPreview();
+    status(color ? `Couche ${idx} (contours) : peinture ${color}` : `Couche ${idx} (contours) : couleur automatique`);
+    schedule();
+    return;
+  }
   const m = layerColors();
   if (color) { m[idx] = color.toLowerCase(); rememberColor(color); } else delete m[idx];
-  showPaletteChoice("");
+  // a colour taken from the current palette keeps that palette shown; any other colour (or the
+  // computed tone) means the layers no longer follow a palette
+  const key = PAL_CUR || PAL_LAST, def = palDef(key);
+  showPaletteChoice(color && def && def[1].some(c => c.toLowerCase() === color.toLowerCase()) ? key : "");
   $("layer_colors").value = Object.entries(m).map(([k, v]) => `${k}=${v}`).join(";");
   status(color ? `Couche ${idx} : peinture ${color}` : `Couche ${idx} : teinte calculée`);
   schedule();

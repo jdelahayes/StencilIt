@@ -189,17 +189,22 @@ def api_recommend():
     return jsonify(cache[key])
 
 
+MASK_KEYS = {"outline": "mask", "silhouette": "silmask"}
+
+
 @app.post("/api/mask")
 def api_mask():
-    """Receives the painted mask (transparent PNG, at the size of the source image preview).
-    Painted (opaque) pixels delimit the areas where key details are searched."""
+    """Receives a painted mask (transparent PNG, at the size of the source image preview).
+    kind "outline" (default): areas where key details are searched; kind "silhouette": area whose
+    outline the outline stencil draws."""
     data = request.get_json(force=True)
     sess = SESSIONS.get(data.get("id", ""))
     if not sess:
         return jsonify(error="Session inconnue, rechargez l'image"), 404
+    key = MASK_KEYS.get(data.get("kind") or "outline", "mask")
     png = data.get("png")
     if not png:
-        sess.pop("mask", None)
+        sess.pop(key, None)
         return jsonify(coverage=0.0)
     try:
         raw = base64.b64decode(png.split(",", 1)[-1])
@@ -210,12 +215,12 @@ def api_mask():
         return jsonify(error="Masque illisible"), 400
     alpha = m[..., 3] if (m.ndim == 3 and m.shape[2] == 4) else (m if m.ndim == 2 else m[..., 2])
     if not (alpha > 0).any():
-        sess.pop("mask", None)
+        sess.pop(key, None)
         return jsonify(coverage=0.0)
     h, w = sess["img"].shape[:2]
     full = cv2.resize(alpha, (w, h), interpolation=cv2.INTER_LINEAR)
-    sess["mask"] = np.where(full > 127, 255, 0).astype(np.uint8)
-    return jsonify(coverage=round(100 * float((sess["mask"] > 0).mean()), 1))
+    sess[key] = np.where(full > 127, 255, 0).astype(np.uint8)
+    return jsonify(coverage=round(100 * float((sess[key] > 0).mean()), 1))
 
 
 def subject_overlay(sess) -> str | None:
@@ -361,6 +366,21 @@ def api_prepreview():
     return jsonify(image=png_b64(out), size=list(size), histogram=hist)
 
 
+SILHOUETTE_MASK_NAMES = {"subject": "sujet", "outline": "contours (détails clés)", "silhouette": "silhouette"}
+
+
+def subject_area(sess, lay, shape, source: str = "subject"):
+    """Area whose outline is drawn (option "silhouette"), brought to the computed image area, or None:
+    the subject cut-out, the key-detail mask or the dedicated silhouette mask."""
+    src = {"subject": sess.get("fg"), "outline": sess.get("mask"), "silhouette": sess.get("silmask")}.get(source)
+    if src is None:
+        return None
+    x0, y0, x1, y1 = lay.src_rect
+    H, W = shape
+    m = cv2.resize((src[y0:y1, x0:x1] > 0).astype(np.uint8) * 255, (W, H), interpolation=cv2.INTER_LINEAR) > 127
+    return m if m.any() and not m.all() else None
+
+
 @app.post("/api/process")
 def api_process():
     data = request.get_json(force=True)
@@ -381,6 +401,10 @@ def api_process():
         x0, y0, x1, y1 = lay.src_rect
         H, W = sess["prep"].labels.shape
         region = cv2.resize(sess["mask"][y0:y1, x0:x1], (W, H), interpolation=cv2.INTER_NEAREST) > 0
+    sess["prep"].subject = subject_area(sess, lay, sess["prep"].labels.shape, p.outline_subject_mask)
+    if p.outline and p.outline_subject and sess["prep"].subject is None:
+        warnings.append(f"Silhouette : le masque {SILHOUETTE_MASK_NAMES[p.outline_subject_mask]} est vide "
+                        f"(onglet Masques)")
     res = pl.build(sess["prep"], p, region)
     sess["result"] = res
     sess["material"] = data.get("material")
@@ -484,6 +508,7 @@ def api_outline_preview():
     region = None
     if sess.get("mask") is not None:
         region = cv2.resize(sess["mask"][y0:y1, x0:x1], (W, H), interpolation=cv2.INTER_NEAREST) > 0
+    res.prepared.subject = subject_area(sess, lay, (H, W), p.outline_subject_mask)
     st = pl.outline_detection(res, p, region)
     # size of the computed area in the source image preview (same scale as the mask canvas)
     h, w = sess["img"].shape[:2]
@@ -537,10 +562,14 @@ def api_export(sid):
     if sess.get("subject") is not None:
         ok, buf = cv2.imencode(".png", sess["subject"])
         subject_png = buf.tobytes()
+    sil_png = None
+    if sess.get("silmask") is not None:
+        ok, buf = cv2.imencode(".png", sess["silmask"])
+        sil_png = buf.tobytes()
     lang = "fr" if request.args.get("lang") == "fr" else "en"
     data = export_zip(sess["result"], sess.get("material"), sess["name"],
                       original=(sess.get("raw"), sess.get("ext", ".png")), mask_png=mask_png,
-                      ui=sess.get("ui"), subject_png=subject_png, lang=lang,
+                      ui=sess.get("ui"), subject_png=subject_png, sil_png=sil_png, lang=lang,
                       subject_exact=bool(sess.get("subject_exact")))
     return send_file(io.BytesIO(data), mimetype="application/zip", as_attachment=True,
                      download_name=f"{sess['name']}_{'pochoirs' if lang == 'fr' else 'stencils'}.zip")
@@ -574,17 +603,22 @@ def api_project():
     out = new_session(img, raw, proj.get("nom_image") or img_name)
     sess = SESSIONS[out["id"]]
     sess["name"] = proj.get("nom") or sess["name"]
-    mask_b64, coverage = None, 0.0
-    m_name = proj.get("masque")
-    if m_name and m_name in names:
+    def read_mask(entry, key):
+        """Painted mask of the project -> session (full image size) + PNG for the browser."""
+        m_name = proj.get(entry)
+        if not (m_name and m_name in names):
+            return None, 0.0
         m = cv2.imdecode(np.frombuffer(z.read(m_name), np.uint8), cv2.IMREAD_GRAYSCALE)
-        if m is not None and m.any():
-            h, w = img.shape[:2]
-            m = cv2.resize(m, (w, h), interpolation=cv2.INTER_NEAREST)
-            sess["mask"] = np.where(m > 127, 255, 0).astype(np.uint8)
-            coverage = round(100 * float((sess["mask"] > 0).mean()), 1)
-            ok, buf = cv2.imencode(".png", sess["mask"])
-            mask_b64 = "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode()
+        if m is None or not m.any():
+            return None, 0.0
+        h, w = img.shape[:2]
+        m = cv2.resize(m, (w, h), interpolation=cv2.INTER_NEAREST)
+        sess[key] = np.where(m > 127, 255, 0).astype(np.uint8)
+        ok, buf = cv2.imencode(".png", sess[key])
+        return ("data:image/png;base64," + base64.b64encode(buf.tobytes()).decode(),
+                round(100 * float((sess[key] > 0).mean()), 1))
+    mask_b64, coverage = read_mask("masque", "mask")
+    sil_b64, sil_coverage = read_mask("masque_silhouette", "silmask")
     subject = None
     s_name = proj.get("masque_sujet")
     if s_name and s_name in names:
@@ -595,7 +629,8 @@ def api_project():
             subject = set_subject(sess, m, bool(proj.get("masque_sujet_exact")))
             ok, buf = cv2.imencode(".png", m)
             subject["png"] = "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode()
-    return jsonify({**out, "info": info, "mask": mask_b64, "mask_coverage": coverage, "subject": subject})
+    return jsonify({**out, "info": info, "mask": mask_b64, "mask_coverage": coverage, "subject": subject,
+                    "silmask": sil_b64, "silmask_coverage": sil_coverage})
 
 
 if __name__ == "__main__":

@@ -244,16 +244,19 @@ which mask you edit in the drop-down list:
 - **Outline mask** (key details) – paint where the outline stencil should look for details
   (eyes, mouth, lettering…). Without a painted area, the whole image is searched. Painting turns on
   the outline stencil.
+- **Silhouette mask** – paint (or select with the Object tool) the area whose **outline** the
+  outline stencil draws (see *Draw the silhouette* below). Painting turns this option on.
 
 **Object** tool (semantic selection, Segment Anything / MobileSAM) – click an object to add it to the
 current mask; click other objects one after the other to add them too. Clicking again inside the
 object just added switches to another cut of it (a part, the object, the whole); **Alt + click**
 removes an object. The image is analysed once when the tool is chosen (well under a second), then
 each click takes a few hundredths of a second. The brush and eraser still touch the mask up
-afterwards. It works for both masks.
+afterwards. It works for every mask.
 
 Keyboard shortcuts: **B** brush, **E** eraser, **S** object, **[** and **]** brush size. *Clear all*
-erases the mask.
+erases the mask. **Copy to…** copies the shown mask into another one (its content is replaced), for
+example the outline mask into the subject mask; a subject roughly painted gives its cut-out.
 
 ![Masks tab: subject painted, background removed](docs/screenshots/masks.jpg)
 
@@ -280,6 +283,12 @@ lines at 0, about 10 % at 50, 95 % at 100: fine control when you want only a few
 (never less than the material's minimum opening). The line colour is automatic (the most
 contrasting tone) or chosen (separate stencil only); with a line lighter than the support, DoG and
 ridges look for light lines.
+
+**Draw the silhouette (outline of a mask)** adds the outline of a mask to the lines, whatever its
+contrast, on top of the detected details: useful when the subject does not stand out from the
+background, since the detection mostly reinforces details inside it. **Silhouette mask** chooses
+which one: the subject mask (selected object or cut-out area), the dedicated silhouette mask, or the
+key-detail mask; **Paint…** opens it in the Masks tab. The image's own edge is not drawn.
 
 **Show detection…** opens the Masks tab with the **detection preview** over the image: red = line of
 the stencil, orange = too short, blue = detected but not kept (already visible in the render, or
@@ -392,7 +401,7 @@ Click **Export SVGs + project (.zip)**. The zip contains:
 | `…_inkscape.svg` | An **Inkscape document** with one layer per element (see below). |
 | `…_silhouette.svg` | **For Silhouette Studio**: only the stencils, one layer each, every layer being a **single compound path** (openings + sheet outline + marks). |
 | `…_original.<ext>` | Your original image, untouched. |
-| `…_outline_mask.png`, `…_subject_mask.png` | The painted masks, if any. |
+| `…_outline_mask.png`, `…_subject_mask.png`, `…_silhouette_mask.png` | The painted masks, if any. |
 | `…_infos.json` | Sizes, colours, ruler measurements, and **all the settings** of the project. |
 
 The **Inkscape file** contains, from bottom to top: *Support*, *Original image (layout)*, *Preview

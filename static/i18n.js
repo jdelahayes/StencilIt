@@ -202,6 +202,23 @@
     "Zoom avant (molette vers le haut)": "Zoom in (mouse wheel up)", "Zoom arrière (molette vers le bas)": "Zoom out (mouse wheel down)",
     "Ajuster à la vue (double-clic sur l'image). Zoomé : glisser (Cadrage, Mise en page, Masques : bouton du milieu ou Espace + glisser) pour se déplacer": "Fit to view (double-click on the image). Zoomed in: drag to move around (Crop, Layout, Masks: middle button or Space + drag)",
     "Repères": "Marks",
+    "Tracer la silhouette (contour d'un masque)": "Draw the silhouette (outline of a mask)",
+    "Ajoute au trait le contour d'un masque (le sujet sélectionné, un masque dédié à la silhouette ou le masque des détails clés), en plus des détails détectés. Utile quand le sujet se détache mal du fond. Le bord de l'image n'est pas tracé.": "Adds the outline of a mask (the selected subject, a mask dedicated to the silhouette or the key-detail mask) to the lines, on top of the detected details. Useful when the subject does not stand out from the background. The image's own edge is not drawn.",
+    "Masque de la silhouette": "Silhouette mask",
+    "Masque sujet (objet sélectionné ou détouré)": "Subject mask (selected object or cut-out)",
+    "Masque silhouette (dédié)": "Silhouette mask (dedicated)",
+    "Masque contours (détails clés)": "Outline mask (key details)",
+    "Masque dont le contour est tracé : le masque sujet (objet sélectionné ou zone détourée), le masque silhouette dédié (onglet Masques), ou le masque des détails clés.": "Mask whose outline is drawn: the subject mask (selected object or cut-out area), the dedicated silhouette mask (Masks tab), or the key-detail mask.",
+    "Peindre…": "Paint…",
+    "Ouvre ce masque dans l'onglet Masques pour le peindre ou y sélectionner des objets": "Opens this mask in the Masks tab to paint it or select objects in it",
+    "Masque silhouette (contour tracé)": "Silhouette mask (outline drawn)",
+    "Copier vers…": "Copy to…", "Masque contours": "Outline mask", "Masque sujet": "Subject mask", "Masque silhouette": "Silhouette mask",
+    "Copier ce masque dans un autre masque": "Copy this mask into another mask",
+    "Copie le masque affiché dans un autre masque (son contenu est remplacé)": "Copies the shown mask into another mask (its content is replaced)",
+    "Peignez ou sélectionnez (outil Objet) la zone dont le contour sera tracé : option « Tracer la silhouette » des contours, masque silhouette.": "Paint or select (Object tool) the area whose outline will be drawn: “Draw the silhouette” option of the outline, silhouette mask.",
+    "Contours : silhouette tracée d'après le masque silhouette": "Outline: silhouette drawn from the silhouette mask",
+    "Couleur du trait des contours (automatique) — cliquer pour changer": "Outline line colour (automatic) — click to change",
+    "Couleur du trait des contours (choisie) — cliquer pour changer": "Outline line colour (chosen) — click to change",
     "Réduire les cotes de calage": "Fold the registration dimensions", "Afficher les cotes de calage": "Show the registration dimensions",
     "Repères de calage (croix, équerres ou trous) et encoches du numéro de couche, dans toutes les vues": "Registration marks (crosses, L-brackets or holes) and layer-number notches, in every view",
     "Mes formats de feuille": "My sheet formats", "tient sur la feuille ✓": "fits on the sheet ✓", "dépasse de la feuille ✗": "overflows the sheet ✗",
@@ -417,6 +434,7 @@
   const plural = (n, w) => `${n} ${w}${+n > 1 ? "s" : ""}`;
   const SIDES = { "gauche": "left", "droit": "right", "haut": "top", "bas": "bottom" };
   const KIND_EN = { "Support": "Support", "Matériau": "Material", "Format": "Sheet format" };
+  const MASK_EN = { "contours": "outline", "sujet": "subject", "silhouette": "silhouette", "contours (détails clés)": "outline (key details)" };
   const decEN = x => x.replace(/(\d),(\d)/g, "$1.$2");
   const P = [
     [/^Calculé en ([\d.,]+) s$/, (m, s) => `Computed in ${s} s`],
@@ -440,6 +458,11 @@
     [/^Couche (\d+)( \(contours\))? (#[0-9a-f]{6})$/i, (m, n, c, h) => `Layer ${n}${c ? " (outline)" : ""} ${h}`],
     [/^Couche (\d+) : peinture (#[0-9a-f]{6})$/i, (m, n, h) => `Layer ${n}: paint ${h}`],
     [/^Couche (\d+) : teinte calculée$/, (m, n) => `Layer ${n}: computed tone`],
+    [/^Couche (\d+) \(contours\) : peinture (#[0-9a-f]{6})$/i, (m, n, h) => `Layer ${n} (outline): paint ${h}`],
+    [/^Couche (\d+) \(contours\) : couleur automatique$/, (m, n) => `Layer ${n} (outline): automatic colour`],
+    [/^Masque (contours|sujet|silhouette) copié dans le masque (contours|sujet|silhouette)$/, (m, a, b) => `${MASK_EN[a]} mask copied into the ${MASK_EN[b]} mask`],
+    [/^Silhouette : le masque (sujet|silhouette|contours \(détails clés\)) est vide \(onglet Masques\)$/, (m, a) => `Silhouette: the ${MASK_EN[a]} mask is empty (Masks tab)`],
+    [/^Zone peinte : ([\d.]+) % de l'image — son contour est tracé par les contours \(masque silhouette\)\.$/, (m, a) => `Painted area: ${a} % of the image — its outline is drawn by the outline (silhouette mask).`],
     [/^Couche (\d+) : (#[0-9a-f]{6})$/i, (m, n, h) => `Layer ${n}: ${h}`],
     [/^Couleur de la peinture de la couche (\d+) \((choisie|calculée)\) — cliquer pour changer$/,
       (m, n, k) => `Paint colour of layer ${n} (${k === "choisie" ? "chosen" : "computed"}) — click to change`],

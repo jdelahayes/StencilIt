@@ -68,6 +68,8 @@ class Params:
     outline_sensitivity: float = 50.0   # 0 = only the strongest details .. 100 = many details (progressive)
     outline_width_mm: float = 0.8       # line width (at least the material's minimum opening)
     outline_min_length_mm: float = 4.0  # minimum line length
+    outline_subject: bool = False       # also draw the outline of a mask (silhouette of the subject)
+    outline_subject_mask: str = "subject"   # mask whose outline is drawn: subject | outline | silhouette
     outline_auto_color: bool = True     # auto colour = tone with the most contrast against the support
     outline_color: str = "#1e1e1e"
     # Paint colours chosen for the layers: "1=#rrggbb;3=#rrggbb" (layer number -> colour).
@@ -127,6 +129,8 @@ class Params:
         p.detail = float(np.clip(p.detail, 0, 100))
         p.hue_weight = float(np.clip(p.hue_weight, 0, 300))
         p.color_vividness = float(np.clip(p.color_vividness, 0, 100))
+        if p.outline_subject_mask not in ("subject", "outline", "silhouette"):
+            p.outline_subject_mask = "subject"
         p.px_per_mm = float(np.clip(p.px_per_mm, 2, 16))
         p.support_w_mm = float(np.clip(p.support_w_mm, 20, 3000))
         p.support_h_mm = float(np.clip(p.support_h_mm, 20, 3000))
@@ -387,6 +391,9 @@ class Prepared:
     auto_thresholds: list = None    # L* thresholds the automatic computation would have chosen
     thresholds_used: list = None    # thresholds actually applied (manual) or None
     fg: np.ndarray | None = None    # subject (True) / removed background (False), computed image size
+    # area whose outline is drawn by the outline (option `outline_subject`): selected subject or
+    # another mask, computed image size (set by the server for each computation; None = prep.fg)
+    subject: np.ndarray | None = None
 
 
 def preprocess_active(p: Params) -> bool:
@@ -1446,6 +1453,27 @@ def outline_keep_share(sensitivity: float) -> float:
     return 0.01 * 95.0 ** (float(np.clip(sensitivity, 0, 100)) / 100.0)
 
 
+def subject_silhouette(prep: Prepared, p: Params) -> np.ndarray | None:
+    """One-pixel line along the outline of the selected subject (option `outline_subject`):
+    smoothed, not drawn along the image edges, pieces shorter than the minimum line length removed."""
+    subj = prep.subject
+    if subj is None and p.outline_subject_mask == "subject":
+        subj = prep.fg                      # without the server: the cut-out subject
+    if not p.outline_subject or subj is None or not subj.any() or subj.all():
+        return None
+    ppm = p.px_per_mm
+    m = cv2.GaussianBlur(subj.astype(np.float32), (0, 0), max(0.8, 0.4 * ppm)) > 0.5
+    line = m & ~cv2.erode(m.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+    b = max(2, int(round(0.5 * ppm)))       # the image's own edge is not an outline
+    line[:b, :] = False; line[-b:, :] = False; line[:, :b] = False; line[:, -b:] = False
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(line.astype(np.uint8), connectivity=8)
+    length = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
+    keep = length >= max(2, int(p.outline_min_length_mm * ppm))
+    keep[0] = False
+    line = keep[lab]
+    return line if line.any() else None
+
+
 def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
                        region: np.ndarray | None = None, dark: bool = True,
                        stages: bool = False):
@@ -1516,9 +1544,14 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     #    Minimum lost share: 0.5 up to 15 % kept, then down to 0.2 at 95 % (as before version 1.2).
     keep_share = outline_keep_share(p.outline_sensitivity)
     cand = edges & (loss >= 0.5 - 0.3 * float(np.clip((keep_share - 0.15) / 0.8, 0, 1)))
+    # effective width: never less than the material's minimum opening (otherwise not cuttable)
+    width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
+    sil = subject_silhouette(prep, p)       # selected subject's outline, always kept
     if not cand.any():
         z = np.zeros(ref.shape[:2], bool)
-        return result(z, z, z, np.zeros(ref.shape[:2], np.uint8))
+        if sil is None:
+            return result(z, z, z, np.zeros(ref.shape[:2], np.uint8))
+        return result(z, sil, z, cv2.dilate(sil.astype(np.uint8) * 255, disk(width * ppm / 2)))
     score = strength * loss
     thr = float(np.percentile(score[cand], 100 * (1 - keep_share)))
     sel = cand & (score >= thr)
@@ -1532,8 +1565,8 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     keep[0] = False
     short = (e8 > 0) & ~keep[lab_e]
     e8 = keep[lab_e].astype(np.uint8) * 255
-    # effective width: never less than the material's minimum opening (otherwise not cuttable)
-    width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
+    if sil is not None:
+        e8[sil] = 255
     stroke = cv2.dilate(e8, disk(width * ppm / 2))
     return result(sel, e8 > 0, short, stroke)
 
