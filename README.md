@@ -7,7 +7,11 @@ drawing; it reduces the image to a few paint tones, builds one cuttable stencil 
 the bridges that keep the stencils in one piece and the registration marks that let you line
 them up, and exports everything as **SVG files in millimetres**.
 
-![StencilIt main window](docs/screenshots/main.jpg)
+![StencilIt main window: a breakdance photo turned into three stencils](docs/screenshots/main.jpg)
+
+*The screenshots of this guide follow one example project: a breakdance photo turned into
+**3 stencils** in pink, violet and ink on white paper (A4 landscape), with key-detail lines and the
+dancer's silhouette cut into the darkest layer.*
 
 ---
 
@@ -46,7 +50,8 @@ StencilIt does all the tedious work for you:
 | A hole inside a hole falls out of the stencil (the inside of an "O") | Detects these **islands** and adds thin **bridges** to hold them, preferably where a darker layer will paint over them. |
 | Shapes too thin to cut or too fragile | Enforces the **material limits** (minimum opening, minimum material strip, minimum piece area). |
 | Layers must line up perfectly | Adds **registration marks** (corner brackets, crosses or pin holes) and **notches** showing the layer number. |
-| Fine details get lost in the blur of the airbrush | Optional **outline stencil** that redraws the key details with a thin line, sprayed last. |
+| Fine details get lost in the blur of the airbrush | Optional **key-detail lines** (a separate outline stencil sprayed last, or cut into a colour layer), plus the **silhouette** of the subject if you want it to stand out. |
+| You need the colours and the measurements at hand while painting | A printable **spraying sheet (PDF)**: colours in spraying order, ruler measurements for the registration crosses. |
 
 **Vocabulary used in this guide**
 
@@ -111,11 +116,12 @@ Open the SVG files of the zip in Silhouette Studio, cut, and spray layer 1, 2, 3
 │ StencilIt            status · Auto compute · Recompute · ⚙                           │  ← header
 ├────────────────────┬────────────────────────────────────────────┬────────────────────┤
 │ Image box          │ Crop | Layout | Masks | Preview |          │ Stencils           │
-│ Open a project…    │ Compare with original | Original    1 2 3  │ palette menu       │
-│ Default settings   │ Support  Mat  Sheet  Marks                 │ legend             │
+│ Open a project…    │ Compare with original | Original    1 2 3  │ palette · Closest  │
+│ Default settings   │ Support  Mat  Sheet  Marks                 │ · Auto · legend    │
 │ Settings sections  │                                            │ one card per layer │
 │  (accordion)       │            main view                       │  (click = enlarge) │
 │ Export button      │ summary: sizes, ΔE, bridges, cut length    │                    │
+│                    │ ▸ Ruler positioning (folding panel)        │                    │
 └────────────────────┴────────────────────────────────────────────┴────────────────────┘
 ```
 
@@ -129,8 +135,9 @@ Open the SVG files of the zip in Silhouette Studio, cut, and spray layer 1, 2, 3
   left button edits, drag with the **middle button** or hold **Space** while dragging. A
   **double-click** (except in Masks) or the *%* button fits it back; the zoom is kept when you
   switch views.
-- **Right column – the stencils**: one card per layer with its colour, statistics (paths, nodes,
-  islands, bridges, cut length) and warnings. Click a card to see that layer alone in the main view.
+- **Right column – the stencils**: one card per layer with its colour swatch (click it to change the
+  paint), statistics (paths, nodes, islands, bridges, merges, cut length) and warnings. Click a card
+  to see that layer alone in the main view.
 - Both side columns can be **resized** by dragging their inner edge (double-click = default width).
 
 **Auto compute** (header): when ticked, every change recomputes the stencils. Untick it for big
@@ -167,7 +174,7 @@ Choose what you will paint on:
 **Crop** tab – drag the frame handles to keep only the part of the image you want. The aspect
 ratio can be free, the support's, or fixed (1:1, 4:3, 3:4, 16:9, 9:16).
 
-![Crop view](docs/screenshots/crop.jpg)
+![Crop view, with the Image: crop & size section open](docs/screenshots/crop.jpg)
 
 **Layout** tab – place the image on the support:
 
@@ -181,7 +188,7 @@ ratio can be free, the support's, or fixed (1:1, 4:3, 3:4, 16:9, 9:16).
 Anything outside the support is trimmed (full bleed). With the **Mat** button on, the cutting mat is
 drawn with its inch grid, so you immediately see whether the sheet fits.
 
-![Layout view with the cutting mat](docs/screenshots/layout.jpg)
+![Layout view with the cutting mat (Cutting machine section open)](docs/screenshots/layout.jpg)
 
 ### 5.4 Image preprocessing (optional)
 
@@ -206,7 +213,7 @@ range (controlled posterisation). **Automatic thresholds** goes back to automati
 Under the histogram, two strips show for each range its tone and the colour of the layer that paints
 it, with the layer number (**S** = tone left to the support).
 
-![Preprocessing with the histogram and manual thresholds](docs/screenshots/preprocessing.jpg)
+![Original tab and Image preprocessing: the histogram, with under it the layer painting each tone range](docs/screenshots/preprocessing.jpg)
 
 ### 5.5 Simplification
 
@@ -231,7 +238,7 @@ it, with the layer number (**S** = tone left to the support).
   Strokes thinner than the material's minimum opening still disappear: redraw them with the
   key-detail lines (below).
 
-### 5.6 Masks: background removal and key details
+### 5.6 Masks: background removal, key details and silhouette
 
 The **Masks** tab lets you paint on the image with a brush, or select objects with a click. Choose
 which mask you edit in the drop-down list:
@@ -258,7 +265,7 @@ Keyboard shortcuts: **B** brush, **E** eraser, **S** object, **[** and **]** bru
 erases the mask. **Copy to…** copies the shown mask into another one (its content is replaced), for
 example the outline mask into the subject mask; a subject roughly painted gives its cut-out.
 
-![Masks tab: subject painted, background removed](docs/screenshots/masks.jpg)
+![Masks tab: the silhouette mask (blue) selected on the dancer; on the left, Draw the silhouette uses it](docs/screenshots/masks.jpg)
 
 **Key-detail outlines** section: *Redraw the faded key details* compares the original image with
 the simulated render of the layers, and keeps the lines whose contrast has been lost.
@@ -356,7 +363,7 @@ Choose how the stencil sheet relates to the support:
 - **Compare with original** – a before/after slider between the original image and the result.
   The summary line gives the **mean colour difference (ΔE)**: lower = more faithful.
 
-  ![Compare with the original, simulated render](docs/screenshots/compare.jpg)
+  ![Compare with the original: photo on the left, simulated airbrush render on the right](docs/screenshots/compare.jpg)
 
 - **Stencil cards** (right column): each card shows the cut layer; in the legend, **bridge** and
   **removed detail** are buttons that highlight bridges (red) and details removed by the material
@@ -372,7 +379,9 @@ By default each layer gets the tone computed from the image. To paint with your 
 
 - click the **colour swatch** of a layer card: choose a colour of the current palette, one of the
   image tones, one of the 6 recently used colours, or any colour with the built-in picker (hex code
-  accepted). **Auto (computed tone)** goes back to the image tone;
+  accepted). **Auto (computed tone)** goes back to the image tone. The outline stencil's card has the
+  same picker (it sets the line colour of the *Key-detail outlines* section). Choosing a colour of the
+  current palette keeps that palette shown in the menu;
 - or use the **Colour palette…** menu at the top of the stencil column: 91 harmonious palettes in 10
   families (Classics, Vivid, Modern vivid, Soft, Modern soft, Trending, Cold, Warm, Nature,
   Monochromes), of 8 colours each. Each layer gets the palette colour closest to the tone it really
@@ -384,8 +393,9 @@ By default each layer gets the tone computed from the image. To paint with your 
   best matches the image is applied.
 
 The chosen colours are used in the preview, the simulated render, the export and the file names.
+The **Auto** button (next to *Closest*) puts every layer back on its computed colour.
 
-![Layer colour picker](docs/screenshots/colors.jpg)
+![Layer 2 shown alone, with its colour picker open](docs/screenshots/colors.jpg)
 
 ### 5.12 Export
 
@@ -403,6 +413,11 @@ Click **Export SVGs + project (.zip)**. The zip contains:
 | `…_original.<ext>` | Your original image, untouched. |
 | `…_outline_mask.png`, `…_subject_mask.png`, `…_silhouette_mask.png` | The painted masks, if any. |
 | `…_infos.json` | Sizes, colours, ruler measurements, and **all the settings** of the project. |
+
+The **spraying sheet** sums up what you need next to the airbrush: the colour of each layer in
+spraying order and the ruler measurements of the registration crosses.
+
+![Spraying sheet (PDF) of the example project](docs/screenshots/spray_sheet.jpg)
 
 The **Inkscape file** contains, from bottom to top: *Support*, *Original image (layout)*, *Preview
 (flat colours)* and *Preview (simulated render)* (hidden), *Registration dimensions (do not cut)*,
@@ -429,7 +444,7 @@ squares with their hex codes, placed left of the page, to prepare your paints.
 **Painting**
 
 1. Fix the support. For the "inside the support" modes, pencil the registration crosses using the
-   ruler measurements.
+   ruler measurements (printed on the spraying sheet).
 2. Lay **layer 1** on its registration marks, spray the lightest colour, remove the stencil.
 3. Repeat with layer 2, 3… in order, each time aligning the marks precisely.
 4. Finish with the outline stencil, if any.
@@ -463,6 +478,9 @@ squares with their hex codes, placed left of the page, to prepare your paints.
 | Two colours merge into one tone | Increase the saturation, add a stencil, or set manual thresholds. |
 | Flat-looking face | Increase the local contrast (CLAHE) or adjust the midtones. |
 | The background gets painted | Use *Remove the background* with the subject mask. |
+| The subject does not stand out from the background | Tick *Draw the silhouette* (Key-detail outlines) and select the subject, or paint the silhouette mask. |
+| The computed colours look dull | Raise *Colour vividness*, or pick a palette (*Closest* finds the best one). |
+| Two colours of similar lightness end up in one layer | Raise the *Hue weight*. |
 | Computing is slow | Untick *Auto compute* and use **Ctrl + Enter**. |
 | "The sheet does not fit on the mat" | Use *Best fit in the stencil*, turn the mat to landscape, or use a larger mat. |
 | In Silhouette Studio, all the cut lines end up in one layer of the Inkscape file | Grouping objects of several layers moves them into a single layer (ungrouping does not put them back). To move everything, select all (Ctrl + A) and drag without grouping, or re-import the file. |
@@ -487,8 +505,9 @@ in `app.py` (Flask) and the interface in `static/index.html` (+ `static/i18n.js`
    made more vivid (colour vividness).
 4. **Layers** – cumulative or exclusive masks, one per tone, plus the optional outline layer
    (Canny edges, difference of Gaussians or Hessian ridges, kept where their contrast is lost in
-   the simulated render), or the same lines merged into a colour layer. Optionally, thin strokes
-   found by a Hessian ridge filter escape the majority filter of the simplification.
+   the simulated render), or the same lines merged into a colour layer, plus optionally the
+   outline of a mask (silhouette). Optionally, thin strokes found by a Hessian ridge filter escape
+   the majority filter of the simplification.
 5. **Material constraints** – morphological opening and closing, removal of tiny pieces.
 6. **Merges and bridges** – optionally, islands are first held by merging zones (morphological
    closing of narrow channels, removal of small islands), cheapest visible change first; each
@@ -496,7 +515,8 @@ in `app.py` (Flask) and the interface in `static/index.html` (+ `static/i18n.js`
    bridges that stay clear of other edges, processed in passes from the nearest islands.
 7. **Vectorisation** – smoothed, simplified outlines turned into Bézier curves.
 8. **Export** – one SVG per layer with registration marks, overview, simulated render, Inkscape
-   document and JSON project.
+   and Silhouette Studio documents, spraying sheet (PDF, written by the small dependency-free
+   `stencilit/pdf_sheet.py`) and JSON project.
 
 ```
 StencilIt/
@@ -505,7 +525,8 @@ StencilIt/
 ├── requirements.txt
 ├── stencilit/
 │   ├── pipeline.py        image → layers → bridges → paths
-│   ├── svg_export.py      SVG / Inkscape / zip export
+│   ├── svg_export.py      SVG / Inkscape / PDF sheet / zip export
+│   ├── pdf_sheet.py       minimal PDF writer (spraying sheet)
 │   ├── semantic.py        object selection (MobileSAM, ONNX)
 │   └── materials.json     built-in material presets
 ├── static/
