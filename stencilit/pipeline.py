@@ -1410,8 +1410,13 @@ def lines_into_layers(prep: Prepared, sim: np.ndarray, p: Params, region: np.nda
     (they are already cut). With `stages`, returns the detection stages instead, the stroke
     limited to the lines added and `present` = lines already in the layers."""
     st = detect_key_details(prep, sim, p, region, dark=True, stages=True)
-    n, comp = cv2.connectedComponents(st["kept"].astype(np.uint8), connectivity=8)
-    if n <= 1:
+    width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
+    k = disk(width * p.px_per_mm / 2)
+    # The silhouette (one long closed line) is placed piece by piece below; the other lines whole
+    sil = subject_silhouette(prep, p)
+    kept = st["kept"] & ~sil if sil is not None else st["kept"]
+    n, comp = cv2.connectedComponents(kept.astype(np.uint8), connectivity=8)
+    if n <= 1 and sil is None:
         return dict(st, present=np.zeros_like(st["kept"])) if stages else ({}, 0)
     ys, xs = np.nonzero(comp)
     c = comp[ys, xs]
@@ -1420,7 +1425,7 @@ def lines_into_layers(prep: Prepared, sim: np.ndarray, p: Params, region: np.nda
     counts = np.bincount(c * nl + painted[ys, xs] + 1, minlength=n * nl).reshape(n, nl)
     local = counts.argmax(axis=1) - 1
     # mean colour of the line in the original photo (the tone colours are measured there too)
-    lab = _lab(original(prep)[ys, xs]).astype(np.float64)
+    lab = _lab(original(prep)[ys, xs]).astype(np.float64) if len(ys) else np.zeros((0, 3))
     tot = np.bincount(c, minlength=n).astype(np.float64)
     mean = np.stack([np.bincount(c, lab[:, k], minlength=n) for k in range(3)], 1) / np.maximum(tot, 1)[:, None]
     pal = _lab(prep.palette)
@@ -1433,18 +1438,38 @@ def lines_into_layers(prep: Prepared, sim: np.ndarray, p: Params, region: np.nda
             assign[i] = min(cands, key=lambda li: float(np.sum((pal[color_ids[li]] - mean[i]) ** 2)))
         else:
             assign[i] = cands[-1]
-    width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
-    k = disk(width * p.px_per_mm / 2)
     out = {}
     for li in sorted(set(assign[assign >= 0].tolist())):
         m = (assign[comp] == li) & (comp > 0)
         out[li] = cv2.dilate(m.astype(np.uint8) * 255, k)
+    present = (assign[comp] < 0) & (comp > 0)
+    added = int((assign[1:] >= 0).sum())
+    if sil is not None:
+        # Silhouette: each piece goes to a layer darker than the lightest one painted under its
+        # stroke (both sides of the edge), so that it shows at least on the lighter side; only the
+        # pieces running entirely over the last layer are left out (already cut there).
+        under = cv2.erode(painted.astype(np.int16), k)           # lightest layer under the stroke
+        orig = _lab(original(prep)).astype(np.float64).reshape(*sil.shape, 3)
+        for v in np.unique(under[sil]):
+            piece = sil & (under == v)
+            cands = list(range(int(v) + 1, len(color_ids)))
+            if not cands:
+                present |= piece
+                continue
+            if p.outline_target == "nearest":
+                mc = orig[piece].mean(axis=0)
+                li = min(cands, key=lambda c: float(np.sum((pal[color_ids[c]] - mc) ** 2)))
+            else:
+                li = cands[-1]
+            m = cv2.dilate(piece.astype(np.uint8) * 255, k)
+            out[li] = m if li not in out else (out[li] | m)
+            added += 1
     if stages:
         stroke = np.zeros(comp.shape, bool)
         for m in out.values():
             stroke |= m > 0
-        return dict(st, stroke=stroke, present=(assign[comp] < 0) & (comp > 0))
-    return out, int((assign >= 0).sum())
+        return dict(st, stroke=stroke, present=present)
+    return out, added
 
 
 def outline_keep_share(sensitivity: float) -> float:
