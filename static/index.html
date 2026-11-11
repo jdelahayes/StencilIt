@@ -95,8 +95,8 @@
   .tabs button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .stage { background: repeating-conic-gradient(var(--soft) 0 25%, var(--panel) 0 50%) 0 0 / 20px 20px;
            border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; justify-content: center; }
-  .stage img { max-width: 100%; max-height: 72vh; display: block; image-rendering: auto; }
-  .stage canvas.pv { max-width: 100%; max-height: 72vh; display: block; }
+  .stage img { max-width: 100%; max-height: var(--stage-h, 72vh); display: block; image-rendering: auto; }
+  .stage canvas.pv { max-width: 100%; max-height: var(--stage-h, 72vh); display: block; }
   .compare { position: relative; display: inline-block; line-height: 0; }
   .compare img.top { position: absolute; inset: 0; width: 100%; height: 100%; clip-path: inset(0 50% 0 0); }
   /* thin black line, kept 1 screen pixel wide whatever the zoom */
@@ -116,7 +116,7 @@
   .vt-sim { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; cursor: pointer; }
   /* Key-detail mask editor */
   .maskwrap { position: relative; display: inline-block; line-height: 0; touch-action: none; user-select: none; cursor: none; }
-  .maskwrap img { max-width: 100%; max-height: 72vh; display: block; pointer-events: none; }
+  .maskwrap img { max-width: 100%; max-height: var(--stage-h, 72vh); display: block; pointer-events: none; }
   .maskwrap img.fgov { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; pointer-events: none; }
   .maskwrap img.detov { position: absolute; max-width: none; max-height: none; pointer-events: none; }
   .detlegend { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
@@ -233,7 +233,7 @@
   .sw.pick { cursor: pointer; width: 20px; height: 20px; }
   /* Crop editor */
   .cropwrap { position: relative; display: inline-block; overflow: hidden; user-select: none; touch-action: none; line-height: 0; }
-  .cropwrap img { max-width: 100%; max-height: 72vh; display: block; pointer-events: none; }
+  .cropwrap img { max-width: 100%; max-height: var(--stage-h, 72vh); display: block; pointer-events: none; }
   .croprect { position: absolute; border: 1.5px solid #fff; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move;
               background-image: linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px);
               background-size: 33.333% 33.333%; background-position: -1px -1px; }
@@ -298,8 +298,13 @@
   .calage td, .calage th { padding: 2px 12px 2px 0; text-align: left; }
   .calage th { color: var(--muted); font-weight: 500; }
   .calage .off { color: #e0703a; }
-  .calage { position: relative; }
-  .calage .calage-hide { position: absolute; top: 8px; right: 10px; }
+  .calage h3 { margin: 0; }
+  .calage .calage-toggle { all: unset; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline;
+                           font-weight: 600; font-size: 13px; }
+  .calage .calage-toggle:hover, .calage .calage-toggle:focus-visible { color: var(--accent); }
+  .calage .calage-toggle .chev { display: inline-block; width: 10px; color: var(--muted); }
+  .calage:not(.collapsed) h3 { margin-bottom: 6px; }
+  .calage.collapsed { padding-top: 6px; padding-bottom: 6px; }
   .lay .regmark { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 2; }
   .lay .regmark::before, .lay .regmark::after { content: ""; position: absolute; background: #1e88e5; }
   .lay .regmark::before { left: -7px; top: -1px; width: 14px; height: 2px; }
@@ -858,8 +863,6 @@
         title="Repères de calage (croix, équerres ou trous) et encoches du numéro de couche, dans toutes les vues">Repères</button>
       <input type="checkbox" id="show_stock" hidden>
       <input type="checkbox" id="show_reg" checked hidden>
-      <button type="button" class="vt-opt" id="optCalage" aria-pressed="true" hidden
-        title="Panneau des cotes de calage à la règle, sous la prévisualisation">Cotes</button>
       <input type="checkbox" id="show_calage" checked hidden>
       <input type="checkbox" id="show_mat" hidden>
     </span>
@@ -1200,7 +1203,7 @@ function supportWorld(st, withMat = false) {
   }
   const cs = getComputedStyle(st);
   const aw = Math.max(200, st.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
-  const ah = Math.max(240, window.innerHeight * 0.72);
+  const ah = stageH();
   const k = Math.min(aw / (x1 - x0), ah / (y1 - y0));
   return { L, m, sr, k, W: (x1 - x0) * k, H: (y1 - y0) * k, px: x => (x - x0) * k, py: y => (y - y0) * k };
 }
@@ -1418,7 +1421,7 @@ function layoutEditor(st) {
         x1 = Math.max(L0.SW * (1 + room), sr.x1 + 2), y1 = Math.max(L0.SH * (1 + room), sr.y1 + 2);
     if (mat) { x0 = Math.min(x0, sr.x0 - 4); y0 = Math.min(y0, sr.y0 - 4); x1 = Math.max(x1, sr.x0 + mat.w + 4); y1 = Math.max(y1, sr.y0 + mat.h + 4); }
     totW = x1 - x0; totH = y1 - y0;
-    const availW = Math.max(200, st.clientWidth - 24), availH = Math.max(240, window.innerHeight * 0.72);
+    const availW = Math.max(200, st.clientWidth - 24), availH = stageH();
     k = Math.min(availW / totW, availH / totH);
     ox = -x0 * k; oy = -y0 * k;
   }
@@ -2131,11 +2134,11 @@ async function init() {
   $("optPre").onclick = () => { SHOW_PRE = !SHOW_PRE; render(); };
   $("show_reg").addEventListener("change", () => { render(); rememberSettings(); });
   $("calage").addEventListener("click", e => {
-    if (!e.target.closest(".calage-hide")) return;
-    $("show_calage").checked = false; $("show_calage").dispatchEvent(new Event("change"));
+    if (!e.target.closest(".calage-toggle")) return;
+    $("show_calage").checked = !$("show_calage").checked; $("show_calage").dispatchEvent(new Event("change"));
   });
-  $("show_calage").addEventListener("change", () => { renderCalage(); rememberSettings(); });
-  [["optSupport", "show_support"], ["optMat", "show_mat"], ["optStock", "show_stock"], ["optReg", "show_reg"], ["optCalage", "show_calage"]].forEach(([b, c]) => $(b).onclick = () => {
+  $("show_calage").addEventListener("change", () => { renderCalage(); render(); rememberSettings(); });
+  [["optSupport", "show_support"], ["optMat", "show_mat"], ["optStock", "show_stock"], ["optReg", "show_reg"]].forEach(([b, c]) => $(b).onclick = () => {
     $(c).checked = !$(c).checked;
     $(c).dispatchEvent(new Event("change"));
   });
@@ -2944,7 +2947,7 @@ function fitStage() {
   const cs = getComputedStyle(st);
   const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
   const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
-  const aw = st.clientWidth - padX, ah = window.innerHeight * 0.72;
+  const aw = st.clientWidth - padX, ah = stageH();
   const r = LAST.sheet_rect_mm, [SWs, SHs] = LAST.support_mm;
   const UW = Math.max(r[2], SWs) - Math.min(r[0], 0), UH = Math.max(r[3], SHs) - Math.min(r[1], 0);
   const k = Math.min(aw / UW, ah / UH);
@@ -2994,9 +2997,32 @@ function refreshPreviewOnly() {
   if (SEL === null && (VIEW === "preview" || VIEW === "compare")) renderPreview($("stage"));
 }
 
+// Height available for the view (content of #stage): fills the column down to the metrics and the
+// ruler panel, so that folding the panel enlarges the view; at least 72 % of the window as before
+function stageH() {
+  const view = document.querySelector("section.view"), st = $("stage");
+  let h = window.innerHeight * 0.72;
+  if (view && st && view.clientHeight < window.innerHeight) {          // column with its own scrolling
+    const top = st.getBoundingClientRect().top - view.getBoundingClientRect().top + view.scrollTop;
+    const cs = getComputedStyle(st), num = v => parseFloat(v) || 0;
+    const pad = num(cs.paddingTop) + num(cs.paddingBottom) + num(cs.borderTopWidth) + num(cs.borderBottomWidth);
+    let below = 0;
+    for (const id of ["compareRange", "metrics", "calage"]) {
+      const e = $(id);
+      if (!e || e.hidden) continue;
+      const m = getComputedStyle(e);
+      below += (e.offsetHeight || (id === "metrics" ? 20 : 0)) + num(m.marginTop) + num(m.marginBottom);
+    }
+    h = Math.max(h, view.clientHeight - num(getComputedStyle(view).paddingBottom) - top - pad - below - 2);
+  }
+  h = Math.max(240, Math.floor(h));
+  document.documentElement.style.setProperty("--stage-h", h + "px");
+  return h;
+}
 function render() {
   $("tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === VIEW && SEL === null));
   const st = $("stage");
+  renderCalage(); stageH();
   $("masktools").hidden = !(IMG && SEL === null && VIEW === "mask");
   renderToolbar();
   const editor = SEL === null && (VIEW === "crop" || VIEW === "layout" || VIEW === "mask");
@@ -3076,15 +3102,15 @@ function render() {
 const fmtMM = v => `${(Math.round(v * 10) / 10).toString().replace(".", ",")} mm`;
 // Ruler dimensions: where to draw the crosses on the support (sheet laid inside the support)
 function renderCalage() {
-  const box = $("calage"), pos = LAST && LAST.positioning, btn = $("optCalage");
-  const avail = !!pos && pos.mode !== "around" && val("reg_dims") && pos.reperes.length > 0;
-  btn.hidden = !avail;                       // "Ruler dimensions" toggle, only when there are some
-  btn.setAttribute("aria-pressed", String($("show_calage").checked));
-  if (!avail || !$("show_calage").checked) { box.hidden = true; return; }
-  const f = pos.feuille;
+  const box = $("calage"), pos = LAST && LAST.positioning;
+  if (!pos || pos.mode === "around" || !val("reg_dims") || !pos.reperes.length) { box.hidden = true; return; }
+  const f = pos.feuille, open = $("show_calage").checked;   // folded: only the title line stays
   box.hidden = false;
-  box.innerHTML = `<button type="button" class="vt-small calage-hide" title="Masquer le panneau des cotes (bouton « Cotes » au-dessus de la vue pour le réafficher)">Masquer</button>
-    <h3>Calage à la règle — depuis le coin haut-gauche du support</h3>
+  box.classList.toggle("collapsed", !open);
+  const head = `<h3><button type="button" class="calage-toggle" aria-expanded="${open}"
+    title="${open ? "Réduire" : "Afficher"} les cotes de calage"><span class="chev" aria-hidden="true">${open ? "▾" : "▸"}</span><span>Calage à la règle — depuis le coin haut-gauche du support</span></button></h3>`;
+  if (!open) { box.innerHTML = head; return; }
+  box.innerHTML = `${head}
     <p class="hint" style="margin:0 0 6px">Tracez au crayon une croix à chaque cote, puis posez chaque couche en alignant ses fenêtres en croix sur les traits.</p>
     <table><tr><th>Croix</th><th>depuis la gauche</th><th>depuis le haut</th><th>depuis la droite</th><th>depuis le bas</th></tr>
     ${pos.reperes.map(r => `<tr class="${r.sur_support ? "" : "off"}"><td>${r.coin}${r.sur_support ? "" : " (hors du support)"}</td>

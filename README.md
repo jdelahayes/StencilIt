@@ -300,8 +300,8 @@ Choose how the stencil sheet relates to the support:
   upside down) or **4 corners**; shape: brackets, crosses or round holes (for registration pins).
 - Small square **notches** at the top of each sheet give the layer number.
 - For "inside the support" modes, the ruler measurements are shown under the preview (*Ruler
-  positioning*) and in the Layout view, and are exported in the files. The **Dimensions** button
-  above the view (or **Hide** in the panel) hides or shows this panel.
+  positioning*) and in the Layout view, and are exported in the files. Click the panel's title
+  to fold it to a single line (the preview then gets the room) or unfold it.
 
 ### 5.8 Cutting machine
 
