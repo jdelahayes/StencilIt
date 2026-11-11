@@ -217,6 +217,11 @@ it, with the layer number (**S** = tone left to the support).
 
 ### 5.5 Simplification
 
+- **Stencil style**:
+  - **Flat colours** (default) – one paint layer per tone, with optional key-detail lines;
+  - **Lines only (line drawing)** – no flat colour at all: only line stencils, one per line colour,
+    sprayed from the lightest to the darkest (see *Lines only* in 5.6). The number of stencils then
+    sets the number of tone zones of the colouring book; layer stacking does not apply.
 - **Number of stencils**: number of painted tones (the bare support and the outline stencil are
   not counted). StencilIt shows a recommendation for your image. More stencils = more faithful but
   more cutting and more painting.
@@ -230,9 +235,9 @@ it, with the layer number (**S** = tone left to the support).
   average out); 100 % = same hue and lightness with the saturation of its most vivid pixels
   (75th percentile), kept inside sRGB. It does not change the cut. No effect in black and white.
 - **Layer stacking**:
-  - **Cumulative** (recommended) – each stencil opens its own tone *and all darker ones*. Layers
+  - **Exclusive** (default) – each stencil opens only its own tone (useful for flat, poster-like colours).
+  - **Cumulative** – each stencil opens its own tone *and all darker ones*. Layers
     overlap, so small registration errors do not leave gaps.
-  - **Exclusive** – each stencil opens only its own tone (useful for flat, poster-like colours).
 - **Protect thin strokes from simplification**: thin dark or light strokes (eyes, eyebrows,
   nostrils, strands) keep their own tone instead of being absorbed by the area around them.
   Strokes thinner than the material's minimum opening still disappear: redraw them with the
@@ -296,6 +301,27 @@ contrast, on top of the detected details: useful when the subject does not stand
 background, since the detection mostly reinforces details inside it. **Silhouette mask** chooses
 which one: the subject mask (selected object or cut-out area), the dedicated silhouette mask, or the
 key-detail mask; **Paint…** opens it in the Masks tab. The image's own edge is not drawn.
+A closed silhouette would cut the whole subject out as one big island, held by a few bridges only.
+Two options open it:
+- **Only where the edge stands out poorly**: the line is drawn only where the simulated render of
+  the layers shows the edge poorly (colour difference across it below *Max colour difference (ΔE)*);
+  elsewhere the layers already draw the edge;
+- **Interrupt every … mm**: the line is cut at regular intervals along its length, leaving
+  *Length of an interruption* of material each time, like bridges spread all around. Small
+  interruptions are almost invisible once sprayed. 0 = continuous line.
+
+**Lines only** (*Stencil style* in Simplification): the stencils hold lines only, from up to three
+sources, which can be combined:
+- the **key details** (*Retrace the faded key details*), searched against the bare support: the
+  strongest edges of the image, as many as the sensitivity allows;
+- the **silhouette** (*Draw the silhouette*), with **Own colour for the silhouette** if wanted;
+- the **colouring book** (*Draw the limits between the tone zones*): the limits between the computed
+  tones, like a colouring book. **Colour of the limits**: same as the key details, a chosen colour,
+  or the **tone of the darker zone** – one stencil per tone, for a coloured line drawing.
+
+Lines of the same colour share one stencil; each colour gets its own. The colour swatch of a line
+stencil's card changes the colour of its sources. *Interrupt every … mm* then applies to all the
+lines, since a line drawing is full of closed loops.
 
 **Show detection…** opens the Masks tab with the **detection preview** over the image: red = line of
 the stencil, orange = too short, blue = detected but not kept (already visible in the render, or
@@ -350,7 +376,7 @@ Choose how the stencil sheet relates to the support:
     textures, where the lines enclose many small light areas; the lines themselves are never cut).
 
   A merge is used when the visible area it changes stays below the limit set by the slider
-  (progressive scale, about 5 mm² at 50). Areas repainted later by a darker layer do not count, and
+  (progressive scale: about 5 mm² at 50, 90 mm² at 100, 1500 mm² at the maximum, 150). Areas repainted later by a darker layer do not count, and
   a change counts less when the two tones involved are close. The **merge** button of the legend
   highlights the merged zones (violet) on the stencil cards.
 - Blade, force, speed and passes can be noted with the material preset for your own reference.

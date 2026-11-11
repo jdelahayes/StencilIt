@@ -402,10 +402,12 @@ def api_process():
         H, W = sess["prep"].labels.shape
         region = cv2.resize(sess["mask"][y0:y1, x0:x1], (W, H), interpolation=cv2.INTER_NEAREST) > 0
     sess["prep"].subject = subject_area(sess, lay, sess["prep"].labels.shape, p.outline_subject_mask)
-    if p.outline and p.outline_subject and sess["prep"].subject is None:
+    if (p.outline or p.stencil_style == "line") and p.outline_subject and sess["prep"].subject is None:
         warnings.append(f"Silhouette : le masque {SILHOUETTE_MASK_NAMES[p.outline_subject_mask]} est vide "
                         f"(onglet Masques)")
     res = pl.build(sess["prep"], p, region)
+    if p.stencil_style == "line" and not res.layers:
+        warnings.append("Trait seul : aucun trait (cochez les détails clés, la silhouette ou le coloriage)")
     sess["result"] = res
     sess["material"] = data.get("material")
     sess["ui"] = data.get("ui")          # full interface state, for the project file
@@ -435,6 +437,7 @@ def api_process():
             "index": L.index,
             "color": pl.bgr_hex(L.color),
             "tone": L.tone,     # tone (index in `palette`) painted by this layer; None for the outline layer
+            "sources": list(L.sources),   # line style: where the lines of this stencil come from
             # layer view without highlights + bridges and removed details as separate overlays
             # (shown / hidden in the browser)
             "image": png_b64(pl.layer_view(res, L, sheet, bridges=False, lost=False, marks=False), 900),

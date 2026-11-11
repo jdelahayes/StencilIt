@@ -56,7 +56,7 @@ class Params:
     # computed tone colours, %: 0 = mean of the pixels (dull: hues and shadows average out),
     # 100 = mean hue and lightness with the saturation of the vivid pixels (75th percentile)
     color_vividness: float = 0.0
-    layering: str = "cumulative"   # cumulative | exclusive
+    layering: str = "exclusive"    # exclusive | cumulative
     skip_support: bool = True      # the tone closest to the support gets no stencil
     protect_lines: bool = False    # thin strokes (eyes, eyebrows…) escape the majority filter
     # Outline stencil (key details faded by the airbrush blur)
@@ -70,7 +70,18 @@ class Params:
     outline_min_length_mm: float = 4.0  # minimum line length
     outline_subject: bool = False       # also draw the outline of a mask (silhouette of the subject)
     outline_subject_mask: str = "subject"   # mask whose outline is drawn: subject | outline | silhouette
+    outline_subject_weak: bool = False      # silhouette only where the edge stands out poorly in the render
+    outline_subject_de: float = 20.0        # ... i.e. colour difference across the edge (ΔE) below this
+    outline_subject_gap_every_mm: float = 0.0   # silhouette interrupted every … mm (0 = continuous)
+    outline_subject_gap_mm: float = 1.5     # length of an interruption (material left: a built-in bridge)
     outline_auto_color: bool = True     # auto colour = tone with the most contrast against the support
+    # Stencil style: fill = flat colour layers (+ optional lines); line = line stencils only, from the
+    # key details (`outline`), the silhouette (`outline_subject`) and/or the limits between the
+    # tone zones (`line_zones`, colouring-book style); one stencil per line colour.
+    stencil_style: str = "fill"
+    line_zones: bool = False
+    line_zones_color: str = ""          # "" = colour of the key-detail lines | "tones" = darker tone of the two zones | #hex
+    line_sil_color: str = ""            # "" = colour of the key-detail lines | #hex
     outline_color: str = "#1e1e1e"
     # Paint colours chosen for the layers: "1=#rrggbb;3=#rrggbb" (layer number -> colour).
     # Layers not listed keep their computed tone.
@@ -84,7 +95,7 @@ class Params:
     min_bridges: int = 1           # minimum number of bridges per island (1 to 4)
     bridges: bool = True
     # Merging zones instead of bridges (0 = off): see merge_zones
-    merge_amount: float = 0.0      # 0..100, progressive scale of the largest visible change accepted
+    merge_amount: float = 0.0      # 0..150, progressive scale of the largest visible change accepted
     merge_channel_mm: float = 2.5  # A: channels of opening narrower than this may be closed
     merge_channels: bool = True    # A: close narrow channels
     merge_islands: bool = True     # B: remove small islands
@@ -131,6 +142,19 @@ class Params:
         p.color_vividness = float(np.clip(p.color_vividness, 0, 100))
         if p.outline_subject_mask not in ("subject", "outline", "silhouette"):
             p.outline_subject_mask = "subject"
+        if p.stencil_style not in ("fill", "line"):
+            p.stencil_style = "fill"
+        for k in ("line_zones_color", "line_sil_color"):
+            v = str(getattr(p, k) or "").strip().lower()
+            ok = v in ("", "tones") if k == "line_zones_color" else v == ""
+            if not ok and not (len(v) == 7 and v.startswith("#") and all(c in "0123456789abcdef" for c in v[1:])):
+                v = ""
+            setattr(p, k, v)
+        p.outline_subject_de = float(np.clip(p.outline_subject_de, 1, 100))
+        p.outline_subject_gap_every_mm = float(np.clip(p.outline_subject_gap_every_mm, 0, 1000))
+        if 0 < p.outline_subject_gap_every_mm < 5:
+            p.outline_subject_gap_every_mm = 5.0
+        p.outline_subject_gap_mm = float(np.clip(p.outline_subject_gap_mm, 0.3, 20))
         p.px_per_mm = float(np.clip(p.px_per_mm, 2, 16))
         p.support_w_mm = float(np.clip(p.support_w_mm, 20, 3000))
         p.support_h_mm = float(np.clip(p.support_h_mm, 20, 3000))
@@ -161,7 +185,7 @@ class Params:
         p.pre_saturation = float(np.clip(p.pre_saturation, 0, 300))
         p.pre_sharpen = float(np.clip(p.pre_sharpen, 0, 100))
         p.outline_width_mm = float(np.clip(p.outline_width_mm, 0.2, 10))
-        p.merge_amount = float(np.clip(p.merge_amount, 0, 100))
+        p.merge_amount = float(np.clip(p.merge_amount, 0, 150))
         p.merge_channel_mm = float(np.clip(p.merge_channel_mm, 0.3, 30))
         p.outline_min_length_mm = float(np.clip(p.outline_min_length_mm, 0, 200))
         return p
@@ -485,6 +509,21 @@ def parse_layer_colors(txt: str) -> dict[int, np.ndarray]:
     return out
 
 
+def parse_tone_colors(txt: str) -> dict[int, np.ndarray]:
+    """Paints chosen for the tones of the "line" style (tone<n> stencils): "t3=#rrggbb" entries of
+    `layer_colors` (keyed by tone, so they follow the tone whatever the order of the stencils)."""
+    out = {}
+    for part in str(txt or "").replace(",", ";").split(";"):
+        k, _, v = part.partition("=")
+        k, v = k.strip(), v.strip()
+        if k[:1] == "t" and k[1:].isdigit() and len(v) == 7 and v.startswith("#"):
+            try:
+                out[int(k[1:])] = hex_to_bgr(v).astype(np.uint8)
+            except ValueError:
+                pass
+    return out
+
+
 def parse_thresholds(txt: str) -> list[float]:
     out = []
     for t in str(txt or "").replace(";", ",").split(","):
@@ -715,10 +754,11 @@ def clean_mask(mask: np.ndarray, p: Params, extra_area_mm2: float = 0.0) -> np.n
 
 def merge_area_mm2(amount: float) -> float:
     """Largest visible area (mm²) a merge may change, from the "merge instead of bridges" setting
-    (0..100, progressive scale): 0 = never merge, ~0.3 mm² at 1, ~5 mm² at 50, 90 mm² at 100."""
+    (0..150, progressive scale): 0 = never merge, ~0.3 mm² at 1, ~5 mm² at 50, 90 mm² at 100,
+    ~1560 mm² at 150."""
     if amount <= 0:
         return 0.0
-    return 0.3 * 300.0 ** (min(amount, 100.0) / 100.0)
+    return 0.3 * 300.0 ** (min(amount, 150.0) / 100.0)
 
 
 def merge_zones(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None,
@@ -1142,6 +1182,7 @@ class Layer:
     merged: np.ndarray | None = None   # areas changed by merges instead of bridges (whole sheet)
     n_merged: int = 0        # number of merges (closed channels + removed islands)
     tone: int | None = None  # index of the tone it paints in prepared.palette (colour layers)
+    sources: tuple = ()      # line stencils of the "line" style: details | silhouette | zones | tone<n>
 
 
 @dataclass
@@ -1235,6 +1276,8 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
         return full
 
     targets, cleaned_all = [], []
+    if p.stencil_style == "line":
+        color_ids = []
     for li, ci in enumerate(color_ids):
         if p.layering == "cumulative":
             t = np.isin(labels, color_ids[li:])
@@ -1259,6 +1302,8 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
     region = outline_region
     if prep.fg is not None and p.outline:
         region = prep.fg if region is None else (region.astype(bool) & prep.fg)
+    if p.stencil_style == "line":
+        return make_result(line_stencils(prep, p, region, support, place))
 
     # Key-detail lines merged into the colour layers (instead of a separate outline stencil):
     # searched against the render of the layers before bridges, then added to the chosen layer.
@@ -1413,7 +1458,7 @@ def lines_into_layers(prep: Prepared, sim: np.ndarray, p: Params, region: np.nda
     width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
     k = disk(width * p.px_per_mm / 2)
     # The silhouette (one long closed line) is placed piece by piece below; the other lines whole
-    sil = subject_silhouette(prep, p)
+    sil = subject_silhouette(prep, p, sim)
     kept = st["kept"] & ~sil if sil is not None else st["kept"]
     n, comp = cv2.connectedComponents(kept.astype(np.uint8), connectivity=8)
     if n <= 1 and sil is None:
@@ -1478,24 +1523,223 @@ def outline_keep_share(sensitivity: float) -> float:
     return 0.01 * 95.0 ** (float(np.clip(sensitivity, 0, 100)) / 100.0)
 
 
-def subject_silhouette(prep: Prepared, p: Params) -> np.ndarray | None:
+def gap_lines(line: np.ndarray, p: Params) -> tuple[np.ndarray, np.ndarray | None]:
+    """Interrupts any line drawing (one-pixel lines) about every `outline_subject_gap_every_mm`
+    (distance between interruptions, measured in a straight line: close to the length along smooth
+    lines), so that closed loops do not cut islands out. Returns (line, zones of the interruptions)."""
+    every = p.outline_subject_gap_every_mm * p.px_per_mm
+    if every <= 0 or not line.any():
+        return line, None
+    width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
+    r = max(1, int(round((p.outline_subject_gap_mm + width) * p.px_per_mm / 2)))
+    ys, xs = np.nonzero(line)
+    # greedy sampling, bucketed on a grid of cells of `every`: a point closer than `every` to a
+    # centre already taken is skipped
+    cell = every
+    taken: dict[tuple, list] = {}
+    centres = []
+    e2 = every * every
+    for y, x in zip(ys.tolist(), xs.tolist()):
+        cy, cx = int(y // cell), int(x // cell)
+        near = False
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                for (yy, xx) in taken.get((cy + dy, cx + dx), ()):
+                    if (yy - y) ** 2 + (xx - x) ** 2 < e2:
+                        near = True
+                        break
+                if near:
+                    break
+            if near:
+                break
+        if not near:
+            taken.setdefault((cy, cx), []).append((y, x))
+            centres.append((x, y))
+    zones = np.zeros(line.shape, np.uint8)
+    for x, y in centres:
+        cv2.circle(zones, (x, y), r, 1, -1)
+    zones = zones > 0
+    return line & ~zones, zones
+
+
+def zone_limits(prep: Prepared, p: Params) -> tuple[np.ndarray, np.ndarray]:
+    """Limits between the tone zones (colouring-book lines): one-pixel line and, for each line
+    pixel, the darker of the two tones it separates."""
+    lab = prep.labels
+    Lt = _lab(prep.palette)[:, 0]
+    line = np.zeros(lab.shape, bool)
+    darker = np.full(lab.shape, -1, np.int32)
+    for a, b, sl in ((lab[:, :-1], lab[:, 1:], (slice(None), slice(1, None))),
+                     (lab[:-1], lab[1:], (slice(1, None), slice(None)))):
+        diff = a != b
+        d = np.where(Lt[a] <= Lt[b], a, b)
+        line[sl] |= diff
+        darker[sl][diff] = d[diff]
+    if prep.fg is not None:             # removed background: only the limits inside the subject
+        line &= cv2.erode(prep.fg.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+    ppm = p.px_per_mm
+    bd = max(2, int(round(0.5 * ppm)))  # the image's own edge is not a limit
+    line[:bd, :] = False; line[-bd:, :] = False; line[:, :bd] = False; line[:, -bd:] = False
+    n, lab_c, stats, _ = cv2.connectedComponentsWithStats(line.astype(np.uint8), connectivity=8)
+    length = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
+    keep = length >= max(2, int(p.outline_min_length_mm * ppm))
+    keep[0] = False
+    return keep[lab_c], darker
+
+
+def line_stencils(prep: Prepared, p: Params, region: np.ndarray | None, support: np.ndarray,
+                  place) -> list:
+    """Stencils of the "line" style: no flat colour, only lines, one stencil per line colour
+    (sprayed from the lightest to the darkest). Sources: key details found against the bare
+    support, silhouette of a mask, limits between the tone zones (colouring book)."""
+    H, W = prep.labels.shape
+    ppm = p.px_per_mm
+    flat = np.empty((H, W, 3), np.uint8)
+    flat[:] = np.asarray(support, np.uint8)
+    base = np.asarray(outline_color(prep, support, p), np.uint8)
+
+    def colour(h):
+        return hex_to_bgr(h).astype(np.uint8) if h.startswith("#") else base
+
+    parts = []                          # (one-pixel line, colour, source)
+    zones = np.zeros((H, W), bool)
+    if p.outline:
+        st = detect_key_details(prep, flat, replace(p, outline_subject=False), region,
+                                outline_is_dark(base, support), stages=True)
+        ln, z = gap_lines(st["kept"], p)
+        parts.append((ln, base, "details"))
+        if z is not None:
+            zones |= z
+    if p.outline_subject:
+        ln, z = subject_silhouette(prep, p, None, gaps=True)
+        if ln is not None:
+            parts.append((ln, colour(p.line_sil_color), "silhouette"))
+            if z is not None:
+                zones |= z
+    if p.line_zones:
+        ln, darker = zone_limits(prep, p)
+        ln, z = gap_lines(ln, p)
+        if z is not None:
+            zones |= z
+        if p.line_zones_color == "tones":
+            paints = parse_tone_colors(p.layer_colors)
+            for t in np.unique(darker[ln]).tolist():
+                if t >= 0:
+                    c = paints.get(t, prep.palette[t].astype(np.uint8))
+                    parts.append((ln & (darker == t), c, f"tone{t}"))
+        else:
+            parts.append((ln, colour(p.line_zones_color), "zones"))
+    width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
+    k = disk(width * ppm / 2)
+    # the interruptions of a line stay free of every other line
+    free = ~(cv2.dilate(zones.astype(np.uint8), k) > 0)
+    groups: dict[str, list] = {}
+    for ln, c, src in parts:
+        ln = ln & free
+        if not ln.any():
+            continue
+        g = groups.setdefault(bgr_hex(c), [np.zeros((H, W), bool), [], np.asarray(c, np.uint8)])
+        g[0] |= ln
+        g[1].append(src)
+    order = sorted(groups.values(), key=lambda g: -float(_lab(g[2].reshape(1, 3))[0, 0]))  # light first
+    layers = []
+    for i, (ln, srcs, c) in enumerate(order):
+        target = cv2.dilate(ln.astype(np.uint8) * 255, k)
+        cleaned = clean_mask(target, p)
+        opening = place(cleaned)
+        bridges, n_isl, n_short = add_bridges(opening, p, None) if p.bridges else ([], 0, 0)
+        layers.append(Layer(index=i + 1, color=c, target=target, opening=opening,
+                            lost=cv2.bitwise_xor(cleaned, target), bridges=bridges,
+                            paths=vectorize(opening, p), islands=n_isl, short_islands=n_short,
+                            kind="outline", sources=tuple(srcs)))
+    return layers
+
+
+def subject_silhouette(prep: Prepared, p: Params, sim: np.ndarray | None = None,
+                       gaps: bool = False):
     """One-pixel line along the outline of the selected subject (option `outline_subject`):
-    smoothed, not drawn along the image edges, pieces shorter than the minimum line length removed."""
+    smoothed, not drawn along the image edges, pieces shorter than the minimum line length removed.
+
+    `outline_subject_weak` + `sim` (simulated render of the colour layers): only the parts of the
+    edge that the render shows poorly (colour difference across the edge below `outline_subject_de`).
+    `outline_subject_gap_every_mm`: the line is interrupted at regular intervals along its length,
+    so that a closed silhouette does not cut the subject out as one big island (each interruption
+    is a built-in bridge). With `gaps`, returns (line, zones of the interruptions) - the other
+    lines must leave these zones empty too - otherwise the line alone."""
+    none = (None, None) if gaps else None
     subj = prep.subject
     if subj is None and p.outline_subject_mask == "subject":
         subj = prep.fg                      # without the server: the cut-out subject
     if not p.outline_subject or subj is None or not subj.any() or subj.all():
-        return None
+        return none
     ppm = p.px_per_mm
     m = cv2.GaussianBlur(subj.astype(np.float32), (0, 0), max(0.8, 0.4 * ppm)) > 0.5
     line = m & ~cv2.erode(m.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
     b = max(2, int(round(0.5 * ppm)))       # the image's own edge is not an outline
     line[:b, :] = False; line[-b:, :] = False; line[:, :b] = False; line[:, -b:] = False
-    n, lab, stats, _ = cv2.connectedComponentsWithStats(line.astype(np.uint8), connectivity=8)
+    min_px = max(2, int(p.outline_min_length_mm * ppm))
+    if p.outline_subject_weak and sim is not None and line.any():
+        # colour of the render on each side of the edge (normalised Gaussian means, ~1.5 mm)
+        lab = cv2.cvtColor(np.asarray(sim, np.float32) / 255.0, cv2.COLOR_BGR2LAB)
+        sig = max(1.0, 1.5 * ppm)
+        sides = []
+        for w in (m.astype(np.float32), (~m).astype(np.float32)):
+            den = cv2.GaussianBlur(w, (0, 0), sig) + 1e-6
+            sides.append(np.dstack([cv2.GaussianBlur(lab[..., c] * w, (0, 0), sig) / den for c in range(3)]))
+        de = np.sqrt(((sides[0] - sides[1]) ** 2).sum(axis=2))
+        weak = line & (de < p.outline_subject_de)
+        # bridge short strong parts (a few mm) so the line is not chopped into dashes
+        line &= cv2.dilate(weak.astype(np.uint8), disk(max(1.0, 1.5 * ppm))) > 0
+    n, lab_c, stats, _ = cv2.connectedComponentsWithStats(line.astype(np.uint8), connectivity=8)
     length = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
-    keep = length >= max(2, int(p.outline_min_length_mm * ppm))
+    keep = length >= min_px
     keep[0] = False
-    line = keep[lab]
+    line = keep[lab_c]
+    if not line.any():
+        return none
+    zones = None
+    every = p.outline_subject_gap_every_mm * ppm
+    if every > 0:
+        width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
+        r = (p.outline_subject_gap_mm + width) * ppm / 2     # stroke half-width + half the gap
+        centres = []
+        contours, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        for c in contours:
+            pts = c[:, 0, :]
+            on = line[pts[:, 1], pts[:, 0]]
+            if not on.any():
+                continue
+            closed = bool(on.all())
+            # runs of contour points on the kept line (the contour is cyclic: start at a gap)
+            if not closed:
+                k0 = int(np.argmin(on))
+                pts, on = np.roll(pts, -k0, axis=0), np.roll(on, -k0)
+            idx = np.flatnonzero(on)
+            runs = np.split(idx, np.flatnonzero(np.diff(idx) > 1) + 1)
+            for run in runs:
+                q = pts[run].astype(np.float64)
+                steps = np.hypot(*np.diff(q, axis=0).T)
+                if closed:
+                    steps = np.append(steps, np.hypot(*(q[0] - q[-1])))
+                s_ = np.concatenate([[0.0], np.cumsum(steps)])
+                L = float(s_[-1])
+                if closed:
+                    k = max(1, int(round(L / every)))
+                    at = (np.arange(k) + 0.5) * L / k
+                else:
+                    k = int(L // every)
+                    at = (np.arange(k) + 1) * L / (k + 1)
+                for a in at:
+                    j = min(int(np.searchsorted(s_, a)), len(q) - 1)
+                    centres.append(q[j])
+        if centres:
+            zones = np.zeros(line.shape, np.uint8)
+            for x, y in centres:
+                cv2.circle(zones, (int(round(x)), int(round(y))), max(1, int(round(r))), 1, -1)
+            zones = zones > 0
+            line &= ~zones
+    if gaps:
+        return (line, zones) if line.any() else none
     return line if line.any() else None
 
 
@@ -1571,7 +1815,7 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     cand = edges & (loss >= 0.5 - 0.3 * float(np.clip((keep_share - 0.15) / 0.8, 0, 1)))
     # effective width: never less than the material's minimum opening (otherwise not cuttable)
     width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
-    sil = subject_silhouette(prep, p)       # selected subject's outline, always kept
+    sil, gaps = subject_silhouette(prep, p, sim, gaps=True)   # selected subject's outline, always kept
     if not cand.any():
         z = np.zeros(ref.shape[:2], bool)
         if sil is None:
@@ -1590,6 +1834,8 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     keep[0] = False
     short = (e8 > 0) & ~keep[lab_e]
     e8 = keep[lab_e].astype(np.uint8) * 255
+    if gaps is not None:                # interruptions of the silhouette: no other line there either
+        e8[cv2.dilate(gaps.astype(np.uint8), disk(width * ppm / 2)) > 0] = 0
     if sil is not None:
         e8[sil] = 255
     stroke = cv2.dilate(e8, disk(width * ppm / 2))
@@ -1607,7 +1853,10 @@ def outline_detection(res: Result, p: Params, region: np.ndarray | None = None) 
     sim = res.detect_sim
     if sim is None:      # outline off in the last computation: render of its colour layers
         sim = image_sim(replace(res, layers=[L for L in res.layers if L.kind != "outline"]))
-    if p.outline_target == "stencil":
+    if p.outline_target == "stencil" or p.stencil_style == "line":
+        if p.stencil_style == "line":   # lines searched against the bare support
+            sim = np.empty(sim.shape, np.uint8)
+            sim[:] = np.asarray(res.support_color, np.uint8)
         dark = outline_is_dark(outline_color(prep, res.support_color, p), res.support_color)
         return dict(detect_key_details(prep, sim, p, region, dark, stages=True), present=None)
     colour = [L for L in res.layers if L.kind != "outline"]

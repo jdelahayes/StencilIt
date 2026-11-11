@@ -205,6 +205,48 @@
     "Tracer la silhouette (contour d'un masque)": "Draw the silhouette (outline of a mask)",
     "Ajoute au trait le contour d'un masque (le sujet sélectionné, un masque dédié à la silhouette ou le masque des détails clés), en plus des détails détectés. Utile quand le sujet se détache mal du fond. Le bord de l'image n'est pas tracé.": "Adds the outline of a mask (the selected subject, a mask dedicated to the silhouette or the key-detail mask) to the lines, on top of the detected details. Useful when the subject does not stand out from the background. The image's own edge is not drawn.",
     "Masque de la silhouette": "Silhouette mask",
+    "Style de pochoir": "Stencil style",
+    "Couleurs pleines (aplats)": "Flat colours",
+    "Trait seul (dessin au trait)": "Lines only (line drawing)",
+    "Trait seul : aucune couche pleine, seulement des pochoirs de traits (un par couleur de trait), réglés dans « Contours des détails clés ». Le nombre de pochoirs fixe le nombre de zones de teinte du coloriage.":
+      "Lines only: no flat layer, only line stencils (one per line colour), set in “Key-detail outlines”. The number of stencils sets the number of tone zones of the colouring book.",
+    "Trait seul : chaque couleur de trait a son pochoir, pulvérisés du plus clair au plus foncé.":
+      "Lines only: each line colour has its stencil, sprayed from the lightest to the darkest.",
+    "Coloriage : tracer les limites entre les zones de teinte": "Colouring book: draw the limits between the tone zones",
+    "Couleur des limites": "Colour of the limits",
+    "Comme les détails clés": "Same as the key details",
+    "Teinte de la zone la plus foncée (un pochoir par teinte)": "Tone of the darker zone (one stencil per tone)",
+    "Couleur choisie": "Chosen colour",
+    "Couleur propre pour la silhouette": "Own colour for the silhouette",
+    "Trait seul : la palette s'applique aux limites du coloriage colorées par teinte":
+      "Lines only: the palette applies to the colouring-book limits coloured by tone",
+    "Couleur de la silhouette": "Silhouette colour",
+    "0 = trait continu. En trait seul, s'applique à tous les traits : les boucles fermées (silhouette, zones du coloriage) découpent des îlots ; les interruptions les tiennent comme des ponts.":
+      "0 = continuous line. In lines only, applies to every line: closed loops (silhouette, colouring-book zones) cut islands out; the interruptions hold them like bridges.",
+    "Couleurs pleines : une couche de peinture par teinte (aplats), avec des traits en option. Trait seul : pas d'aplat, seulement des pochoirs de traits — détails clés, silhouette et/ou limites entre zones (coloriage) — un pochoir par couleur de trait.":
+      "Flat colours: one paint layer per tone, with optional lines. Lines only: no flat colour, only line stencils — key details, silhouette and/or limits between zones (colouring book) — one stencil per line colour.",
+    "Trace la limite entre les zones de teinte calculées, comme un coloriage. Le nombre de pochoirs et le niveau de détail fixent le nombre et la finesse des zones.":
+      "Draws the limit between the computed tone zones, like a colouring book. The number of stencils and the level of detail set the number and fineness of the zones.",
+    "Couleur du trait des limites : celle des détails clés, la teinte de la plus foncée des deux zones (un pochoir par teinte), ou une couleur choisie.":
+      "Line colour of the limits: that of the key details, the tone of the darker of both zones (one stencil per tone), or a chosen colour.",
+    "Donne à la silhouette sa propre couleur de trait (un pochoir à part) ; sinon, celle des détails clés.":
+      "Gives the silhouette its own line colour (a separate stencil); otherwise that of the key details.",
+    "Trait seul : aucun trait (cochez les détails clés, la silhouette ou le coloriage)":
+      "Lines only: no line (tick the key details, the silhouette or the colouring book)",
+    "Seulement là où le bord ressort peu": "Only where the edge stands out poorly",
+    "Écart de couleur maxi (ΔE)": "Max colour difference (ΔE)",
+    "Interrompre tous les (mm)": "Interrupt every (mm)",
+    "Longueur d'une interruption (mm)": "Length of an interruption (mm)",
+    "0 = trait continu. Une silhouette fermée découpe tout le sujet en un seul îlot ; les interruptions le tiennent comme des ponts répartis tout autour.":
+      "0 = continuous line. A closed silhouette cuts the whole subject out as one island; the interruptions hold it like bridges spread all around.",
+    "Ne trace la silhouette que là où le rendu simulé des couches la montre mal (couleurs proches de part et d'autre du bord). Ailleurs, les couches dessinent déjà le bord : le trait s'interrompt, ce qui ouvre souvent la boucle.":
+      "Draws the silhouette only where the simulated render of the layers shows it poorly (similar colours on both sides of the edge). Elsewhere the layers already draw the edge: the line stops, which often opens the loop.",
+    "Écart de couleur (ΔE) entre les deux côtés du bord dans le rendu simulé, en dessous duquel la silhouette est tracée. Plus haut = trait plus présent.":
+      "Colour difference (ΔE) between both sides of the edge in the simulated render, below which the silhouette is drawn. Higher = more line.",
+    "Coupe le trait de la silhouette à intervalles réguliers (mesurés le long du trait) : chaque interruption laisse un peu de matière qui tient l'intérieur du sujet, comme un pont. 0 = trait continu.":
+      "Cuts the silhouette line at regular intervals (measured along the line): each interruption leaves a little material that holds the inside of the subject, like a bridge. 0 = continuous line.",
+    "Longueur de matière laissée à chaque interruption. Au pistolet, la peinture passe un peu sous les petites interruptions : le trait paraît presque continu.":
+      "Length of material left at each interruption. With the airbrush, paint goes slightly under small interruptions: the line looks almost continuous.",
     "Masque sujet (objet sélectionné ou détouré)": "Subject mask (selected object or cut-out)",
     "Masque silhouette (dédié)": "Silhouette mask (dedicated)",
     "Masque contours (détails clés)": "Outline mask (key details)",
@@ -440,13 +482,17 @@
     [/^Calculé en ([\d.,]+) s$/, (m, s) => `Computed in ${s} s`],
     [/^Pochoir (\d+)$/, (m, n) => `Stencil ${n}`],
     [/^(★ .+) \(perso\)$/, (m, n) => `${n} (custom)`],
+    [/^(\d+) pochoirs? de traits · dans l'ordre$/, (m, n) => `${plural(n, "line stencil")} · in order`],
+    [/^Pochoir (\d+) \(traits\) : peinture (#[0-9a-f]{6})$/i, (m, n, c) => `Stencil ${n} (lines): paint ${c}`],
+    [/^Pochoir (\d+) \(traits\) : couleur automatique$/, (m, n) => `Stencil ${n} (lines): automatic colour`],
     [/^(\d+) couches?( \+ contours)? · dans l'ordre$/, (m, n, c) => `${plural(n, "layer")}${c ? " + outline" : ""} · in order`],
-    [/^(\d+) pochoirs? · détail (\d+)(?: · teinte (\d+) %)?(?: · vivacité (\d+) %)?$/, (m, n, d, h, v) =>
-      `${plural(n, "stencil")} · detail ${d}${h ? ` · hue ${h} %` : ""}${v ? ` · vividness ${v} %` : ""}`],
+    [/^(trait seul · )?(\d+) pochoirs? · détail (\d+)(?: · teinte (\d+) %)?(?: · vivacité (\d+) %)?$/, (m, l, n, d, h, v) =>
+      `${l ? "lines only · " : ""}${plural(n, "stencil")} · detail ${d}${h ? ` · hue ${h} %` : ""}${v ? ` · vividness ${v} %` : ""}`],
     [/^(\d+) pochoirs?$/, (m, n) => plural(n, "stencil")],
     [/^(\d+) pochoir\(s\) : ΔE ([\d.]+)$/, (m, n, d) => `${n} stencil(s): ΔE ${d}`],
     [/^(\d+) coins · (.+)$/, (m, n, s) => `${n} corners · ${tr(s)}`],
     [/^tol\. ([\d.]+) mm$/, (m, t) => `tol. ${t} mm`],
+    [/^trait seul : (.+)$/, (m, s) => "lines only: " + s.split(" · ").map(w => ({ "détails": "details", "silhouette": "silhouette", "coloriage": "colouring book", "aucun trait": "no line" })[w] || w).join(" · ")],
     [/^activé · (.+) · sens\. (\d+)$/, (m, z, s) => `enabled · ${tr(z)} · sens. ${s}`],
     [/^contraste (\d+)$/, (m, n) => `contrast ${n}`], [/^gamma ([\d.]+)$/, (m, n) => `gamma ${n}`],
     [/^saturation (\d+) %$/, (m, n) => `saturation ${n} %`], [/^netteté (\d+)$/, (m, n) => `sharpness ${n}`],

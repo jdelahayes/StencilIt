@@ -710,6 +710,12 @@
 
   <fieldset>
     <legend>Simplification</legend>
+    <label class="full" for="stencil_style">Style de pochoir</label>
+    <select id="stencil_style">
+      <option value="fill">Couleurs pleines (aplats)</option>
+      <option value="line">Trait seul (dessin au trait)</option>
+    </select>
+    <p class="hint" id="styleHint" hidden>Trait seul : aucune couche pleine, seulement des pochoirs de traits (un par couleur de trait), réglés dans « Contours des détails clés ». Le nombre de pochoirs fixe le nombre de zones de teinte du coloriage.</p>
     <label class="row">Nombre de pochoirs <span class="v" id="n_layers_v"></span>
       <input type="range" id="n_layers" min="1" max="8" value="3"></label>
     <div class="reco" id="reco" hidden></div>
@@ -725,19 +731,39 @@
       <option value="color">Couleur</option>
       <option value="gray">Noir & blanc / niveaux de gris</option>
     </select>
+    <div id="fillOnly">
     <label class="full">Superposition des couches</label>
     <select id="layering">
+      <option value="exclusive" selected>Exclusive (chaque couleur seule)</option>
       <option value="cumulative">Cumulative (du clair au foncé, chevauchement)</option>
-      <option value="exclusive">Exclusive (chaque couleur seule)</option>
     </select>
     <div class="check"><input type="checkbox" id="skip_support" checked><label for="skip_support">La teinte la plus proche du support reste nue (pas de pochoir)</label></div>
     <div class="check"><input type="checkbox" id="protect_lines"><label for="protect_lines">Protéger les traits fins de la simplification (yeux, sourcils, mèches…)</label></div>
     <p class="hint">Cumulatif : chaque pochoir ouvre sa couleur + les plus foncées. Moins de pièces fragiles et pas de liseré entre couleurs.</p>
+    </div>
   </fieldset>
 
   <fieldset>
     <legend>Contours des détails clés</legend>
+    <div id="lineBox" hidden>
+      <p class="hint">Trait seul : chaque couleur de trait a son pochoir, pulvérisés du plus clair au plus foncé.</p>
+      <div class="check"><input type="checkbox" id="line_zones"><label for="line_zones">Coloriage : tracer les limites entre les zones de teinte</label></div>
+      <div id="lzBox" hidden>
+        <label class="full" for="lzMode">Couleur des limites</label>
+        <div style="display:flex; gap:8px; align-items:center">
+          <select id="lzMode" style="flex:1">
+            <option value="">Comme les détails clés</option>
+            <option value="tones">Teinte de la zone la plus foncée (un pochoir par teinte)</option>
+            <option value="custom">Couleur choisie</option>
+          </select>
+          <input type="color" id="lzColor" value="#1e1e1e" aria-label="Couleur des limites" style="width:54px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px" hidden>
+        </div>
+      </div>
+      <input type="hidden" id="line_zones_color" value="">
+      <input type="hidden" id="line_sil_color" value="">
+    </div>
     <div class="check"><input type="checkbox" id="outline"><label for="outline">Retracer les détails clés estompés</label></div>
+    <div id="targetBox">
     <label class="full">Où mettre les traits</label>
     <select id="outline_target">
       <option value="stencil">Pochoir de contours séparé (peint en dernier)</option>
@@ -745,6 +771,7 @@
       <option value="nearest">Dans la couche de teinte la plus proche</option>
     </select>
     <p class="hint" id="outline_target_hint"></p>
+    </div>
     <p class="hint">Détecte automatiquement les détails nets de l'image que la simplification et le flou de l'aérographe estompent (yeux, traits fins, mèches…) et les redessine d'un trait fin.</p>
     <p class="hint">Pour limiter la recherche à certaines zones (visage, yeux…), peignez-les dans l'onglet <b>« Masque contours »</b>.</p>
     <label class="full">Méthode de détection</label>
@@ -772,6 +799,17 @@
         </select>
         <button type="button" id="paintSilhouette" class="vt-small" title="Ouvre ce masque dans l'onglet Masques pour le peindre ou y sélectionner des objets">Peindre…</button>
       </div>
+      <div class="check" id="silWeakRow"><input type="checkbox" id="outline_subject_weak"><label for="outline_subject_weak">Seulement là où le bord ressort peu</label></div>
+      <label class="row" id="silDeRow">Écart de couleur maxi (ΔE) <input type="number" id="outline_subject_de" value="20" min="1" max="100" step="1"></label>
+      <div id="silColorRow" hidden style="display:flex; gap:8px; align-items:center">
+        <div class="check" style="flex:1"><input type="checkbox" id="silOwn"><label for="silOwn">Couleur propre pour la silhouette</label></div>
+        <input type="color" id="silColor" value="#1e1e1e" aria-label="Couleur de la silhouette" style="width:54px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px" disabled>
+      </div>
+    </div>
+    <div id="gapBox" hidden>
+      <label class="row">Interrompre tous les (mm) <input type="number" id="outline_subject_gap_every_mm" value="0" min="0" max="1000" step="5"></label>
+      <label class="row">Longueur d'une interruption (mm) <input type="number" id="outline_subject_gap_mm" value="1.5" min="0.3" max="20" step="0.5"></label>
+      <p class="hint" style="margin-top:-2px" id="gapHint">0 = trait continu. Une silhouette fermée découpe tout le sujet en un seul îlot ; les interruptions le tiennent comme des ponts répartis tout autour.</p>
     </div>
     <div id="outlineColorBox">
     <label class="full">Couleur du trait</label>
@@ -798,7 +836,7 @@
     <label class="row">2 ponts au-delà de (mm²) <input type="number" id="double_bridge_area_mm2" step="50" min="0" max="100000"></label>
     <p class="hint">Les ponts d'un même îlot sont répartis tout autour. Plus de ponts = îlots mieux tenus (papier, grands îlots), mais plus de traces à retoucher.</p>
     <label class="row">Fusion au lieu des ponts <span class="v" id="merge_amount_v"></span>
-      <input type="range" id="merge_amount" min="0" max="100" step="1" value="0"></label>
+      <input type="range" id="merge_amount" min="0" max="150" step="1" value="0"></label>
     <p class="hint" id="merge_hint" style="margin-top:-2px"></p>
     <label class="row">Largeur max d'un chenal (mm) <input type="number" id="merge_channel_mm" value="2.5" min="0.3" max="30" step="0.5"></label>
     <div class="check"><input type="checkbox" id="merge_channels" checked><label for="merge_channels">Fermer les chenaux étroits</label></div>
@@ -960,7 +998,7 @@ const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_m
   "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds", "pre_saturation", "pre_sharpen", "pre_remove_bg",
   "layer_colors",
   "n_layers", "detail", "hue_weight", "color_vividness", "color_mode", "layering", "skip_support", "protect_lines",
-  "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_subject", "outline_subject_mask", "outline_auto_color", "outline_color",
+  "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_subject", "outline_subject_mask", "outline_subject_weak", "outline_subject_de", "outline_subject_gap_every_mm", "outline_subject_gap_mm", "stencil_style", "line_zones", "line_zones_color", "line_sil_color", "outline_auto_color", "outline_color",
   ...MAT_FIELDS, "merge_amount", "merge_channel_mm", "merge_channels", "merge_islands", "merge_line_islands",
   "tolerance_mm", "smooth_curves", "spray_mm", "px_per_mm"];
 const SUPPORT_COLORS = [["Blanc", "#ffffff"], ["Ivoire", "#f3ecd9"], ["Kraft", "#c8a26e"], ["Gris", "#9a9a9a"], ["Noir", "#1e1e1e"]];
@@ -1550,7 +1588,7 @@ function setVals(o) {
   }
   if (!$("stock_preset").value) $("stock_preset").value = "custom";   // deleted ★ format
   syncSheetMode(); syncStockPreset(); syncMat();   // state of the fields, sheet, cutting mat and material sheet
-  methodHint(); syncOutlineTarget(); syncSilhouetteSource();
+  methodHint(); syncStyle();
 }
 async function presetCall(method, url, body) {
   try {
@@ -1752,7 +1790,7 @@ function showValues() {
 function mergeHint() {
   const a = val("merge_amount");
   if (!a) { $("merge_hint").textContent = "Désactivée : les îlots sont toujours tenus par des ponts."; return; }
-  const mm2 = 0.3 * Math.pow(300, Math.min(a, 100) / 100);
+  const mm2 = 0.3 * Math.pow(300, Math.min(a, 150) / 100);
   $("merge_hint").textContent = `Fusion acceptée jusqu'à ${mm2 < 10 ? mm2.toFixed(1) : Math.round(mm2)} mm² modifiés (zone visible), sinon un pont.`;
 }
 function cutInfo() {
@@ -1783,10 +1821,12 @@ const SECTION_SUMMARY = {
     if (val("pre_remove_bg")) a.push("fond supprimé");
     return a.length ? a.join(" · ") : "aucun";
   },
-  "Simplification": () => `${val("n_layers")} pochoir${val("n_layers") > 1 ? "s" : ""} · détail ${val("detail")}` +
+  "Simplification": () => (val("stencil_style") === "line" ? "trait seul · " : "") + `${val("n_layers")} pochoir${val("n_layers") > 1 ? "s" : ""} · détail ${val("detail")}` +
     (val("hue_weight") !== 40 ? ` · teinte ${val("hue_weight")} %` : "") +
     (val("color_vividness") > 0 ? ` · vivacité ${val("color_vividness")} %` : ""),
-  "Contours des détails clés": () => val("outline") ? `activé · ${MASK_EMPTY ? "toute l'image" : "masque"} · sens. ${val("outline_sensitivity")}` : "désactivé",
+  "Contours des détails clés": () => val("stencil_style") === "line"
+    ? "trait seul : " + ([val("outline") && "détails", val("outline_subject") && "silhouette", val("line_zones") && "coloriage"].filter(Boolean).join(" · ") || "aucun trait")
+    : val("outline") ? `activé · ${MASK_EMPTY ? "toute l'image" : "masque"} · sens. ${val("outline_sensitivity")}` : "désactivé",
   "Machine de découpe": () => {
     const m = $("machine").selectedOptions[0], st = stockSheet(), mat = cutMat();
     return [m ? m.text.split(" (")[0].replace(/^Silhouette /, "") : "", mat ? mat.label : "Rouleau", st ? st.label : ""].filter(Boolean).join(" · ");
@@ -1933,6 +1973,14 @@ const TIPS = {
   outline_min_length_mm: "Les traits plus courts que cette longueur sont ignorés.",
   outline_subject: "Ajoute au trait le contour d'un masque (le sujet sélectionné, un masque dédié à la silhouette ou le masque des détails clés), en plus des détails détectés. Utile quand le sujet se détache mal du fond. Le bord de l'image n'est pas tracé.",
   outline_subject_mask: "Masque dont le contour est tracé : le masque sujet (objet sélectionné ou zone détourée), le masque silhouette dédié (onglet Masques), ou le masque des détails clés.",
+  stencil_style: "Couleurs pleines : une couche de peinture par teinte (aplats), avec des traits en option. Trait seul : pas d'aplat, seulement des pochoirs de traits — détails clés, silhouette et/ou limites entre zones (coloriage) — un pochoir par couleur de trait.",
+  line_zones: "Trace la limite entre les zones de teinte calculées, comme un coloriage. Le nombre de pochoirs et le niveau de détail fixent le nombre et la finesse des zones.",
+  lzMode: "Couleur du trait des limites : celle des détails clés, la teinte de la plus foncée des deux zones (un pochoir par teinte), ou une couleur choisie.",
+  silOwn: "Donne à la silhouette sa propre couleur de trait (un pochoir à part) ; sinon, celle des détails clés.",
+  outline_subject_weak: "Ne trace la silhouette que là où le rendu simulé des couches la montre mal (couleurs proches de part et d'autre du bord). Ailleurs, les couches dessinent déjà le bord : le trait s'interrompt, ce qui ouvre souvent la boucle.",
+  outline_subject_de: "Écart de couleur (ΔE) entre les deux côtés du bord dans le rendu simulé, en dessous duquel la silhouette est tracée. Plus haut = trait plus présent.",
+  outline_subject_gap_every_mm: "Coupe le trait de la silhouette à intervalles réguliers (mesurés le long du trait) : chaque interruption laisse un peu de matière qui tient l'intérieur du sujet, comme un pont. 0 = trait continu.",
+  outline_subject_gap_mm: "Longueur de matière laissée à chaque interruption. Au pistolet, la peinture passe un peu sous les petites interruptions : le trait paraît presque continu.",
   outline_auto_color: "Couleur du trait choisie automatiquement : la teinte de l'image la plus contrastée avec le support.",
   outline_color: "Couleur du trait du pochoir de contours (si la couleur automatique est décochée).",
   material: "Matériau du pochoir : fixe les contraintes de découpe et les réglages machine conseillés.",
@@ -2224,7 +2272,15 @@ async function init() {
   $("outline_method").addEventListener("change", enableOutline);
   $("outline_target").addEventListener("change", () => { syncOutlineTarget(); enableOutline(); detectPreview(); });
   ["outline_sensitivity", "outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("change", enableOutline));
-  ["outline_method", "outline_auto_color", "outline_color", "outline_subject", "outline_subject_mask"].forEach(k => $(k).addEventListener("change", detectPreview));
+  ["outline_method", "outline_auto_color", "outline_color", "outline_subject", "outline_subject_mask", "outline_subject_weak", "outline_subject_de", "outline_subject_gap_every_mm", "outline_subject_gap_mm"].forEach(k => $(k).addEventListener("change", detectPreview));
+  $("outline_subject_weak").addEventListener("change", syncSilhouetteSource);
+  $("stencil_style").addEventListener("change", () => { syncStyle(); detectPreview(); });
+  $("line_zones").addEventListener("change", syncSilhouetteSource);
+  const setHidden = (id, v) => { $(id).value = v; syncSilhouetteSource(); updateSummaries(); detectPreview(); schedule(); };
+  $("lzMode").addEventListener("change", () => setHidden("line_zones_color", $("lzMode").value === "custom" ? $("lzColor").value.toLowerCase() : $("lzMode").value));
+  $("lzColor").addEventListener("change", () => setHidden("line_zones_color", $("lzColor").value.toLowerCase()));
+  $("silOwn").addEventListener("change", () => setHidden("line_sil_color", $("silOwn").checked ? $("silColor").value.toLowerCase() : ""));
+  $("silColor").addEventListener("change", () => setHidden("line_sil_color", $("silColor").value.toLowerCase()));
   ["outline_subject", "outline_subject_mask"].forEach(k => $(k).addEventListener("change", () => { syncSilhouetteSource(); if (val("outline_subject")) enableOutline(); }));
   $("paintSilhouette").onclick = () => { $("maskKind").value = val("outline_subject_mask"); VIEW = "mask"; SEL = null; render(); };
   $("mCopy").onchange = () => { const to = $("mCopy").value; $("mCopy").value = ""; copyMask(maskKind(), to); };
@@ -2547,7 +2603,29 @@ function silInfo(coverage) {
     : `Zone peinte : ${coverage} % de l'image — son contour est tracé par les contours (masque silhouette).`;
   showMaskInfo();
 }
-function syncSilhouetteSource() { $("silSrcBox").hidden = !val("outline_subject"); }
+function syncSilhouetteSource() {
+  const line = val("stencil_style") === "line";
+  $("silSrcBox").hidden = !val("outline_subject");
+  // weak edges: compared with the render of the colour layers (none in the line style)
+  $("silWeakRow").hidden = line; $("silDeRow").hidden = line || !val("outline_subject_weak");
+  $("gapBox").hidden = !(val("outline_subject") || line);
+  $("gapHint").textContent = line
+    ? "0 = trait continu. En trait seul, s'applique à tous les traits : les boucles fermées (silhouette, zones du coloriage) découpent des îlots ; les interruptions les tiennent comme des ponts."
+    : "0 = trait continu. Une silhouette fermée découpe tout le sujet en un seul îlot ; les interruptions le tiennent comme des ponts répartis tout autour.";
+  // line style: own colours of the silhouette and of the colouring-book limits
+  $("silColorRow").hidden = !line;
+  const sc = val("line_sil_color");
+  $("silOwn").checked = !!sc; $("silColor").disabled = !sc; if (sc) $("silColor").value = sc;
+  const zc = val("line_zones_color");
+  $("lzMode").value = zc === "" || zc === "tones" ? zc : "custom";
+  $("lzColor").hidden = $("lzMode").value !== "custom"; if (zc.startsWith("#")) $("lzColor").value = zc;
+  $("lzBox").hidden = !val("line_zones");
+}
+function syncStyle() {
+  const line = val("stencil_style") === "line";
+  $("styleHint").hidden = !line; $("fillOnly").hidden = line; $("lineBox").hidden = !line; $("targetBox").hidden = line;
+  syncOutlineTarget(); syncSilhouetteSource();
+}
 function createSubj() {
   SUBJ = maskCanvas();
   SUBJ_EMPTY = true; SUBJ_EXACT = false; FG_OVERLAY = null; SEM_LAST = null;
@@ -2702,7 +2780,7 @@ const TARGET_HINTS = {
 function syncOutlineTarget() {
   const t = $("outline_target").value;
   $("outline_target_hint").textContent = TARGET_HINTS[t] || "";
-  $("outlineColorBox").hidden = t !== "stencil";
+  $("outlineColorBox").hidden = t !== "stencil" && val("stencil_style") !== "line";
 }
 function methodHint() { $("outline_method_hint").textContent = METHOD_HINTS[$("outline_method").value] || ""; }
 let DET = null, DET_TIMER = null, DET_REQ = 0;
@@ -3154,9 +3232,10 @@ function render() {
   const warns = [...(LAST.warnings || [])];
   if (LAST.support_tone && lum(LAST.base) < 90 && LAST.layers.length)
     warns.push("Support foncé : les zones sombres laissées au support deviennent des îlots dans les couches claires, et leurs ponts resteront visibles. Pour des aplats foncés sans pont, décochez « La teinte la plus proche du support reste nue ».");
-  if (val("outline") && val("outline_target") !== "stencil" && !LAST.lines_added)
+  const fill = val("stencil_style") !== "line";
+  if (fill && val("outline") && val("outline_target") !== "stencil" && !LAST.lines_added)
     warns.push(`Traits dans les couches : aucun détail clé ajouté${MASK_EMPTY ? "" : " dans les zones peintes du masque"}. Augmentez la sensibilité (actuellement ${val("outline_sensitivity")}) ou réduisez la longueur mini d'un trait.`);
-  if (val("outline") && val("outline_target") === "stencil" && !LAST.layers.some(L => L.kind === "outline"))
+  if (fill && val("outline") && val("outline_target") === "stencil" && !LAST.layers.some(L => L.kind === "outline"))
     warns.push(`Pochoir de contours : aucun détail clé trouvé${MASK_EMPTY ? "" : " dans les zones peintes du masque"}. Augmentez la sensibilité (actuellement ${val("outline_sensitivity")}) ou réduisez la longueur mini d'un trait.`);
   $("warnings").innerHTML = warns.map(w => `<div class="warn">⚠ ${w}</div>`).join("");
 
@@ -3194,7 +3273,9 @@ function render() {
     </div>`).join("");
   $("layers").querySelectorAll(".lcolor").forEach(b => b.onclick = () => openColorPop(b));
   const nOut = LAST.layers.filter(L => L.kind === "outline").length;
-  $("layerCount").textContent = `${LAST.layers.length - nOut} couche${LAST.layers.length - nOut > 1 ? "s" : ""}${nOut ? " + contours" : ""} · dans l'ordre`;
+  $("layerCount").textContent = LAST.layers.length && nOut === LAST.layers.length
+    ? `${nOut} pochoir${nOut > 1 ? "s" : ""} de traits · dans l'ordre`
+    : `${LAST.layers.length - nOut} couche${LAST.layers.length - nOut > 1 ? "s" : ""}${nOut ? " + contours" : ""} · dans l'ordre`;
   $("layers").querySelectorAll(".card").forEach(c => c.onclick = e => {
     if (e.target.closest(".eye")) { toggleLayer(+c.dataset.idx); return; }
     if (e.target.closest(".lcolor")) return;                       // colour picker: no selection
@@ -3528,8 +3609,13 @@ function nearestColors(stops, tones) {
 // with no key, every palette is tried and the one that best matches the image is applied
 function applyNearest(key) {
   if (!LAST) return status("Calculez d'abord les couches", true);
-  const layers = LAST.layers.filter(L => L.kind !== "outline" && L.tone != null && (LAST.palette || [])[L.tone]);
-  if (!layers.length) return status("Calculez d'abord les couches", true);
+  // flat colours: the colour layers; line style: the tones of the tone stencils (colouring book)
+  const layers = val("stencil_style") === "line"
+    ? [...new Set(LAST.layers.flatMap(L => (L.sources || []).filter(s => /^tone\d+$/.test(s)).map(s => +s.slice(4))))]
+      .filter(t => (LAST.palette || [])[t]).map(t => ({ index: "t" + t, tone: t }))
+    : LAST.layers.filter(L => L.kind !== "outline" && L.tone != null && (LAST.palette || [])[L.tone]);
+  if (!layers.length) return status(val("stencil_style") === "line"
+    ? "Trait seul : la palette s'applique aux limites du coloriage colorées par teinte" : "Calculez d'abord les couches", true);
   const tones = layers.map(L => LAST.palette[L.tone]);
   let best = null;
   const keys = key ? [key].filter(palDef)
@@ -3636,7 +3722,8 @@ function layerColors() {
   const m = {};
   String($("layer_colors").value || "").split(";").forEach(p => {
     const [k, v] = p.split("=");
-    if (k && /^#[0-9a-f]{6}$/i.test((v || "").trim())) m[+k] = v.trim().toLowerCase();
+    // "t3=#…": paint of tone 3 (line style, tone stencils); otherwise layer number
+    if (k && /^#[0-9a-f]{6}$/i.test((v || "").trim())) m[/^t\d+$/.test(k.trim()) ? k.trim() : +k] = v.trim().toLowerCase();
   });
   return m;
 }
@@ -3753,10 +3840,31 @@ function setupColorPop() {
 }
 // Colour chosen by hand? (outline layer: "automatic" unticked in the outline section)
 function customColor(L) {
+  if (L && L.sources && L.sources.length) return L.sources.some(s =>
+    s === "details" ? !val("outline_auto_color") : s === "silhouette" ? !!val("line_sil_color")
+      : s === "zones" ? !!val("line_zones_color") : !!layerColors()[s.replace("tone", "t")]);
   return L && (L.kind === "outline" ? !val("outline_auto_color") : !!layerColors()[L.index]);
 }
 function setLayerColor(idx, color) {
   const L = LAST && LAST.layers.find(x => x.index === idx);
+  if (L && L.sources && L.sources.length) {   // line style: the colour of each source of this stencil
+    const c = color ? color.toLowerCase() : "", m = layerColors();
+    L.sources.forEach(s => {
+      if (s === "details") { $("outline_auto_color").checked = !c; $("outline_color").disabled = !c; if (c) $("outline_color").value = c; }
+      else if (s === "silhouette") $("line_sil_color").value = c;
+      else if (s === "zones") $("line_zones_color").value = c;
+      else if (c) m[s.replace("tone", "t")] = c; else delete m[s.replace("tone", "t")];
+    });
+    const key = PAL_CUR || PAL_LAST, def = palDef(key);
+    if (L.sources.some(s => s.startsWith("tone")))
+      showPaletteChoice(c && def && def[1].some(x => x.toLowerCase() === c) ? key : "");
+    $("layer_colors").value = Object.entries(m).map(([k, v]) => `${k}=${v}`).join(";");
+    if (c) rememberColor(color);
+    syncSilhouetteSource(); updateSummaries(); detectPreview();
+    status(c ? `Pochoir ${idx} (traits) : peinture ${c}` : `Pochoir ${idx} (traits) : couleur automatique`);
+    schedule();
+    return;
+  }
   if (L && L.kind === "outline") {     // outline stencil: its colour is the outline section's line colour
     $("outline_auto_color").checked = !color; $("outline_color").disabled = !color;
     if (color) { $("outline_color").value = color.toLowerCase(); rememberColor(color); }
