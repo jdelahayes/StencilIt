@@ -298,6 +298,8 @@
   .calage td, .calage th { padding: 2px 12px 2px 0; text-align: left; }
   .calage th { color: var(--muted); font-weight: 500; }
   .calage .off { color: #e0703a; }
+  .calage { position: relative; }
+  .calage .calage-hide { position: absolute; top: 8px; right: 10px; }
   .lay .regmark { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 2; }
   .lay .regmark::before, .lay .regmark::after { content: ""; position: absolute; background: #1e88e5; }
   .lay .regmark::before { left: -7px; top: -1px; width: 14px; height: 2px; }
@@ -366,7 +368,7 @@
   </div>
   <div class="projbar">
     <button type="button" id="openProject" title="Rouvrir un zip exporté par StencilIt (image, masque et tous les réglages), ou seulement son fichier …_infos.json">Ouvrir un projet…</button>
-    <button type="button" id="resetAll" title="Oublier les derniers réglages utilisés (les réglages enregistrés sont conservés)">Réglages par défaut</button>
+    <button type="button" id="resetAll" title="Rétablit tous les réglages par défaut ; l'image chargée et ses masques sont conservés, ainsi que les réglages enregistrés">Réglages par défaut</button>
     <input type="file" id="projectFile" accept=".zip,.json,application/zip,application/json" hidden>
   </div>
 
@@ -708,6 +710,10 @@
     <div class="reco" id="reco" hidden></div>
     <label class="row">Niveau de détail <span class="v" id="detail_v"></span>
       <input type="range" id="detail" min="0" max="100" value="50"></label>
+    <label class="row">Poids de la teinte (%) <span class="v" id="hue_weight_v"></span>
+      <input type="range" id="hue_weight" min="0" max="300" step="10" value="40"></label>
+    <label class="row">Vivacité des couleurs (%) <span class="v" id="color_vividness_v"></span>
+      <input type="range" id="color_vividness" min="0" max="100" step="5" value="0"></label>
     <label class="full">Mode</label>
     <select id="color_mode">
       <option value="auto">Automatique</option>
@@ -852,6 +858,9 @@
         title="Repères de calage (croix, équerres ou trous) et encoches du numéro de couche, dans toutes les vues">Repères</button>
       <input type="checkbox" id="show_stock" hidden>
       <input type="checkbox" id="show_reg" checked hidden>
+      <button type="button" class="vt-opt" id="optCalage" aria-pressed="true" hidden
+        title="Panneau des cotes de calage à la règle, sous la prévisualisation">Cotes</button>
+      <input type="checkbox" id="show_calage" checked hidden>
       <input type="checkbox" id="show_mat" hidden>
     </span>
     <button type="button" class="vt-opt vt-pre" id="optPre" aria-pressed="true" hidden
@@ -896,13 +905,15 @@
   <div class="palbar">
     <div class="paldd" id="palDD">
       <button type="button" id="palBtn" aria-haspopup="listbox" aria-expanded="false"
-        title="Colore toutes les couches avec une palette cohérente, du plus clair (1re couche) au plus foncé ; chaque couleur reste modifiable ensuite">
+        title="Colore les couches avec une palette cohérente : chaque couche reçoit la couleur de la palette la plus proche de sa teinte dans l'image (jamais deux fois la même) ; chaque couleur reste modifiable ensuite">
         <span class="pname" id="palBtnLabel">Palette de couleurs…</span>
         <span class="palprev" id="palPrev" aria-hidden="true"></span><span class="chev" aria-hidden="true">▾</span>
       </button>
       <div class="palmenu" id="palMenu" role="listbox" aria-label="Palettes de couleurs" hidden></div>
     </div>
-    <button type="button" class="vt-small" id="colorsAuto" hidden title="Revenir aux teintes calculées pour toutes les couches">Auto</button>
+    <button type="button" class="vt-small" id="palNearest"
+      title="Donne à chaque couche la couleur de la palette la plus proche de sa teinte réelle dans l'image (deux couches n'ont jamais la même couleur) ; sans palette choisie, prend la palette qui colle le mieux à l'image">Plus proches</button>
+    <button type="button" class="vt-small" id="colorsAuto" title="Revenir aux teintes calculées pour toutes les couches">Auto</button>
     <input type="hidden" id="layer_colors" value="">
   </div>
   <div class="legend">
@@ -926,7 +937,7 @@ const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_m
   "image_scale", "image_height_factor", "image_pos_x", "image_pos_y", "margin_mm", "sheet_mode", "sheet_border_mm", "reg_dims", "machine_max_mm", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline",
   "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds", "pre_saturation", "pre_sharpen", "pre_remove_bg",
   "layer_colors",
-  "n_layers", "detail", "color_mode", "layering", "skip_support", "protect_lines",
+  "n_layers", "detail", "hue_weight", "color_vividness", "color_mode", "layering", "skip_support", "protect_lines",
   "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_auto_color", "outline_color",
   ...MAT_FIELDS, "merge_amount", "merge_channel_mm", "merge_channels", "merge_islands", "merge_line_islands",
   "tolerance_mm", "smooth_curves", "spray_mm", "px_per_mm"];
@@ -1650,16 +1661,44 @@ function makePresetBar(cfg) {
 const LS_KEY = "stencilit.derniers_reglages";
 const NOT_REMEMBERED = new Set(["image_scale", "image_height_factor", "image_pos_x", "image_pos_y"]); // specific to each image
 let NO_REMEMBER = false;
+let DEFAULTS = null;   // interface state before the last settings are restored ("Default settings")
+function collectSettings(all) {
+  const s = {};
+  PARAMS.filter(k => all || !NOT_REMEMBERED.has(k)).forEach(k => s[k] = val(k));
+  CUT_FIELDS.forEach(f => s["cut_" + f] = $("cut_" + f).value);
+  ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "auto_calc", "show_stock", "show_reg", "show_calage", "stock_preset", "stock_orient", "stock_w_mm", "stock_h_mm"].forEach(k => s[k] = val(k));
+  return s;
+}
 function rememberSettings() {
   if (NO_REMEMBER) return;
   try {
-    const s = {};
-    PARAMS.filter(k => !NOT_REMEMBERED.has(k)).forEach(k => s[k] = val(k));
-    CUT_FIELDS.forEach(f => s["cut_" + f] = $("cut_" + f).value);
-    ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "auto_calc", "show_stock", "show_reg", "stock_preset", "stock_orient", "stock_w_mm", "stock_h_mm"].forEach(k => s[k] = val(k));
+    const s = collectSettings(false);
     s.sens_scale = 2;
     localStorage.setItem(LS_KEY, JSON.stringify(s));
   } catch (e) { /* storage unavailable: ignored */ }
+}
+// "Default settings": everything back to the defaults, the loaded image (and its masks) is kept
+async function resetSettings() {
+  try { localStorage.removeItem(LS_KEY); } catch (e) {}
+  if (!SID || !DEFAULTS) { NO_REMEMBER = true; location.reload(); return; }   // no image: a reload is enough
+  const d = { ...DEFAULTS };
+  $("material").value = d.material; applyMaterial(d.material); delete d.material;
+  setVals(d);
+  $("layer_colors").value = ""; showPaletteChoice(""); PAL_LAST = "";
+  CROP = { x: 0, y: 0, w: 1, h: 1 }; $("crop_ratio").value = "free";
+  $("image_scale").value = 100; $("image_pos_x").value = 50; $("image_pos_y").value = 50;
+  setHF(1); $("keep_ratio").checked = true;
+  if ($("support_preset").value !== "custom") {      // support oriented like the image, as on loading
+    $("orientation").value = IMG.w > IMG.h ? "landscape" : "portrait";
+    applyPreset();
+  }
+  SUPBAR?.setDirty(false); MATBAR?.setDirty(false); STOCKBAR?.setDirty(false);
+  syncWidth(); showValues(); cropInfo(); updateSummaries();
+  await recommend(true);
+  if (prefs().auto_fit !== false) { fitToStencil(); clearTimeout(timer); }
+  render();
+  process();
+  status("Réglages par défaut rétablis (image conservée)");
 }
 // Outline sensitivity: progressive scale since 1.2 (marker sens_scale = 2). Older saved values
 // (linear scale: 15 % to 95 % of the candidate lines kept) are converted to the same result.
@@ -1681,7 +1720,7 @@ function restoreSettings() {
   return true;
 }
 function showValues() {
-  ["n_layers", "detail", "tolerance_mm", "spray_mm", "px_per_mm", "image_scale", "image_pos_x", "image_pos_y", "outline_sensitivity", "pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen", "merge_amount"].forEach(k => {
+  ["n_layers", "detail", "hue_weight", "color_vividness", "tolerance_mm", "spray_mm", "px_per_mm", "image_scale", "image_pos_x", "image_pos_y", "outline_sensitivity", "pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen", "merge_amount"].forEach(k => {
     const o = $(k + "_v");
     if (o) o.textContent = k.startsWith("image_") ? (+$(k).value).toFixed(1) : k === "pre_gamma" ? (+$(k).value).toFixed(2) : $(k).value;
   });
@@ -1722,7 +1761,9 @@ const SECTION_SUMMARY = {
     if (val("pre_remove_bg")) a.push("fond supprimé");
     return a.length ? a.join(" · ") : "aucun";
   },
-  "Simplification": () => `${val("n_layers")} pochoir${val("n_layers") > 1 ? "s" : ""} · détail ${val("detail")}`,
+  "Simplification": () => `${val("n_layers")} pochoir${val("n_layers") > 1 ? "s" : ""} · détail ${val("detail")}` +
+    (val("hue_weight") !== 40 ? ` · teinte ${val("hue_weight")} %` : "") +
+    (val("color_vividness") > 0 ? ` · vivacité ${val("color_vividness")} %` : ""),
   "Contours des détails clés": () => val("outline") ? `activé · ${MASK_EMPTY ? "toute l'image" : "masque"} · sens. ${val("outline_sensitivity")}` : "désactivé",
   "Machine de découpe": () => {
     const m = $("machine").selectedOptions[0], st = stockSheet(), mat = cutMat();
@@ -1854,6 +1895,8 @@ const TIPS = {
   sheet_outline: "Découpe aussi le contour de la feuille (sinon seules les ouvertures et les repères sont découpés).",
   n_layers: "Nombre de pochoirs (couleurs peintes), sans compter le support nu ni le pochoir de contours.",
   detail: "Niveau de détail : bas = formes simples et lisses, haut = plus de petits détails (plus de découpe et de ponts).",
+  hue_weight: "Importance de la teinte face à la clarté pour former les couches (mode couleur). 0 % = clarté seule ; 40 % = réglage d'origine (la clarté domine) ; 100 % = équilibre perceptif ; au-delà, les couleurs différentes sont séparées même à clarté égale. Sans effet en noir et blanc ou avec des seuils manuels.",
+  color_vividness: "Couleurs calculées des couches (bouton Auto). Elles sont mesurées sur la photo d'origine, sans le prétraitement. 0 % = moyenne des pixels de chaque ton, souvent terne (les teintes voisines, ombres et reflets se compensent) ; 100 % = même teinte et même clarté, avec la saturation des pixels les plus vifs. Ne change pas la découpe. Sans effet en noir et blanc.",
   color_mode: "Couleur, noir et blanc, ou automatique (détecté selon l'image).",
   layering: "Cumulatif : chaque pochoir ouvre sa couleur et toutes les plus foncées (moins de raccords). Exclusif : chaque pochoir n'ouvre que sa couleur.",
   protect_lines: "Les traits fins, sombres ou clairs (yeux, sourcils, narines, mèches), gardent leur teinte au lieu d'être absorbés par la zone voisine lors de la simplification. Les traits plus fins que l'ouverture mini disparaissent quand même : utilisez alors « Retracer les détails clés estompés ».",
@@ -1938,6 +1981,7 @@ async function init() {
   sel.value = "mylar"; applyMaterial("mylar");
   try { UP = await (await fetch("/api/presets")).json(); } catch (e) { /* no saved presets */ }
   refreshUserPresets();
+  DEFAULTS = collectSettings(true);
   if (restoreSettings()) {
     syncPresetFromSize(); status("Derniers réglages restaurés — chargez une image");
   }
@@ -1987,11 +2031,7 @@ async function init() {
   [...SUPPORT_FIELDS, "support_preset", "orientation"].forEach(f => $(f).addEventListener("input", () => SUPBAR.setDirty(true)));
   ["support_preset", "orientation", "reg_corners", "reg_shape"].forEach(f => $(f).addEventListener("change", () => SUPBAR.setDirty(true)));
   $("supportSwatches").addEventListener("click", () => SUPBAR.setDirty(true));
-  $("resetAll").onclick = () => {
-    NO_REMEMBER = true; // otherwise "beforeunload" would save the current settings again
-    try { localStorage.removeItem(LS_KEY); } catch (e) {}
-    location.reload();
-  };
+  $("resetAll").onclick = resetSettings;
   window.addEventListener("beforeunload", rememberSettings);
   // sliders: the value is shown live while dragging, the computation starts once the handle is
   // released ("change" also fires after a keyboard step)
@@ -2015,6 +2055,7 @@ async function init() {
     status("Couleurs calculées pour toutes les couches"); schedule();
   };
   setupPalettes();
+  $("palNearest").onclick = () => applyNearest(palDef(PAL_CUR || PAL_LAST) ? PAL_CUR || PAL_LAST : "");
   setupColorPop();
   setupHisto(); drawHisto();
   ["pre_auto_levels", "pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen"].forEach(k => $(k).addEventListener("change", () => { updateSummaries(); recommend(false); }));
@@ -2089,7 +2130,12 @@ async function init() {
   $("lgMerged").onclick = () => { setOverlay("lgMerged", "no-merged", $("lgMerged").getAttribute("aria-pressed") !== "true"); saveOverlays(); };
   $("optPre").onclick = () => { SHOW_PRE = !SHOW_PRE; render(); };
   $("show_reg").addEventListener("change", () => { render(); rememberSettings(); });
-  [["optSupport", "show_support"], ["optMat", "show_mat"], ["optStock", "show_stock"], ["optReg", "show_reg"]].forEach(([b, c]) => $(b).onclick = () => {
+  $("calage").addEventListener("click", e => {
+    if (!e.target.closest(".calage-hide")) return;
+    $("show_calage").checked = false; $("show_calage").dispatchEvent(new Event("change"));
+  });
+  $("show_calage").addEventListener("change", () => { renderCalage(); rememberSettings(); });
+  [["optSupport", "show_support"], ["optMat", "show_mat"], ["optStock", "show_stock"], ["optReg", "show_reg"], ["optCalage", "show_calage"]].forEach(([b, c]) => $(b).onclick = () => {
     $(c).checked = !$(c).checked;
     $(c).dispatchEvent(new Event("change"));
   });
@@ -3017,7 +3063,6 @@ function render() {
       </div>
     </div>`).join("");
   $("layers").querySelectorAll(".lcolor").forEach(b => b.onclick = () => openColorPop(b));
-  $("colorsAuto").hidden = !Object.keys(layerColors()).length;
   const nOut = LAST.layers.filter(L => L.kind === "outline").length;
   $("layerCount").textContent = `${LAST.layers.length - nOut} couche${LAST.layers.length - nOut > 1 ? "s" : ""}${nOut ? " + contours" : ""} · dans l'ordre`;
   $("layers").querySelectorAll(".card").forEach(c => c.onclick = e => {
@@ -3031,11 +3076,15 @@ function render() {
 const fmtMM = v => `${(Math.round(v * 10) / 10).toString().replace(".", ",")} mm`;
 // Ruler dimensions: where to draw the crosses on the support (sheet laid inside the support)
 function renderCalage() {
-  const box = $("calage"), pos = LAST && LAST.positioning;
-  if (!pos || pos.mode === "around" || !val("reg_dims") || !pos.reperes.length) { box.hidden = true; return; }
+  const box = $("calage"), pos = LAST && LAST.positioning, btn = $("optCalage");
+  const avail = !!pos && pos.mode !== "around" && val("reg_dims") && pos.reperes.length > 0;
+  btn.hidden = !avail;                       // "Ruler dimensions" toggle, only when there are some
+  btn.setAttribute("aria-pressed", String($("show_calage").checked));
+  if (!avail || !$("show_calage").checked) { box.hidden = true; return; }
   const f = pos.feuille;
   box.hidden = false;
-  box.innerHTML = `<h3>Calage à la règle — depuis le coin haut-gauche du support</h3>
+  box.innerHTML = `<button type="button" class="vt-small calage-hide" title="Masquer le panneau des cotes (bouton « Cotes » au-dessus de la vue pour le réafficher)">Masquer</button>
+    <h3>Calage à la règle — depuis le coin haut-gauche du support</h3>
     <p class="hint" style="margin:0 0 6px">Tracez au crayon une croix à chaque cote, puis posez chaque couche en alignant ses fenêtres en croix sur les traits.</p>
     <table><tr><th>Croix</th><th>depuis la gauche</th><th>depuis le haut</th><th>depuis la droite</th><th>depuis le bas</th></tr>
     ${pos.reperes.map(r => `<tr class="${r.sur_support ? "" : "off"}"><td>${r.coin}${r.sur_support ? "" : " (hors du support)"}</td>
@@ -3283,14 +3332,89 @@ function palDef(key) {
   }
   return PALETTES[key] || null;
 }
-function applyPalette(key) {
-  const def = palDef(key);
-  if (!LAST || !def) return;
-  const layers = LAST.layers.filter(L => L.kind !== "outline");
-  const cols = paletteColors(def[1], layers.length);
-  $("layer_colors").value = layers.map((L, i) => `${L.index}=${cols[i]}`).join(";");
-  PAL_LAST = key;
-  status(`Palette « ${def[0]} » appliquée à ${layers.length} couche${layers.length > 1 ? "s" : ""}`);
+function applyPalette(key) {   // palette chosen in the menu: closest colours of that palette
+  applyNearest(key);
+}
+// ---- "Closest colours": each layer gets the palette colour nearest to the tone it really paints
+const srgbLab = hex => {   // sRGB hex -> CIE Lab (D65)
+  const [x, y, z] = (([r, g, b]) => [[.4124, .3576, .1805], [.2126, .7152, .0722], [.0193, .1192, .9505]]
+    .map(([a, c, d]) => a * r + c * g + d * b))(hexRgb(hex).map(v => (v /= 255) <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4));
+  const f = t => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116;
+  const fx = f(x / .95047), fy = f(y), fz = f(z / 1.08883);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+};
+function deltaE00([L1, a1, b1], [L2, a2, b2]) {   // CIEDE2000 colour difference
+  const rad = Math.PI / 180, C7 = c => (c ** 7 / (c ** 7 + 25 ** 7)) ** .5;
+  const Cm = (Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2, G = .5 * (1 - C7(Cm));
+  const A1 = a1 * (1 + G), A2 = a2 * (1 + G), C1 = Math.hypot(A1, b1), C2 = Math.hypot(A2, b2);
+  const hue = (b, a) => { const h = Math.atan2(b, a) / rad; return h < 0 ? h + 360 : h; };
+  const h1 = hue(b1, A1), h2 = hue(b2, A2);
+  let dh = C1 * C2 === 0 ? 0 : h2 - h1;
+  if (dh > 180) dh -= 360; else if (dh < -180) dh += 360;
+  const dL = L2 - L1, dC = C2 - C1, dH = 2 * Math.sqrt(C1 * C2) * Math.sin(dh * rad / 2);
+  const Lm = (L1 + L2) / 2, Cp = (C1 + C2) / 2;
+  let hm = h1 + h2;
+  if (C1 * C2 !== 0) hm = Math.abs(h1 - h2) <= 180 ? hm / 2 : (hm < 360 ? (hm + 360) / 2 : (hm - 360) / 2);
+  const T = 1 - .17 * Math.cos((hm - 30) * rad) + .24 * Math.cos(2 * hm * rad) + .32 * Math.cos((3 * hm + 6) * rad) - .2 * Math.cos((4 * hm - 63) * rad);
+  const SL = 1 + .015 * (Lm - 50) ** 2 / Math.sqrt(20 + (Lm - 50) ** 2), SC = 1 + .045 * Cp, SH = 1 + .015 * Cp * T;
+  const RT = -2 * C7(Cp) * Math.sin(60 * Math.exp(-(((hm - 275) / 25) ** 2)) * rad);
+  return Math.sqrt((dL / SL) ** 2 + (dC / SC) ** 2 + (dH / SH) ** 2 + RT * (dC / SC) * (dH / SH));
+}
+// Minimum-cost assignment (Hungarian algorithm), cost[n][m] with n <= m: column of each row
+function assignMin(cost) {
+  const n = cost.length, m = cost[0].length, u = Array(n + 1).fill(0), v = Array(m + 1).fill(0);
+  const p = Array(m + 1).fill(0), way = Array(m + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i; let j0 = 0;
+    const minv = Array(m + 1).fill(Infinity), used = Array(m + 1).fill(false);
+    do {
+      used[j0] = true; const i0 = p[j0]; let delta = Infinity, j1 = 0;
+      for (let j = 1; j <= m; j++) if (!used[j]) {
+        const c = cost[i0 - 1][j - 1] - u[i0] - v[j];
+        if (c < minv[j]) { minv[j] = c; way[j] = j0; }
+        if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+      }
+      for (let j = 0; j <= m; j++) if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta;
+      j0 = j1;
+    } while (p[j0]);
+    do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+  }
+  const col = Array(n);
+  for (let j = 1; j <= m; j++) if (p[j]) col[p[j] - 1] = j - 1;
+  return col;
+}
+// Distinct palette colours (blended in-between tones added when there are more layers than colours)
+// closest to the given image tones; returns {cols, mean} (mean CIEDE2000 difference)
+function nearestColors(stops, tones) {
+  let cand = [...new Set(stops.map(c => c.toLowerCase()))];
+  if (tones.length > cand.length) cand = paletteColors(cand, Math.max(2 * cand.length - 1, tones.length));
+  while (cand.length < tones.length) cand = cand.concat(cand);   // single-colour palette: repeats
+  const lt = tones.map(srgbLab), lc = cand.map(srgbLab);
+  const cost = lt.map(a => lc.map(b => deltaE00(a, b)));
+  const col = assignMin(cost);
+  return { cols: col.map(j => cand[j]), mean: col.reduce((s, j, i) => s + cost[i][j], 0) / tones.length };
+}
+// Each layer gets the colour of palette `key` closest to its tone in the image;
+// with no key, every palette is tried and the one that best matches the image is applied
+function applyNearest(key) {
+  if (!LAST) return status("Calculez d'abord les couches", true);
+  const layers = LAST.layers.filter(L => L.kind !== "outline" && L.tone != null && (LAST.palette || [])[L.tone]);
+  if (!layers.length) return status("Calculez d'abord les couches", true);
+  const tones = layers.map(L => LAST.palette[L.tone]);
+  let best = null;
+  const keys = key ? [key].filter(palDef)
+    : [...Object.keys(UP.palette || {}).map(k => "u:" + k), ...Object.keys(PALETTES)].filter(palDef);
+  for (const k of keys) {
+    const r = nearestColors(palDef(k)[1], tones);
+    if (!best || r.mean < best.mean) best = { ...r, k };
+  }
+  if (!best) return;
+  const m = layerColors();
+  layers.forEach((L, i) => { m[L.index] = best.cols[i]; });
+  $("layer_colors").value = Object.entries(m).map(([k, v]) => `${k}=${v}`).join(";");
+  PAL_LAST = best.k; showPaletteChoice(best.k);
+  const n = layers.length;
+  status(`Palette « ${palDef(best.k)[0]} » : couleurs les plus proches de l'image sur ${n} couche${n > 1 ? "s" : ""} (écart moyen ΔE ${best.mean.toFixed(1)})`);
   schedule();
 }
 const swatches = cols => cols.map(c => `<i style="background:${c}"></i>`).join("");

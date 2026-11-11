@@ -14,6 +14,7 @@ import zipfile
 import cv2
 import numpy as np
 
+from .pdf_sheet import Pdf, wrap
 from .pipeline import (Result, bgr_hex, layer_stats, positioning, registration_shapes, simulate, simulate_sheet,
                        support_overlap)
 
@@ -43,6 +44,26 @@ _FR = {
     # file names
     "layer": "couche", "of": "sur", "overview": "apercu", "simulated_render": "rendu_simule",
     "outline_mask": "masque_contours", "subject_mask": "masque_sujet", "_outline": "_contours",
+    "spray_sheet": "fiche_pulverisation",
+    # PDF spraying sheet
+    "Spraying sheet": "Fiche de pulvérisation", "Stencil sheet": "Feuille du pochoir", "Image": "Image",
+    "Layer colours (spraying order)": "Couleurs des couches (ordre de pulvérisation)",
+    "RGB": "RVB", "cut": "découpe", "bridges": "ponts",
+    "Support (no paint)": "Support (pas de peinture)",
+    "Tone left to the bare support": "Teinte laissée au support nu",
+    "Ruler registration, from the support's top-left corner": "Calage à la règle, depuis le coin haut-gauche du support",
+    "Pencil a cross at each dimension, then lay each layer with its cross windows on the marks.":
+        "Tracez au crayon une croix à chaque cote, puis posez chaque couche en alignant ses fenêtres en croix sur les traits.",
+    "Cross": "Croix", "from the left": "depuis la gauche", "from the top": "depuis le haut",
+    "from the right": "depuis la droite", "from the bottom": "depuis le bas", "off the support": "hors du support",
+    "Sheet edges": "Bords de la feuille", "from the left edge": "du bord gauche", "from the top edge": "du haut",
+    "from the right edge": "de la droite", "from the bottom edge": "du bas",
+    "Registration": "Calage",
+    "The sheet goes around the support: lay each layer with the support's corners in its registration marks.":
+        "La feuille entoure le support : posez chaque couche en plaçant les angles du support dans ses repères de calage.",
+    "Spray the layers in order, from the first to the last; let each coat dry before laying the next stencil.":
+        "Pulvérisez les couches dans l'ordre, de la première à la dernière ; laissez sécher chaque passe avant de poser le pochoir suivant.",
+    "Simulated render": "Rendu simulé",
 }
 _CORNERS_EN = {"haut-gauche": "top-left", "haut-droite": "top-right", "bas-gauche": "bottom-left", "bas-droite": "bottom-right"}
 
@@ -402,6 +423,127 @@ def _swatch_body(res: Result) -> list[str]:
     return body
 
 
+def _mm(v: float) -> str:
+    return f"{_num(v)} mm"
+
+
+def sheet_pdf(res: Result, name: str) -> bytes:
+    """Spraying sheet (A4 PDF): formats, layer colours in spraying order, ruler registration
+    dimensions and the simulated render."""
+    pdf = Pdf()
+    L0, R0 = 15.0, 195.0                       # text margins (mm)
+    colon = " : " if _LANG.get() == "fr" else ": "
+    pdf.text(L0, 20, f"StencilIt - {name}", 16, bold=True)
+    pdf.text(L0, 27, T("Spraying sheet"), 11, color="#555555")
+
+    # simulated render, top right
+    sim = simulate(res)
+    h, w = sim.shape[:2]
+    k = min(1.0, 1400 / max(h, w))
+    if k < 1:
+        sim = cv2.resize(sim, (round(w * k), round(h * k)), interpolation=cv2.INTER_AREA)
+    ok, jpg = cv2.imencode(".jpg", sim, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    sc = min(62.0 / sim.shape[1], 78.0 / sim.shape[0])
+    iw, ih = sim.shape[1] * sc, sim.shape[0] * sc
+    ix, iy = R0 - iw, 14.0
+    pdf.image(jpg.tobytes(), sim.shape[1], sim.shape[0], ix, iy, iw, ih)
+    pdf.rect(ix, iy, iw, ih, stroke="#999999", line_w=0.2)
+    pdf.text(ix, iy + ih + 4, T("Simulated render"), 8, color="#777777")
+
+    sw, sh = res.support_mm
+    y = 38.0
+    for label, value in ((T("Support"), f"{_num(sw)} x {_num(sh)} mm, {bgr_hex(res.support_color)}"),
+                         (T("Stencil sheet"), f"{_num(res.sheet_mm[0])} x {_num(res.sheet_mm[1])} mm"),
+                         (T("Image"), f"{_num(res.image_mm[0])} x {_num(res.image_mm[1])} mm")):
+        pdf.text(L0, y, label, 9, color="#555555")
+        pdf.text(L0 + 34, y, value, 9)
+        y += 5.5
+
+    # Layer colours (left column, beside the render while there is room)
+    y = 66.0
+    pdf.text(L0, y, T("Layer colours (spraying order)"), 12, bold=True)
+    y += 4
+    sq = 11.0
+
+    def swatch_row(y, hx, title, sub, dash=False):
+        pdf.rect(L0, y, sq, sq, fill=hx, stroke="#666666", line_w=0.25, dash=dash)
+        r, g, b = (int(hx[i:i + 2], 16) for i in (1, 3, 5))
+        pdf.text(L0 + sq + 4, y + 4.5, title, 10, bold=True)
+        pdf.text(L0 + sq + 4, y + 9.5, hx, 10, mono=True)
+        pdf.text(L0 + sq + 26, y + 9.5, f"{T('RGB')} {r}, {g}, {b}", 9, color="#444444")
+        if sub:
+            pdf.text(L0 + sq + 4, y + 14.0, sub, 8, color="#777777")
+
+    row = sq + 7
+    for L in res.layers:
+        if y + row > 285:
+            pdf.add_page()
+            y = 20.0
+        title = f"{T('Layer')} {L.index}" + (f" ({T('outline')})" if L.kind == "outline" else "")
+        st = layer_stats(L)
+        swatch_row(y, bgr_hex(L.color), title,
+                   f"{T('cut')} {_num(st['cut_length_m'])} m, {st['bridges']} {T('bridges')}")
+        y += row
+    swatch_row(y, bgr_hex(res.support_color), T("Support (no paint)"), "", dash=True)
+    y += sq + 4
+    if res.support_label is not None:
+        y += 4
+        pdf.text(L0, y, f"{T('Tone left to the bare support')}{colon}"
+                        f"{bgr_hex(res.prepared.palette[res.support_label])}", 9, color="#555555")
+    y = max(y, iy + ih + 6)
+    for line in wrap(T("Spray the layers in order, from the first to the last; let each coat dry before "
+                       "laying the next stencil."), R0 - L0, 9):
+        y += 5
+        pdf.text(L0, y, line, 9, color="#333333")
+
+    # Ruler registration
+    y += 12
+    if y > 235:
+        pdf.add_page()
+        y = 20.0
+    pos = positioning(res)
+    around = res.params.sheet_mode == "around" or not pos["reperes"]
+    pdf.text(L0, y, T("Registration") if around else T("Ruler registration, from the support's top-left corner"),
+             12, bold=True)
+    y += 1
+    if around:
+        for line in wrap(T("The sheet goes around the support: lay each layer with the support's corners in "
+                           "its registration marks."), R0 - L0, 9):
+            y += 5
+            pdf.text(L0, y, line, 9)
+        return pdf.output()
+    for line in wrap(T("Pencil a cross at each dimension, then lay each layer with its cross windows on "
+                       "the marks."), R0 - L0, 9):
+        y += 5
+        pdf.text(L0, y, line, 9, color="#333333")
+    y += 8
+    cols = [L0, L0 + 46, L0 + 80, L0 + 114, L0 + 148]
+    for x, head in zip(cols, (T("Cross"), T("from the left"), T("from the top"), T("from the right"),
+                              T("from the bottom"))):
+        pdf.text(x, y, head, 9, color="#555555")
+    y += 1.8
+    pdf.line(L0, y, R0, y)
+    for m in pos["reperes"]:
+        y += 6
+        off = not m["sur_support"]
+        col = "#c0501e" if off else "#000000"
+        pdf.text(cols[0], y, _corner(m["coin"]) + (f" ({T('off the support')})" if off else ""), 9.5, color=col)
+        pdf.text(cols[1], y, _mm(m["x"]), 10, bold=True, color=col)
+        pdf.text(cols[2], y, _mm(m["y"]), 10, bold=True, color=col)
+        pdf.text(cols[3], y, _mm(m["depuis_droite"]), 9.5, color=col)
+        pdf.text(cols[4], y, _mm(m["depuis_bas"]), 9.5, color=col)
+    f = pos["feuille"]
+    y += 3
+    pdf.line(L0, y, R0, y)
+    txt = (f"{T('Sheet edges')} ({_mm(f['largeur'])} x {_mm(f['hauteur'])}){colon}{_mm(f['gauche'])} "
+           f"{T('from the left edge')}, {_mm(f['haut'])} {T('from the top edge')}, {_mm(f['droite'])} "
+           f"{T('from the right edge')}, {_mm(f['bas'])} {T('from the bottom edge')}.")
+    for line in wrap(txt, R0 - L0, 9):
+        y += 5.5
+        pdf.text(L0, y, line, 9)
+    return pdf.output()
+
+
 PROJECT_VERSION = 1
 
 
@@ -438,6 +580,7 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
             z.writestr(f"{name}_silhouette.svg", silhouette_svg(res, material))
             ok, png = cv2.imencode(".png", simulate(res))
             z.writestr(f"{name}_{T('simulated_render')}.png", png.tobytes())
+            z.writestr(f"{name}_{T('spray_sheet')}.pdf", sheet_pdf(res, name))
             info = {
                 # Project: reopen this zip (or this file) in StencilIt with "Open a project…"
                 "projet": {

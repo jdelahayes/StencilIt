@@ -30,7 +30,7 @@ LOCK = threading.Lock()
 
 PREP_KEYS = ("support_w_mm", "support_h_mm", "px_per_mm", "detail", "n_layers", "color_mode", "skip_support",
              "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds",
-             "pre_saturation", "pre_sharpen", "pre_remove_bg", "protect_lines")
+             "pre_saturation", "pre_sharpen", "pre_remove_bg", "protect_lines", "hue_weight", "color_vividness")
 
 
 def materials() -> dict:

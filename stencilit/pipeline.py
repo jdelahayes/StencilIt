@@ -50,6 +50,12 @@ class Params:
     n_layers: int = 3              # number of stencils
     color_mode: str = "auto"       # auto | color | gray
     detail: float = 50.0           # 0 (very simplified) .. 100 (very detailed)
+    # weight of the hue (a*, b*) against the luminance when computing the tones (colour mode), %:
+    # 0 = luminance only, ~100 = perceptual balance (ΔE76), 40 = historical weighting (default)
+    hue_weight: float = 40.0
+    # computed tone colours, %: 0 = mean of the pixels (dull: hues and shadows average out),
+    # 100 = mean hue and lightness with the saturation of the vivid pixels (75th percentile)
+    color_vividness: float = 0.0
     layering: str = "cumulative"   # cumulative | exclusive
     skip_support: bool = True      # the tone closest to the support gets no stencil
     protect_lines: bool = False    # thin strokes (eyes, eyebrows…) escape the majority filter
@@ -119,6 +125,8 @@ class Params:
                 setattr(p, f.name, v)
         p.n_layers = int(np.clip(p.n_layers, 1, 10))
         p.detail = float(np.clip(p.detail, 0, 100))
+        p.hue_weight = float(np.clip(p.hue_weight, 0, 300))
+        p.color_vividness = float(np.clip(p.color_vividness, 0, 100))
         p.px_per_mm = float(np.clip(p.px_per_mm, 2, 16))
         p.support_w_mm = float(np.clip(p.support_w_mm, 20, 3000))
         p.support_h_mm = float(np.clip(p.support_h_mm, 20, 3000))
@@ -335,6 +343,29 @@ def lab_to_bgr(lab_colors: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(arr, cv2.COLOR_LAB2BGR).reshape(-1, 3)
 
 
+def original(prep: "Prepared") -> np.ndarray:
+    """Original photo at the working size (without preprocessing): reference of the paint colours."""
+    return prep.raw if prep.raw is not None else prep.resized
+
+
+def vivid_tone(mean: np.ndarray, pixels: np.ndarray, amount: float) -> np.ndarray:
+    """Tone colour with livelier saturation: same lightness and hue as `mean` (OpenCV 8-bit Lab),
+    chroma raised towards the 75th percentile of the pixels' chroma (`amount` 0..1), kept in gamut."""
+    a0, b0 = float(mean[1]) - 128, float(mean[2]) - 128
+    c0 = float(np.hypot(a0, b0))
+    if amount <= 0 or c0 < 1 or len(pixels) == 0:
+        return mean
+    sub = pixels[:: max(1, len(pixels) // 50000)]
+    c_vivid = float(np.percentile(np.hypot(sub[:, 1] - 128, sub[:, 2] - 128), 75))
+    target = c0 + amount * max(0.0, c_vivid - c0)
+    for c in np.linspace(target, c0, 9)[:-1]:      # largest chroma that stays inside sRGB
+        cand = np.array([mean[0], 128 + a0 * c / c0, 128 + b0 * c / c0], np.float32)
+        back = cv2.cvtColor(lab_to_bgr(cand[None]).reshape(1, 1, 3), cv2.COLOR_BGR2LAB)[0, 0].astype(np.float32)
+        if np.linalg.norm(back - cand) < 3:
+            return cand
+    return mean
+
+
 def bgr_hex(c) -> str:
     b, g, r = (int(v) for v in c)
     return f"#{r:02x}{g:02x}{b:02x}"
@@ -491,7 +522,13 @@ def prepare(img: np.ndarray, p: Params, lay: Layout, fg_src: np.ndarray | None =
     k = p.n_layers + (1 if p.skip_support else 0)
     lab = cv2.cvtColor(sm, cv2.COLOR_BGR2LAB).astype(np.float32)
     L100 = lab[..., 0] * (100.0 / 255.0)
-    feat = lab[..., :1] if gray else lab
+    if gray:
+        feat = lab[..., :1]
+    else:
+        # OpenCV 8-bit Lab: L* is stretched to 0..255 while a*, b* keep their scale, so at the
+        # default weight (40 %) the luminance counts ~2.5 times more than the hue; 100 % = balance
+        f = p.hue_weight / 40.0
+        feat = lab if f == 1.0 else np.concatenate([lab[..., :1], 128 + (lab[..., 1:] - 128) * f], axis=-1)
     X = feat.reshape(-1, feat.shape[-1])
 
     # tones learnt on the subject only when the background is removed
@@ -540,24 +577,32 @@ def prepare(img: np.ndarray, p: Params, lay: Layout, fg_src: np.ndarray | None =
             prot &= fg
         labels = np.where(prot, before, labels)
 
-    # Actual mean colours (on the smoothed image), sorted light -> dark
+    # Tones sorted light -> dark by their mean lightness on the smoothed, preprocessed image
+    # (the image the cut is computed on)
     lab_full = lab.reshape(H, W, 3)
     inside = fg if fg is not None else np.ones((H, W), bool)
     used = [i for i in range(n_lab) if np.any((labels == i) & inside)]
     if not used:
         used, inside = [i for i in range(n_lab) if np.any(labels == i)], np.ones((H, W), bool)
-    means = np.array([lab_full[(labels == i) & inside].mean(axis=0) for i in used], np.float32)
-    if gray:
-        means[:, 1:] = 128
-    order = np.argsort(-means[:, 0])
+    seg_L = np.array([lab_full[..., 0][(labels == i) & inside].mean() for i in used], np.float32)
+    order = np.argsort(-seg_L)
     remap = np.zeros(n_lab, np.int32)
     for i in range(n_lab):            # labels absent from the subject: attached to the nearest one
         if i not in used:
-            remap[i] = int(np.argmin(np.abs(means[order][:, 0] - (centers[i, 0] if i < len(centers) else 128))))
+            remap[i] = int(np.argmin(np.abs(seg_L[order] - (centers[i, 0] if i < len(centers) else 128))))
     for new, old_pos in enumerate(order):
         remap[used[old_pos]] = new
     labels = remap[labels]
-    palette = lab_to_bgr(means[order])
+    # Paint colours measured on the original photo (resized, without preprocessing) over the same
+    # zones: preprocessing helps the cut but must not dull or shift the colours
+    lab_raw = cv2.cvtColor(raw, cv2.COLOR_BGR2LAB).astype(np.float32)
+    zones = [(labels == new) & inside for new in range(len(used))]
+    means = np.array([lab_raw[z].mean(axis=0) for z in zones], np.float32)
+    if not gray and p.color_vividness > 0:
+        means = np.array([vivid_tone(m, lab_raw[z], p.color_vividness / 100) for m, z in zip(means, zones)], np.float32)
+    if gray:
+        means[:, 1:] = 128
+    palette = lab_to_bgr(means)
     return Prepared(resized=resized, labels=labels, palette=palette, gray=gray, off_px=(ox, oy),
                     raw=raw, hist=hist, auto_thresholds=auto_thr, thresholds_used=thr or None, fg=fg)
 
@@ -1367,8 +1412,8 @@ def lines_into_layers(prep: Prepared, sim: np.ndarray, p: Params, region: np.nda
     nl = len(color_ids) + 1
     counts = np.bincount(c * nl + painted[ys, xs] + 1, minlength=n * nl).reshape(n, nl)
     local = counts.argmax(axis=1) - 1
-    # mean colour of the line in the original
-    lab = _lab(prep.resized[ys, xs]).astype(np.float64)
+    # mean colour of the line in the original photo (the tone colours are measured there too)
+    lab = _lab(original(prep)[ys, xs]).astype(np.float64)
     tot = np.bincount(c, minlength=n).astype(np.float64)
     mean = np.stack([np.bincount(c, lab[:, k], minlength=n) for k in range(3)], 1) / np.maximum(tot, 1)[:, None]
     pal = _lab(prep.palette)
@@ -1435,6 +1480,9 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     lab_ref = lab(ref)
     g_ref = grad(lab_ref)
     g_sim = grad(lab(sim))
+    # the paints reproduce the original photo: the loss of contrast is measured against it
+    # (lines are still detected on the preprocessed image, sharper and more contrasted)
+    g_orig = g_ref if prep.raw is None or prep.raw is ref else grad(lab(prep.raw))
 
     # 1. Candidate lines
     if method == "canny":
@@ -1459,7 +1507,7 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
         return dict(detected=edges, selected=sel, kept=kept, short=short, stroke=stroke > 0)
 
     # 2. Loss of sharpness: share of the original's local contrast missing from the simulated render
-    loss = np.clip((g_ref - g_sim) / (g_ref + 1e-3), 0, 1)
+    loss = np.clip((g_orig - g_sim) / (g_orig + 1e-3), 0, 1)
     loss = cv2.dilate(loss, disk(max(1.0, 0.4 * ppm)))      # edge position tolerance
 
     # 3. Point-by-point selection: importance = line strength x lost share.
@@ -1807,7 +1855,7 @@ def layer_overlays(res: Result, L: Layer) -> tuple[np.ndarray, np.ndarray, np.nd
 
 def delta_e(res: Result, sheet_sim: np.ndarray | None = None) -> float:
     """Mean difference (Lab ΔE) between the original image and the simulated render, over the image area."""
-    a = cv2.cvtColor(res.prepared.resized.astype(np.float32) / 255, cv2.COLOR_BGR2LAB)
+    a = cv2.cvtColor(original(res.prepared).astype(np.float32) / 255, cv2.COLOR_BGR2LAB)
     b = cv2.cvtColor(image_sim(res, sheet_sim).astype(np.float32) / 255, cv2.COLOR_BGR2LAB)
     if res.prepared.gray:
         return float(np.abs(a[..., 0] - b[..., 0]).mean())

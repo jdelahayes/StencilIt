@@ -187,6 +187,8 @@ drawn with its inch grid, so you immediately see whether the sheet fits.
 
 These settings improve the image **before** it is split into tones. The **Original** tab shows the
 preprocessed image instantly (even in on-demand mode), with its luminance histogram.
+Preprocessing only guides the **cut**: the computed paint colours are always measured on the
+original photo, over the same zones, so a strong preprocessing does not dull or shift them.
 
 | Setting | Use it when… |
 |---|---|
@@ -212,6 +214,14 @@ it, with the layer number (**S** = tone left to the support).
   not counted). StencilIt shows a recommendation for your image. More stencils = more faithful but
   more cutting and more painting.
 - **Level of detail**: low = simple smooth shapes; high = more small details (and more bridges).
+- **Hue weight (%)** (colour mode): how much the hue counts against the lightness when the tones
+  are computed. 0 % = lightness only; 40 % (default) = original behaviour, lightness dominates;
+  100 % = perceptual balance; higher = different colours are split even at the same lightness.
+  No effect in black and white or with manual thresholds.
+- **Colour vividness (%)**: computed colour of each tone (layer colours on *Auto*). 0 % (default) =
+  mean of its pixels, often duller than the image (neighbouring hues, shadows and highlights
+  average out); 100 % = same hue and lightness with the saturation of its most vivid pixels
+  (75th percentile), kept inside sRGB. It does not change the cut. No effect in black and white.
 - **Layer stacking**:
   - **Cumulative** (recommended) – each stencil opens its own tone *and all darker ones*. Layers
     overlap, so small registration errors do not leave gaps.
@@ -290,7 +300,8 @@ Choose how the stencil sheet relates to the support:
   upside down) or **4 corners**; shape: brackets, crosses or round holes (for registration pins).
 - Small square **notches** at the top of each sheet give the layer number.
 - For "inside the support" modes, the ruler measurements are shown under the preview (*Ruler
-  positioning*) and in the Layout view, and are exported in the files.
+  positioning*) and in the Layout view, and are exported in the files. The **Dimensions** button
+  above the view (or **Hide** in the panel) hides or shows this panel.
 
 ### 5.8 Cutting machine
 
@@ -355,9 +366,13 @@ By default each layer gets the tone computed from the image. To paint with your 
   accepted). **Auto (computed tone)** goes back to the image tone;
 - or use the **Colour palette…** menu at the top of the stencil column: 91 harmonious palettes in 10
   families (Classics, Vivid, Modern vivid, Soft, Modern soft, Trending, Cold, Warm, Nature,
-  Monochromes), of 8 colours each, from the lightest (layer 1) to the darkest. Up to 8 layers,
-  each layer gets a real colour of the palette (always including the lightest and the darkest);
-  beyond that, intermediate tones are blended. **＋ Save the current colours…** creates your own palette (*My palettes*).
+  Monochromes), of 8 colours each. Each layer gets the palette colour closest to the tone it really
+  paints in the image (CIEDE2000 difference, optimal assignment so that two layers never share a
+  colour; blended in-between tones are added when there are more layers than colours); the status
+  bar shows the mean ΔE. **＋ Save the current colours…** creates your own palette (*My palettes*);
+- or click **Closest**: same closest-colour assignment with the chosen palette (useful after editing
+  colours by hand); with no palette chosen, every palette (yours included) is tried and the one that
+  best matches the image is applied.
 
 The chosen colours are used in the preview, the simulated render, the export and the file names.
 
@@ -373,6 +388,7 @@ Click **Export SVGs + project (.zip)**. The zip contains:
 | `…_layerNN_of03_outline_<colour>.svg` | The outline stencil, if enabled. |
 | `…_overview.svg` | All layers stacked, to check the result. |
 | `…_simulated_render.png` | The simulated airbrush result. |
+| `…_spray_sheet.pdf` | **Spraying sheet** to print (A4): formats, layer colours in spraying order (swatch, hex, RGB, cut length), support colour, ruler registration dimensions and the simulated render. |
 | `…_inkscape.svg` | An **Inkscape document** with one layer per element (see below). |
 | `…_silhouette.svg` | **For Silhouette Studio**: only the stencils, one layer each, every layer being a **single compound path** (openings + sheet outline + marks). |
 | `…_original.<ext>` | Your original image, untouched. |
@@ -456,8 +472,10 @@ in `app.py` (Flask) and the interface in `static/index.html` (+ `static/i18n.js`
 1. **Scaling** – the image is cropped, placed and resampled at its real size (mm → pixels).
 2. **Preprocessing** – levels, CLAHE, gamma, saturation, sharpening, background removal (GrabCut
    around a painted area, or objects selected with MobileSAM, see `stencilit/semantic.py`).
-3. **Simplification** – k-means clustering in the Lab colour space (or on luminance, or with manual
-   thresholds) plus a majority filter; tones sorted from light to dark = spraying order.
+3. **Simplification** – k-means clustering in the Lab colour space, chroma weighted by the hue
+   weight (or on luminance, or with manual thresholds) plus a majority filter; tones sorted from light to dark = spraying order.
+   Tone colours = mean of each zone measured on the original (non-preprocessed) image, optionally
+   made more vivid (colour vividness).
 4. **Layers** – cumulative or exclusive masks, one per tone, plus the optional outline layer
    (Canny edges, difference of Gaussians or Hessian ridges, kept where their contrast is lost in
    the simulated render), or the same lines merged into a colour layer. Optionally, thin strokes
