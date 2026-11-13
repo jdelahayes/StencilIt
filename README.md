@@ -103,7 +103,7 @@ language selector (**French** is available; the exported files follow the select
 4. In **Cutting machine**, pick your machine and **Cutting mat**, then in **Material & cutting** your
    material (e.g. *Mylar*).
 5. Look at the **Preview** tab and the stencil cards on the right. Happy? Click
-   **Export SVGs + project (.zip)**.
+   **Export the project (.zip)** (next to *Open a project…*, under the image box).
 
 Open the SVG files of the zip in Silhouette Studio, cut, and spray layer 1, 2, 3… in order.
 
@@ -370,7 +370,8 @@ Choose how the stencil sheet relates to the support:
   over them (invisible bridges).
 - **Merge instead of bridges** (0 = off): many islands can be held without a bridge, by
   - **closing a narrow channel** of opening (narrower than *Max channel width*) that separates the
-    island from the rest of the sheet: the island is welded along the whole narrow part;
+    island from the rest of the sheet: the island is welded along the whole narrow part (channels are
+    looked for at several widths up to the maximum, so a wider maximum only adds possible merges);
   - **removing a small island**: it simply gets painted. Islands touching key-detail lines cut into
     the layer are kept, unless *… including those enclosed by key-detail lines* is ticked (useful on
     textures, where the lines enclose many small light areas; the lines themselves are never cut).
@@ -379,12 +380,17 @@ Choose how the stencil sheet relates to the support:
   (progressive scale: about 5 mm² at 50, 90 mm² at 100, 1500 mm² at the maximum, 150). Areas repainted later by a darker layer do not count, and
   a change counts less when the two tones involved are close. The **merge** button of the legend
   highlights the merged zones (violet) on the stencil cards.
+
+  On **line stencils** (*Lines only* style, separate outline stencil) only small islands enclosed by
+  lines are merged: the area inside the loop is painted, and a line is never cut. High values paint
+  large enclosed areas; to hold big loops, prefer the interruptions (*Interrupt every … mm*).
 - Blade, force, speed and passes can be noted with the material preset for your own reference.
 
 ### 5.10 Check the result
 
 - **Preview** – the real stencils (with cutting constraints and bridges) stacked on the support
-  colour in spraying order. Tick **Simulated render** to add the soft airbrush blur. Use the layer
+  colour in spraying order. Tick **Simulated render** to add the soft airbrush blur, and **Without
+  bridges** to see the result once the bridge traces are retouched (bridges painted over). Use the layer
   buttons **1 2 3…** to hide layers.
 - **Compare with original** – a before/after slider between the original image and the result.
   The summary line gives the **mean colour difference (ΔE)**: lower = more faithful.
@@ -425,18 +431,29 @@ By default each layer gets the tone computed from the image. To paint with your 
   clicking it, **×** removes it, drag to reorder, **＋ Colour**, **＋ Layer colours**, **Sort light →
   dark**, paste more colours; **Save** saves (renames when the name was changed), **Save as…** keeps
   the original and saves a new palette (up to 16 colours);
-- or click **Closest**: same closest-colour assignment with the chosen palette (useful after editing
+- or click **Closest** (target icon ◎): same closest-colour assignment with the chosen palette (useful after editing
   colours by hand); with no palette chosen, every palette (yours included) is tried and the one that
-  best matches the image is applied.
+  best matches the image is applied;
+- or click **Other colours** (shuffle icon ⤨): each click gives another combination of the chosen palette's colours
+  on the layers (never twice the same colour), from the closest to the image to the farthest, each
+  one changing at least half of the layers; *Closest* goes back to the best one. The toggle next to
+  it (**Keep the light → dark order**, remembered) limits the combinations to those where the
+  lightest layer gets the lightest chosen colour, the next one the next lighter, and so on.
 
 The chosen colours are used in the preview, the simulated render, the export and the file names.
-The **Auto** button (next to *Closest*) puts every layer back on its computed colour.
+The **Auto** button (circular arrow ↺, next to *Other colours*) puts every layer back on its computed
+colour; the same arrow on a stencil card does it for that layer, and the eye icon shows / hides the
+layer in the preview.
+
+Changing only paints is fast: when the colours cannot change the cut (flat colours, *Merge instead of
+bridges* at 0, no key-detail lines, no silhouette limited to weak edges), the cut of the previous
+computation is kept and only the colours, previews and simulated render are updated.
 
 ![Layer 2 shown alone, with its colour picker open](docs/screenshots/colors.jpg)
 
 ### 5.12 Export
 
-Click **Export SVGs + project (.zip)**. The zip contains:
+Click **Export the project (.zip)**, next to *Open a project…* under the image box. The zip contains:
 
 | File | Content |
 |---|---|
@@ -493,6 +510,11 @@ squares with their hex codes, placed left of the page, to prepare your paints.
 
 ## 7. Projects and saved settings
 
+- **Undo / redo**: the ↶ ↷ buttons above the view (left of the layer buttons), or **Ctrl + Z** /
+  **Ctrl + Y** (**Ctrl + Shift + Z**), undo and redo the settings changes – fields, crop, layer
+  colours, palette – and the **painted masks** (each stroke, object selection, copy or clear is one
+  step), then recompute. Up to 100 steps; the history starts again with each new image. Display
+  options are not part of it, and in a text or number field Ctrl + Z stays the field's own undo.
 - **Re-open a project**: *Open a project…* (or drop the file on the image box)
   - the **.zip** restores everything: image, masks, settings, crop, colours – then recomputes;
   - the **_infos.json** alone applies the settings to the loaded image (or to the next one you load);

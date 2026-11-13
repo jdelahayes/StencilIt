@@ -49,7 +49,10 @@
     "Glissez une image ici": "Drop an image here", "ou cliquez pour choisir": "or click to choose",
     "Ouvrir un projet…": "Open a project…",
     "Rouvrir un zip exporté par StencilIt (image, masque et tous les réglages), ou seulement son fichier …_infos.json": "Reopen a zip exported by StencilIt (image, masks and all settings), or just its …_infos.json file",
-    "Exporter les SVG + projet (.zip)": "Export SVGs + project (.zip)",
+    "Exporter les SVG + projet (.zip)": "Export SVGs + project (.zip)", "Exporter le projet (.zip)": "Export the project (.zip)",
+    "Plus proches : donne à chaque couche la couleur de la palette la plus proche de sa teinte réelle dans l'image (deux couches n'ont jamais la même couleur) ; sans palette choisie, prend la palette qui colle le mieux à l'image":
+      "Closest: gives each layer the palette colour closest to its real tone in the image (two layers never get the same colour); with no palette chosen, picks the palette that best matches the image",
+    "Auto : revenir aux teintes calculées pour toutes les couches": "Auto: back to the computed tones for all layers",
     "Pochoirs SVG + projet rechargeable (image d'origine, masque, réglages)": "SVG stencils + reloadable project (original image, mask, settings)",
     "Glisser pour élargir / réduire (double-clic : largeur par défaut)": "Drag to widen / narrow (double-click: default width)",
     "Largeur du panneau des réglages": "Settings panel width", "Largeur de la colonne des pochoirs": "Stencil column width",
@@ -71,6 +74,23 @@
       "Creates a palette: add the colours one by one, paste them or take those of the layers",
     "Crée une palette à partir des couleurs actuelles des couches (de la 1re à la dernière), modifiable avant de l'enregistrer":
       "Creates a palette from the current layer colours (first to last), editable before saving it",
+    "Trait seul : seuls les petits îlots entourés par les traits sont fusionnés (l'intérieur est peint) ; un trait n'est jamais coupé, les chenaux ne sont donc pas fermés.":
+      "Lines only: only the small islands enclosed by the lines are merged (the inside is painted); a line is never cut, so channels are not closed.",
+    "Historique des réglages": "Settings history", "Annuler le changement": "Undo", "Rétablir": "Redo",
+    "Annuler le dernier changement de réglage (Ctrl + Z)": "Undo the last settings change (Ctrl + Z)",
+    "Rétablir le changement annulé (Ctrl + Y ou Ctrl + Maj + Z)": "Redo the undone change (Ctrl + Y or Ctrl + Shift + Z)",
+    "Annulé": "Undone", "Rétabli": "Redone",
+    "Sans les ponts": "Without bridges",
+    "Prévisualisation sans les ponts : leur trace est peinte, comme après la retouche": "Preview without the bridges: their trace is painted, as after retouching",
+    "Autres couleurs": "Other colours", "Garder l'ordre clair → foncé": "Keep the light → dark order",
+    "Autres couleurs : garder l'ordre clair → foncé (la couche la plus claire reçoit la couleur la plus claire choisie, et ainsi de suite)":
+      "Other colours: keep the light → dark order (the lightest layer gets the lightest chosen colour, and so on)",
+    "Autres couleurs : ordre clair → foncé conservé": "Other colours: light → dark order kept",
+    "Autres couleurs : toutes les combinaisons": "Other colours: every combination",
+    "Autres couleurs de la palette : chaque clic donne une autre combinaison, de la plus proche de l'image à la plus éloignée (deux couches n'ont jamais la même couleur)":
+      "Other colours of the palette: each click gives another combination, from the closest to the image to the farthest (two layers never share a colour)",
+    "Choisissez d'abord une palette (menu Palette de couleurs…)": "Choose a palette first (Colour palette… menu)",
+    "Pas d'autre combinaison avec cette palette": "No other combination with this palette",
     "Choix de la couleur": "Colour choice", "Couleur": "Colour", "Pipette": "Eyedropper",
     "Pipette : prendre une couleur dans l'image (loupe au pixel ; Échap pour annuler)": "Eyedropper: take a colour from the image (pixel loupe; Escape to cancel)",
     "Pipette : cliquez sur un pixel de l'image (Échap pour annuler)": "Eyedropper: click a pixel of the image (Escape to cancel)",
@@ -515,6 +535,7 @@
   const decEN = x => x.replace(/(\d),(\d)/g, "$1.$2");
   const P = [
     [/^Calculé en ([\d.,]+) s$/, (m, s) => `Computed in ${s} s`],
+    [/^Couleurs mises à jour en ([\d.,]+) s \(découpe inchangée\)$/, (m, s) => `Colours updated in ${s} s (cut unchanged)`],
     [/^Pochoir (\d+)$/, (m, n) => `Stencil ${n}`],
     [/^(★ .+) \(perso\)$/, (m, n) => `${n} (custom)`],
     [/^(\d+) pochoirs? de traits · dans l'ordre$/, (m, n) => `${plural(n, "line stencil")} · in order`],
@@ -570,6 +591,8 @@
     [/^(\d+) couleurs au maximum$/, (m, k) => `${k} colours at most`],
     [/^Palette « (.+) » du projet ajoutée à « Mes palettes »$/, (m, n) => `Palette “${n}” of the project added to “My palettes”`],
     [/^Pipette : (#[0-9a-f]{6})$/, (m, c) => `Eyedropper: ${c}`],
+    [/^Palette « (.+) » : combinaison (\d+) sur (\d+)(, ordre clair → foncé)? \(écart moyen à l'image ΔE ([\d.]+)\)$/,
+      (m, n, a, b, o, d) => `Palette “${tr(n)}”: combination ${a} of ${b}${o ? ", light → dark order" : ""} (mean difference to the image ΔE ${d})`],
     [/^« (.+) » existe déjà : cliquez encore pour la remplacer$/, (m, n) => `“${n}” already exists: click again to replace it`],
     [/^Supprimer la palette « (.+) »$/, (m, n) => `Delete palette “${n}”`], [/^Supprimer (.+)$/, (m, n) => `Delete ${n}`],
     [/^(.+) : (#[0-9a-f]{6}(?: · #[0-9a-f]{6})*)$/i, (m, n, c) => `${tr(n)}: ${c}`],
@@ -620,8 +643,8 @@
     [/^(haut|bas)-(gauche|droite) \(hors du support\)$/, (m, a, b) => `${tr(a + "-" + b)} (outside the support)`],
     [/^Bords de la feuille \((.+) × (.+)\) : à (.+) du bord gauche, (.+) du haut, (.+) de la droite, (.+) du bas\.$/,
       (m, w, h, l, t, r, b) => `Sheet edges (${w} × ${h}): ${l} from the left edge, ${t} from the top, ${r} from the right, ${b} from the bottom.`],
-    [/^Prévisualisation (avec rendu simulé|nette)(, (\d+) couche\(s\) masquée\(s\))?$/,
-      (m, k, h, n) => `Preview ${k === "nette" ? "(sharp)" : "with simulated render"}${h ? `, ${n} layer(s) hidden` : ""}`],
+    [/^Prévisualisation (avec rendu simulé|nette)(, sans les ponts)?(, (\d+) couche\(s\) masquée\(s\))?$/,
+      (m, k, b, h, n) => `Preview ${k === "nette" ? "(sharp)" : "with simulated render"}${b ? ", without bridges" : ""}${h ? `, ${n} layer(s) hidden` : ""}`],
     [/^Pochoir de contours : aucun détail clé trouvé( dans les zones peintes du masque)?\. Augmentez la sensibilité \(actuellement (\d+)\) ou réduisez la longueur mini d'un trait\.$/,
       (m, z, s) => `Outline stencil: no key detail found${z ? " in the painted mask areas" : ""}. Increase the sensitivity (currently ${s}) or reduce the minimum line length.`],
     // Engine warnings

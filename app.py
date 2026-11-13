@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 import zipfile
+from dataclasses import fields
 from pathlib import Path
 
 import cv2
@@ -406,7 +407,14 @@ def api_process():
     if p.outline_subject and sess["prep"].subject is None:
         warnings.append(f"Silhouette : le masque {SILHOUETTE_MASK_NAMES[p.outline_subject_mask]} est vide "
                         f"(onglet Masques)")
-    res = pl.build(sess["prep"], p, region)
+    # Only the paints changed (and they do not change the cut): same geometry, new colours
+    geom = ({f.name: getattr(p, f.name) for f in fields(p) if f.name != "layer_colors"},
+            (sess["prep"], sess.get("mask"), sess.get("silmask"), sess.get("fg")))
+    old = sess.get("geom")
+    recolored = (sess.get("result") is not None and old is not None and pl.colors_only(p)
+                 and old[0] == geom[0] and all(a is b for a, b in zip(old[1], geom[1])))
+    res = pl.recolor(sess["result"], p) if recolored else pl.build(sess["prep"], p, region)
+    sess["geom"] = geom
     if p.stencil_style == "line" and not res.layers:
         warnings.append("Trait seul : aucun trait (cochez les détails clés, la silhouette ou le coloriage)")
     sess["result"] = res
@@ -431,9 +439,26 @@ def api_process():
                                                            interpolation=cv2.INTER_AREA)
         return out
 
+    # Images of the previous answer reused when only paints changed: overlays and blurred masks
+    # do not depend on the colour, a layer view only on its own colour (kept: entries used now)
+    old_cache = sess.get("png_cache", {}) if recolored else {}
+    cache = sess["png_cache"] = {}
+
+    def cached(key, make):
+        cache[key] = old_cache[key] if key in old_cache else make()
+        return cache[key]
+
     layers = []
     for L in res.layers:
+        hexc = pl.bgr_hex(L.color)
         mask = L.opening.astype(np.float32) / 255.0
+        flat = cached((L.index, "flat"), lambda: to_preview(mask))
+        soft = cached((L.index, "soft"), lambda: to_preview(cv2.GaussianBlur(mask, (0, 0), sig) * 0.97))
+        # same without the bridges (painted over, as after retouching), for the preview option
+        if L.bridges:
+            nb = pl.opening_without_bridges(res, L).astype(np.float32) / 255.0
+            flat_nb = cached((L.index, "flat_nb"), lambda: to_preview(nb))
+            soft_nb = cached((L.index, "soft_nb"), lambda: to_preview(cv2.GaussianBlur(nb, (0, 0), sig) * 0.97))
         layers.append({
             "index": L.index,
             "color": pl.bgr_hex(L.color),
@@ -441,13 +466,17 @@ def api_process():
             "sources": list(L.sources),   # line style: where the lines of this stencil come from
             # layer view without highlights + bridges and removed details as separate overlays
             # (shown / hidden in the browser)
-            "image": png_b64(pl.layer_view(res, L, sheet, bridges=False, lost=False, marks=False), 900),
+            "image": cached((L.index, "view", hexc, tuple(sheet)),
+                            lambda: png_b64(pl.layer_view(res, L, sheet, bridges=False, lost=False, marks=False), 900)),
             # registration marks + layer-number notches (sheet coordinates, mm), drawn by the browser
             "reg": pl.reg_shapes_json(pl.registration_shapes(res, L.index)[0]),
-            **{k: (png_b64(o, 900) if k != "img_merged" or L.n_merged else None)
-               for k, o in zip(("img_bridges", "img_lost", "img_merged"), pl.layer_overlays(res, L))},
-            "mask_flat": rgba_b64(L.color, to_preview(mask)),
-            "mask_sim": rgba_b64(L.color, to_preview(cv2.GaussianBlur(mask, (0, 0), sig) * 0.97)),
+            **cached((L.index, "overlays"), lambda: {
+                k: (png_b64(o, 900) if k != "img_merged" or L.n_merged else None)
+                for k, o in zip(("img_bridges", "img_lost", "img_merged"), pl.layer_overlays(res, L))}),
+            "mask_flat": cached((L.index, "mflat", hexc), lambda: rgba_b64(L.color, flat)),
+            "mask_sim": cached((L.index, "msim", hexc), lambda: rgba_b64(L.color, soft)),
+            "mask_flat_nb": cached((L.index, "mflat_nb", hexc), lambda: rgba_b64(L.color, flat_nb)) if L.bridges else None,
+            "mask_sim_nb": cached((L.index, "msim_nb", hexc), lambda: rgba_b64(L.color, soft_nb)) if L.bridges else None,
             **pl.layer_stats(L),
         })
     reg_shapes, reg_warn = pl.registration_shapes(res)
@@ -489,6 +518,7 @@ def api_process():
         visible_mm=[round(lay.vis_mm[2] - lay.vis_mm[0], 1), round(lay.vis_mm[3] - lay.vis_mm[1], 1)],
         delta_e=round(pl.delta_e(res, sheet_sim), 1),
         lines_added=res.lines_added,
+        recolored=recolored,     # colours only: the cut of the previous computation was kept
         seconds=round(time.perf_counter() - t0, 2),
     )
 

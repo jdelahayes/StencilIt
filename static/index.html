@@ -134,7 +134,17 @@
   .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .vt-size { display: inline-flex; align-items: center; gap: 6px; }
   .vt-size input { width: 120px; accent-color: var(--accent); }
-  .card .eye { margin-left: auto; padding: 1px 6px; font-size: 11px; border-radius: 999px; }
+  .card .eye { margin-left: auto; padding: 2px 5px; line-height: 0; border-radius: 999px; }
+  .card .eye[aria-pressed="false"] { color: var(--muted); }
+  .card .lcreset { padding: 2px 4px; line-height: 0; }
+  .card .lcreset .ico { width: 13px; height: 13px; }
+  /* icon buttons (stencil column) */
+  .ibtn { display: inline-flex; align-items: center; justify-content: center; padding: 4px 6px; line-height: 0; }
+  .ico { display: block; flex: none; }
+  .undobar { margin-left: auto; display: inline-flex; gap: 4px; margin-right: 8px; }
+  .undobar .ibtn { padding: 3px 5px; }
+  .ibtn:disabled { opacity: .35; cursor: default; }
+  .ibtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .card.hidden-layer img { opacity: .35; }
   #compareRange { display: block; width: 100%; margin: 6px 0 0; accent-color: var(--accent); }
   /* Zoom of the computed views (preview, comparison, original, layer) */
@@ -295,7 +305,7 @@
   textarea { resize: vertical; font-size: 12px; }
   .cutgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 4px; }
   .cutgrid label { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 4px; }
-  .projbar { margin: -6px 0 12px; text-align: center; }
+  .projbar { margin: -6px 0 12px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
   .projbar button { font-size: 12px; padding: 4px 10px; }
   header button.link { margin-left: 12px; background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 12px; }
   .aligngrid { display: grid; grid-template-columns: repeat(3, 30px); gap: 3px; }
@@ -403,6 +413,7 @@
   </div>
   <div class="projbar">
     <button type="button" id="openProject" title="Rouvrir un zip exporté par StencilIt (image, masque et tous les réglages), ou seulement son fichier …_infos.json">Ouvrir un projet…</button>
+    <button type="button" class="primary" id="export" disabled title="Pochoirs SVG + projet rechargeable (image d'origine, masque, réglages)">Exporter le projet (.zip)</button>
     <button type="button" id="resetAll" title="Rétablit tous les réglages par défaut ; l'image chargée et ses masques sont conservés, ainsi que les réglages enregistrés">Réglages par défaut</button>
     <input type="file" id="projectFile" accept=".zip,.json,application/zip,application/json" hidden>
   </div>
@@ -868,10 +879,13 @@
     <label class="row">Fusion au lieu des ponts <span class="v" id="merge_amount_v"></span>
       <input type="range" id="merge_amount" min="0" max="150" step="1" value="0"></label>
     <p class="hint" id="merge_hint" style="margin-top:-2px"></p>
+    <div id="mergeFill">
     <label class="row">Largeur max d'un chenal (mm) <input type="number" id="merge_channel_mm" value="2.5" min="0.3" max="30" step="0.5"></label>
     <div class="check"><input type="checkbox" id="merge_channels" checked><label for="merge_channels">Fermer les chenaux étroits</label></div>
+    </div>
     <div class="check"><input type="checkbox" id="merge_islands" checked><label for="merge_islands">Supprimer les petits îlots</label></div>
-    <div class="check"><input type="checkbox" id="merge_line_islands"><label for="merge_line_islands">… y compris ceux entourés par les traits des détails clés</label></div>
+    <div class="check" id="mergeLineIsl"><input type="checkbox" id="merge_line_islands"><label for="merge_line_islands">… y compris ceux entourés par les traits des détails clés</label></div>
+    <p class="hint" id="mergeLineHint" hidden>Trait seul : seuls les petits îlots entourés par les traits sont fusionnés (l'intérieur est peint) ; un trait n'est jamais coupé, les chenaux ne sont donc pas fermés.</p>
     <div class="cut">
       <b>Réglages de la machine</b>
       <div class="cutgrid">
@@ -916,7 +930,6 @@
     <p class="hint">Plus haut = plus précis mais plus lent.</p>
   </fieldset>
 
-  <button class="primary" id="export" disabled style="width:100%" title="Pochoirs SVG + projet rechargeable (image d'origine, masque, réglages)">Exporter les SVG + projet (.zip)</button>
 </aside>
 
 <section class="view">
@@ -927,7 +940,11 @@
     <button data-v="preview" class="on">Prévisualisation</button>
     <button data-v="compare">Comparer à l'original</button>
     <button data-v="reference">Original</button>
-    <span style="margin-left:auto" class="palette" id="palette"></span>
+    <span class="undobar" role="group" aria-label="Historique des réglages">
+      <button type="button" class="ibtn" id="undoBtn" disabled aria-label="Annuler le changement" title="Annuler le dernier changement de réglage (Ctrl + Z)"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button type="button" class="ibtn" id="redoBtn" disabled aria-label="Rétablir" title="Rétablir le changement annulé (Ctrl + Y ou Ctrl + Maj + Z)"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+    </span>
+    <span class="palette" id="palette"></span>
   </div>
   <div id="warnings"></div>
   <div class="viewtools" id="viewtools" hidden>
@@ -952,6 +969,7 @@
     <span id="layerToggles" class="vt-toggles vt-layers"></span>
     <button type="button" id="showAll" class="vt-small vt-layers">Tout afficher</button>
     <label class="vt-sim vt-layers"><input type="checkbox" id="preview_sim"> Rendu simulé <span class="hint">(flou de l'aérographe)</span></label>
+    <label class="vt-sim vt-layers" title="Prévisualisation sans les ponts : leur trace est peinte, comme après la retouche"><input type="checkbox" id="preview_nobridges"> Sans les ponts</label>
     <span class="vt-zoom" id="zoomTools" role="group" aria-label="Zoom" hidden>
       <button type="button" id="zoomOut" title="Zoom arrière (molette vers le bas)" aria-label="Zoom arrière">−</button>
       <button type="button" id="zoomLevel" title="Ajuster à la vue (double-clic sur l'image). Zoomé : glisser (Cadrage, Mise en page, Masques : bouton du milieu ou Espace + glisser) pour se déplacer">100 %</button>
@@ -1001,9 +1019,13 @@
       </button>
       <div class="palmenu" id="palMenu" role="listbox" aria-label="Palettes de couleurs" hidden></div>
     </div>
-    <button type="button" class="vt-small" id="palNearest"
-      title="Donne à chaque couche la couleur de la palette la plus proche de sa teinte réelle dans l'image (deux couches n'ont jamais la même couleur) ; sans palette choisie, prend la palette qui colle le mieux à l'image">Plus proches</button>
-    <button type="button" class="vt-small" id="colorsAuto" title="Revenir aux teintes calculées pour toutes les couches">Auto</button>
+    <button type="button" class="ibtn" id="palNearest" aria-label="Plus proches"
+      title="Plus proches : donne à chaque couche la couleur de la palette la plus proche de sa teinte réelle dans l'image (deux couches n'ont jamais la même couleur) ; sans palette choisie, prend la palette qui colle le mieux à l'image"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg></button>
+    <button type="button" class="ibtn" id="palVary" aria-label="Autres couleurs"
+      title="Autres couleurs de la palette : chaque clic donne une autre combinaison, de la plus proche de l'image à la plus éloignée (deux couches n'ont jamais la même couleur)"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg></button>
+    <button type="button" class="ibtn" id="palOrder" aria-pressed="false" aria-label="Garder l'ordre clair → foncé"
+      title="Autres couleurs : garder l'ordre clair → foncé (la couche la plus claire reçoit la couleur la plus claire choisie, et ainsi de suite)"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="5" rx="1" fill="currentColor" fill-opacity=".15"/><rect x="3" y="10" width="6" height="5" rx="1" fill="currentColor" fill-opacity=".5"/><rect x="3" y="17" width="6" height="5" rx="1" fill="currentColor"/><path d="M16 4v16"/><path d="m12.5 16.5 3.5 3.5 3.5-3.5"/></svg></button>
+    <button type="button" class="ibtn" id="colorsAuto" aria-label="Auto" title="Auto : revenir aux teintes calculées pour toutes les couches"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
     <input type="hidden" id="layer_colors" value="">
   </div>
   <div class="legend">
@@ -1756,7 +1778,7 @@ function collectSettings(all) {
   const s = {};
   PARAMS.filter(k => all || !NOT_REMEMBERED.has(k)).forEach(k => s[k] = val(k));
   CUT_FIELDS.forEach(f => s["cut_" + f] = $("cut_" + f).value);
-  ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "show_support", "show_mat", "mat_preset", "machine", "auto_calc", "show_stock", "show_reg", "show_calage", "stock_preset", "stock_orient", "stock_w_mm", "stock_h_mm"].forEach(k => s[k] = val(k));
+  ["material", "support_preset", "orientation", "user_support", "align_margin_mm", "keep_ratio", "preview_sim", "preview_nobridges", "show_support", "show_mat", "mat_preset", "machine", "auto_calc", "show_stock", "show_reg", "show_calage", "stock_preset", "stock_orient", "stock_w_mm", "stock_h_mm"].forEach(k => s[k] = val(k));
   return s;
 }
 function rememberSettings() {
@@ -2153,12 +2175,33 @@ async function init() {
   document.addEventListener("keydown", e => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && SID) { e.preventDefault(); process(); }
   });
+  // Undo / redo of the settings: buttons above the view, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z
+  // (in a text or number field, the field's own undo is left alone)
+  $("undoBtn").onclick = () => historyGo(-1);
+  $("redoBtn").onclick = () => historyGo(1);
+  document.addEventListener("keydown", e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || !SID) return;
+    const a = document.activeElement;
+    if (a && (a.isContentEditable || a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && /^(text|number|search|)$/.test(a.type)))) return;
+    const k = e.key.toLowerCase();
+    if (k === "z" && !e.shiftKey) { e.preventDefault(); historyGo(-1); }
+    else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); historyGo(1); }
+  });
   $("colorsAuto").onclick = () => {
     $("layer_colors").value = ""; showPaletteChoice(""); PAL_LAST = "";
     status("Couleurs calculées pour toutes les couches"); schedule();
   };
   setupPalettes();
   $("palNearest").onclick = () => applyNearest(palDef(PAL_CUR || PAL_LAST) ? PAL_CUR || PAL_LAST : "");
+  $("palVary").onclick = varyColors;
+  // "Other colours" option: keep the light -> dark order of the layers (remembered)
+  const setOrder = on => $("palOrder").setAttribute("aria-pressed", String(on));
+  setOrder(!!prefs().palette_order);
+  $("palOrder").onclick = () => {
+    const on = $("palOrder").getAttribute("aria-pressed") !== "true";
+    setOrder(on); savePref("palette_order", on);
+    status(on ? "Autres couleurs : ordre clair → foncé conservé" : "Autres couleurs : toutes les combinaisons");
+  };
   setupColorPop();
   setupPickPop();
   setupHisto(); drawHisto();
@@ -2337,6 +2380,7 @@ async function init() {
   });
   // Preview: simulated render and layer visibility (no server recomputation)
   $("preview_sim").addEventListener("change", () => { refreshPreviewOnly(); rememberSettings(); });
+  $("preview_nobridges").addEventListener("change", () => { refreshPreviewOnly(); rememberSettings(); });
   $("showAll").onclick = () => { HIDDEN.clear(); refreshPreviewOnly(); };
   // Outline stencil: automatic or chosen colour
   $("outline_auto_color").addEventListener("change", () => { $("outline_color").disabled = $("outline_auto_color").checked; });
@@ -2359,7 +2403,7 @@ async function init() {
   $("openProject").onclick = () => $("projectFile").click();
   $("projectFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; f && openProject(f); };
 
-  $("tabs").querySelectorAll("button").forEach(b => b.onclick = () => { VIEW = b.dataset.v; SEL = null; render(); });
+  $("tabs").querySelectorAll("button[data-v]").forEach(b => b.onclick = () => { VIEW = b.dataset.v; SEL = null; render(); });
   $("export").onclick = async () => {
     if (!SID) return;
     try {      // the palette shown can change without a new computation: sent just before the export
@@ -2439,11 +2483,12 @@ function uiState() {
   values.sens_scale = 2;
   return { version: 1, values, crop: { ...CROP }, hidden_layers: [...HIDDEN], palette: projectPalette() };
 }
-// Palette applied to the layers (name + colours), saved in the project so that it comes back on
-// reopening, even on a computer that does not have it in "My palettes"
+// Palette of the project (name + colours), saved in it so that it comes back on reopening, even on
+// a computer that does not have it in "My palettes". The last applied palette is kept even when
+// some layer colours were then picked outside it (the palette is no longer shown as applied then).
 function projectPalette() {
-  const d = palDef(PAL_CUR);
-  return d ? { key: PAL_CUR, name: d[0], colors: d[1].slice() } : null;
+  const key = PAL_CUR || PAL_LAST, d = palDef(key);
+  return d ? { key, name: d[0], colors: d[1].slice() } : null;
 }
 async function restoreProjectPalette(pal) {
   const cols = pal && Array.isArray(pal.colors)
@@ -2505,6 +2550,7 @@ function loadMaskImage(src, coverage, kind = "outline") {
       if (kind === "subject") { SUBJ_EMPTY = !(coverage > 0); }
       else if (kind === "silhouette") { SIL_EMPTY = !(coverage > 0); silInfo(coverage); }
       else { MASK_EMPTY = !(coverage > 0); maskInfo(coverage); }
+      MASKV[kind] = { png: coverage > 0 ? CV.toDataURL("image/png") : null, exact: false };
       done();
     };
     im.onerror = () => done();
@@ -2540,7 +2586,7 @@ async function openProject(file) {
   if (j.mask) await loadMaskImage(j.mask, j.mask_coverage);
   if (j.subject && j.subject.png) {
     await loadMaskImage(j.subject.png, j.subject.coverage, "subject");
-    SUBJ_EXACT = !!j.subject.exact;
+    SUBJ_EXACT = !!j.subject.exact; MASKV.subject = { ...MASKV.subject, exact: SUBJ_EXACT };
     FG_OVERLAY = j.subject.overlay; subjInfo(j.subject);
   }
   if (j.silmask) await loadMaskImage(j.silmask, j.silmask_coverage, "silhouette");
@@ -2590,8 +2636,57 @@ let DIRTY = false, GEN = 0;
 const autoCalc = () => $("auto_calc").checked;
 function schedule() {
   if (!SID) return;
+  historySoon();
   if (!autoCalc()) { GEN++; DIRTY = true; updateCalcBtn(); return; }
   clearTimeout(timer); timer = setTimeout(process, 350);
+}
+// ---------------- Undo / redo of the settings ----------------
+// A snapshot of the settings (fields, crop, colours, palette shown) is recorded after each change
+// that leads to a computation (grouped over 300 ms); undo / redo restores it and recomputes.
+// The history starts again with each new image; masks and view options are not part of it.
+const HIST = { list: [], pos: -1, sid: null, timer: null };
+function historySnap() {
+  const s = uiState(), values = { ...s.values };
+  // automatic line colour: rewritten by each computation, not a change of the user
+  if (values.outline_auto_color) delete values.outline_color;
+  return { values, crop: s.crop, pal: PAL_CUR, palLast: PAL_LAST, masks: { ...MASKV } };
+}
+function historyRecord() {
+  clearTimeout(HIST.timer); HIST.timer = null;
+  if (!SID) return;
+  if (HIST.sid !== SID) { HIST.list = []; HIST.pos = -1; HIST.sid = SID; }
+  const snap = historySnap(), key = JSON.stringify(snap);
+  if (HIST.pos >= 0 && JSON.stringify(HIST.list[HIST.pos]) === key) return;
+  HIST.list.splice(HIST.pos + 1);          // a new change drops the undone ones
+  HIST.list.push(snap);
+  if (HIST.list.length > 100) HIST.list.shift();
+  HIST.pos = HIST.list.length - 1;
+  historyButtons();
+}
+function historySoon() { clearTimeout(HIST.timer); HIST.timer = setTimeout(historyRecord, 300); }
+function historyButtons() {
+  $("undoBtn").disabled = !(HIST.sid === SID && HIST.pos > 0);
+  $("redoBtn").disabled = !(HIST.sid === SID && HIST.pos < HIST.list.length - 1);
+}
+function historyGo(step) {
+  if (HIST.timer) historyRecord();         // a change still being grouped: recorded first
+  const to = HIST.pos + step;
+  if (HIST.sid !== SID || to < 0 || to >= HIST.list.length) return;
+  HIST.pos = to;
+  const s = HIST.list[to], vals = { ...s.values };
+  const mat = vals.material; delete vals.material;
+  if (mat && [...$("material").options].some(o => o.value === mat)) $("material").value = mat;
+  setVals(vals);
+  CROP = { ...s.crop };
+  $("outline_color").disabled = $("outline_auto_color").checked;
+  showValues(); cutInfo(); regHint(); cropInfo(); syncWidth(); updateSummaries(); renderOutlineSwatches();
+  showPaletteChoice(s.pal); PAL_LAST = s.palLast; VARY = null;
+  // masks that differ: put back (canvas + server), in the background
+  for (const k of Object.keys(MASKV))
+    if (s.masks && JSON.stringify(s.masks[k]) !== JSON.stringify(MASKV[k])) restoreMask(k, s.masks[k]);
+  historyButtons();
+  status(step < 0 ? "Annulé" : "Rétabli");
+  render(); schedule();
 }
 function updateCalcBtn() {
   const b = $("calcBtn");
@@ -2605,6 +2700,7 @@ function updateCalcBtn() {
 
 async function process() {
   if (!SID) return;
+  historyRecord();
   if (busy) { again = true; return; }
   busy = true; status("Calcul en cours…");
   document.querySelector("header").classList.add("busy");
@@ -2615,7 +2711,7 @@ async function process() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || "Erreur");
     IMG_CACHE = new Map(); LAST = j; render(); rememberSettings(); updateSummaries();
-    status(`Calculé en ${j.seconds} s`);
+    status(j.recolored ? `Couleurs mises à jour en ${j.seconds} s (découpe inchangée)` : `Calculé en ${j.seconds} s`);
     if (GEN === gen) DIRTY = false;               // nothing changed during the computation
     $("export").disabled = false;
   } catch (e) { status(e.message, true); }
@@ -2646,6 +2742,32 @@ let SIL = null, SIL_EMPTY = true, SIL_INFO = "", SIL_SENDING = null;
 // masks containing an object selection (exact outline): kept exact when copied into the subject mask
 const MASK_OBJ = { outline: false, silhouette: false };
 const maskCv = k => k === "subject" ? SUBJ : k === "silhouette" ? SIL : MASK;
+// Masks in the undo history: PNG of each mask (null = empty) + exact flag, updated when a mask is
+// sent to the server (end of a stroke, object, copy, clear) or loaded; MASK_RESTORE > 0 while
+// undo / redo puts a mask back (no history entry, no automatic option change)
+const MASKV = { outline: { png: null, exact: false }, subject: { png: null, exact: false }, silhouette: { png: null, exact: false } };
+let MASK_RESTORE = 0;
+const maskExact = k => k === "subject" ? SUBJ_EXACT : MASK_OBJ[k];
+function maskCommit(kind, png) {
+  if (MASK_RESTORE) return;
+  MASKV[kind] = { png, exact: !!maskExact(kind) };
+  historySoon();
+}
+async function restoreMask(kind, st) {
+  if (!maskCv(kind)) (kind === "subject" ? createSubj : kind === "silhouette" ? createSil : createMask)();
+  MASKV[kind] = st;
+  const c = maskCv(kind), ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (st.png) {
+    const im = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = st.png; });
+    if (im) ctx.drawImage(im, 0, 0, c.width, c.height);
+  }
+  if (kind === "subject") SUBJ_EXACT = !!st.exact; else MASK_OBJ[kind] = !!st.exact;
+  SEM_LAST = null;
+  MASK_RESTORE++;
+  try { await sendMask(kind); } finally { MASK_RESTORE--; }
+  if (VIEW === "mask") render();
+}
 const silFrom = k => val("outline_subject") && val("outline_subject_mask") === k;
 function maskCanvas() {
   const s = Math.min(1, 1100 / Math.max(IMG.w, IMG.h));   // same size as the preview sent by the server
@@ -2657,11 +2779,13 @@ function maskCanvas() {
 }
 function createMask() {
   MASK = maskCanvas();
+  MASKV.outline = { png: null, exact: false };
   MASK_EMPTY = true; SEM_LAST = null; MASK_OBJ.outline = false;
   maskInfo(0);
 }
 function createSil() {
   SIL = maskCanvas();
+  MASKV.silhouette = { png: null, exact: false };
   SIL_EMPTY = true; SEM_LAST = null; MASK_OBJ.silhouette = false;
   silInfo(0);
 }
@@ -2692,10 +2816,13 @@ function syncSilhouetteSource() {
 function syncStyle() {
   const line = val("stencil_style") === "line";
   $("styleHint").hidden = !line; $("fillOnly").hidden = line; $("lineBox").hidden = !line; $("targetBox").hidden = line;
+  // merges of line stencils: islands enclosed by the lines only (a line is never closed)
+  $("mergeFill").hidden = line; $("mergeLineIsl").hidden = line; $("mergeLineHint").hidden = !line;
   syncOutlineTarget(); syncSilhouetteSource();
 }
 function createSubj() {
   SUBJ = maskCanvas();
+  MASKV.subject = { png: null, exact: false };
   SUBJ_EMPTY = true; SUBJ_EXACT = false; FG_OVERLAY = null; SEM_LAST = null;
   subjInfo(null);
 }
@@ -2733,6 +2860,7 @@ async function sendSubject() {
   SUBJ_EMPTY = maskIsEmpty(SUBJ);
   if (SUBJ_EMPTY) SUBJ_EXACT = false;
   const png = SUBJ_EMPTY ? null : SUBJ.toDataURL("image/png");
+  maskCommit("subject", png);
   status(SUBJ_EMPTY ? "Masque sujet effacé" : "Détourage du sujet…");
   const req = fetch("/api/subject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png, exact: SUBJ_EXACT }) });
   SUBJ_SENDING = req;
@@ -2744,7 +2872,7 @@ async function sendSubject() {
     subjInfo(j);
     const ov = document.querySelector("#stage .fgov");
     if (ov) { if (FG_OVERLAY) { ov.src = FG_OVERLAY; ov.hidden = false; } else ov.hidden = true; }
-    if (!SUBJ_EMPTY && !$("pre_remove_bg").checked) {   // painting the subject = wanting to remove the background
+    if (!SUBJ_EMPTY && !$("pre_remove_bg").checked && !MASK_RESTORE) {   // painting the subject = wanting to remove the background
       $("pre_remove_bg").checked = true; updateSummaries();
       status("Fond supprimé (sujet peint)");
     } else status(SUBJ_EMPTY ? "Masque sujet effacé" : "Sujet détouré");
@@ -2755,6 +2883,7 @@ async function sendSil() {
   if (!SID || !SIL) return;
   SIL_EMPTY = maskIsEmpty(SIL);
   const png = SIL_EMPTY ? null : SIL.toDataURL("image/png");
+  maskCommit("silhouette", png);
   const req = fetch("/api/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png, kind: "silhouette" }) });
   SIL_SENDING = req;
   try {
@@ -2762,7 +2891,7 @@ async function sendSil() {
     if (!r.ok) { status(j.error || "Erreur du masque", true); return; }
     if (SIL_SENDING !== req) return;
     silInfo(j.coverage);
-    if (!SIL_EMPTY && !silFrom("silhouette")) {        // painting the silhouette mask = wanting its outline drawn
+    if (!SIL_EMPTY && !silFrom("silhouette") && !MASK_RESTORE) {   // painting the silhouette mask = wanting its outline drawn
       $("outline_subject").checked = true; $("outline_subject_mask").value = "silhouette";
       syncSilhouetteSource(); updateSummaries();
       status("Contours : silhouette tracée d'après le masque silhouette");
@@ -2813,6 +2942,7 @@ async function sendMask(kind = maskKind()) {
   if (!SID || !MASK) return;
   MASK_EMPTY = maskIsEmpty();
   const png = MASK_EMPTY ? null : MASK.toDataURL("image/png");
+  maskCommit("outline", png);
   const req = fetch("/api/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png }) });
   MASK_SENDING = req;
   try {
@@ -2820,7 +2950,7 @@ async function sendMask(kind = maskKind()) {
     if (!r.ok) { status(j.error || "Erreur du masque", true); return; }
     if (MASK_SENDING !== req) return;                 // a more recent upload is in progress
     maskInfo(j.coverage);
-    if (!MASK_EMPTY && !$("outline").checked) {       // painting a mask only makes sense with the outline stencil
+    if (!MASK_EMPTY && !$("outline").checked && !MASK_RESTORE) {   // painting a mask only makes sense with the outline stencil
       $("outline").checked = true; updateSummaries();
       status("Pochoir de contours activé (masque peint)");
     }
@@ -3059,11 +3189,13 @@ async function composeCanvas() {
   // otherwise the layers alone appear on the checkerboard
   if ($("show_support").checked) { ctx.fillStyle = LAST.base; ctx.fillRect(0, 0, w, h); }
   const sim = $("preview_sim").checked;
-  const imgs = await Promise.all(LAST.layers.map(L => HIDDEN.has(L.index) ? null : loadImg(sim ? L.mask_sim : L.mask_flat)));
+  const nb = $("preview_nobridges").checked;   // bridges painted over (as after retouching)
+  const imgs = await Promise.all(LAST.layers.map(L => HIDDEN.has(L.index) ? null
+    : loadImg(sim ? (nb && L.mask_sim_nb) || L.mask_sim : (nb && L.mask_flat_nb) || L.mask_flat)));
   imgs.forEach(im => im && ctx.drawImage(im, 0, 0, w, h));
   const hidden = LAST.layers.filter(L => HIDDEN.has(L.index)).length;
   cv.setAttribute("role", "img");
-  cv.setAttribute("aria-label", `Prévisualisation ${sim ? "avec rendu simulé" : "nette"}${hidden ? `, ${hidden} couche(s) masquée(s)` : ""}`);
+  cv.setAttribute("aria-label", `Prévisualisation ${sim ? "avec rendu simulé" : "nette"}${nb ? ", sans les ponts" : ""}${hidden ? `, ${hidden} couche(s) masquée(s)` : ""}`);
   return cv;
 }
 async function renderPreview(st) {
@@ -3236,13 +3368,16 @@ function toggleLayer(i) {
   if (HIDDEN.has(i)) HIDDEN.delete(i); else HIDDEN.add(i);
   refreshPreviewOnly();
 }
+// Icons of the stencil cards (stroke, currentColor)
+const ICO_RESET = `<svg class="ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>`;
+const eyeIcon = on => `<svg class="ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${on ? `<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>` : `<path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2"/><path d="M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.8 0 3.4-.5 4.8-1.3"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>`}</svg>`;
 function refreshPreviewOnly() {
   renderToolbar();
   document.querySelectorAll("#layers .card").forEach(c => {
     const i = +c.dataset.idx, hid = HIDDEN.has(i);
     c.classList.toggle("hidden-layer", hid);
     const eye = c.querySelector(".eye");
-    if (eye) { eye.textContent = hid ? "masquée" : "visible"; eye.setAttribute("aria-pressed", String(!hid)); }
+    if (eye) { eye.innerHTML = eyeIcon(!hid); eye.setAttribute("aria-pressed", String(!hid)); }
   });
   if (SEL === null && (VIEW === "preview" || VIEW === "compare")) renderPreview($("stage"));
 }
@@ -3270,7 +3405,7 @@ function stageH() {
   return h;
 }
 function render() {
-  $("tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === VIEW && SEL === null));
+  $("tabs").querySelectorAll("button[data-v]").forEach(b => b.classList.toggle("on", b.dataset.v === VIEW && SEL === null));
   const st = $("stage");
   renderCalage(); stageH();
   $("masktools").hidden = !(IMG && SEL === null && VIEW === "mask");
@@ -3332,8 +3467,8 @@ function render() {
         <div class="t">${L.kind === "outline"
           ? `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur du trait des contours${val("outline_auto_color") ? " (automatique)" : " (choisie)"} — cliquer pour changer"></button>`
           : `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur de la peinture de la couche ${L.index}${layerColors()[L.index] ? " (choisie)" : " (calculée)"} — cliquer pour changer"></button>`}Couche ${L.index}${L.kind === "outline" ? " — contours ✎" : ""} — ${L.color}${customColor(L)
-          ? ` <button type="button" class="lcreset vt-small" data-idx="${L.index}" title="Revenir à la teinte calculée">auto</button>` : ""}
-          <button type="button" class="eye" aria-pressed="${!HIDDEN.has(L.index)}" title="Afficher / masquer dans la prévisualisation">${HIDDEN.has(L.index) ? "masquée" : "visible"}</button></div>
+          ? ` <button type="button" class="lcreset" data-idx="${L.index}" title="Revenir à la teinte calculée" aria-label="Revenir à la teinte calculée">${ICO_RESET}</button>` : ""}
+          <button type="button" class="eye" aria-pressed="${!HIDDEN.has(L.index)}" title="Afficher / masquer dans la prévisualisation" aria-label="Afficher / masquer dans la prévisualisation">${eyeIcon(!HIDDEN.has(L.index))}</button></div>
         ${L.paths} tracés · ${L.nodes} nœuds · ${L.islands} îlot${L.islands > 1 ? "s" : ""} · ${L.bridges} ponts${L.merged ? ` · ${L.merged} fusion${L.merged > 1 ? "s" : ""}` : ""}<br>
         ${L.short_islands ? `<span style="color:#d97706">⚠ ${L.short_islands} îlot(s) sans place pour ${val("min_bridges")} ponts</span><br>` : ""}
         Coupe : ${L.cut_length_m} m · détails supprimés : ${L.lost_pct} %
@@ -3675,15 +3810,21 @@ function nearestColors(stops, tones) {
 }
 // Each layer gets the colour of palette `key` closest to its tone in the image;
 // with no key, every palette is tried and the one that best matches the image is applied
-function applyNearest(key) {
-  if (!LAST) return status("Calculez d'abord les couches", true);
-  // flat colours: the colour layers; line style: the tones of the tone stencils (colouring book)
-  const layers = val("stencil_style") === "line"
+// Layers a palette colours: flat colours = the colour layers; line style = the tones of the tone
+// stencils (colouring book), keyed "t<tone>"
+function paletteTargets() {
+  return val("stencil_style") === "line"
     ? [...new Set(LAST.layers.flatMap(L => (L.sources || []).filter(s => /^tone\d+$/.test(s)).map(s => +s.slice(4))))]
       .filter(t => (LAST.palette || [])[t]).map(t => ({ index: "t" + t, tone: t }))
     : LAST.layers.filter(L => L.kind !== "outline" && L.tone != null && (LAST.palette || [])[L.tone]);
-  if (!layers.length) return status(val("stencil_style") === "line"
-    ? "Trait seul : la palette s'applique aux limites du coloriage colorées par teinte" : "Calculez d'abord les couches", true);
+}
+const noTargets = () => status(val("stencil_style") === "line"
+  ? "Trait seul : la palette s'applique aux limites du coloriage colorées par teinte" : "Calculez d'abord les couches", true);
+function applyNearest(key) {
+  if (!LAST) return status("Calculez d'abord les couches", true);
+  const layers = paletteTargets();
+  if (!layers.length) return noTargets();
+  VARY = null;
   const tones = layers.map(L => LAST.palette[L.tone]);
   let best = null;
   const keys = key ? [key].filter(palDef)
@@ -3699,6 +3840,101 @@ function applyNearest(key) {
   PAL_LAST = best.k; showPaletteChoice(best.k);
   const n = layers.length;
   status(`Palette « ${palDef(best.k)[0]} » : couleurs les plus proches de l'image sur ${n} couche${n > 1 ? "s" : ""} (écart moyen ΔE ${best.mean.toFixed(1)})`);
+  schedule();
+}
+// "Other colours": other combinations of the palette colours on the layers, from the closest to
+// the image to the farthest; each click shows the next one that changes at least half the layers
+// compared with the one shown, then starts again
+let VARY = null;   // { sig, list: [{cols, mean}], pos }
+function paletteCombos(stops, tones, ordered = false) {
+  let cand = [...new Set(stops.map(c => c.toLowerCase()))];
+  if (tones.length > cand.length) cand = paletteColors(cand, Math.max(2 * cand.length - 1, tones.length));
+  while (cand.length < tones.length) cand = cand.concat(cand);
+  const n = tones.length, m = cand.length, lt = tones.map(srgbLab), lc = cand.map(srgbLab);
+  if (ordered) return orderedCombos(cand, lt, lc);
+  const cost = lt.map(a => lc.map(b => deltaE00(a, b)));
+  const out = [], seen = new Set();
+  const add = col => {
+    const key = col.join(",");
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ cols: col.map(j => cand[j]), mean: col.reduce((s, j, i) => s + cost[i][j], 0) / n });
+  };
+  let total = 1;
+  for (let i = 0; i < n; i++) total *= m - i;
+  if (total <= 40000) {                 // every injective combination
+    const col = Array(n), used = Array(m).fill(false);
+    (function rec(i) {
+      if (i === n) return add(col.slice());
+      for (let j = 0; j < m; j++) if (!used[j]) { used[j] = true; col[i] = j; rec(i + 1); used[j] = false; }
+    })(0);
+  } else {                              // too many: optimal one + random combinations
+    add(assignMin(cost));
+    for (let t = 0; t < 20000; t++) {
+      const idx = [...Array(m).keys()];
+      for (let i = 0; i < n; i++) { const k = i + Math.floor(Math.random() * (m - i)); [idx[i], idx[k]] = [idx[k], idx[i]]; }
+      add(idx.slice(0, n));
+    }
+  }
+  return out.sort((a, b) => a.mean - b.mean);
+}
+// Light -> dark order kept: the chosen colours are given by lightness rank (the lightest layer
+// tone gets the lightest chosen colour...): one combination per subset of n colours
+function orderedCombos(cand, lt, lc) {
+  const n = lt.length, m = cand.length;
+  const ct = [...Array(n).keys()].sort((a, b) => lt[b][0] - lt[a][0]);   // layers, lightest first
+  const cc = [...Array(m).keys()].sort((a, b) => lc[b][0] - lc[a][0]);   // colours, lightest first
+  const out = [], seen = new Set();
+  const add = sub => {                  // sub: increasing positions in cc
+    const col = Array(n);
+    sub.forEach((k, r) => { col[ct[r]] = cc[k]; });
+    const key = col.join(",");
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ cols: col.map(j => cand[j]), mean: col.reduce((s, j, i) => s + deltaE00(lt[i], lc[j]), 0) / n });
+  };
+  let total = 1;
+  for (let i = 0; i < n; i++) total = total * (m - i) / (i + 1);
+  if (total <= 40000) {
+    const sub = [];
+    (function rec(start) {
+      if (sub.length === n) return add(sub.slice());
+      for (let k = start; k <= m - (n - sub.length); k++) { sub.push(k); rec(k + 1); sub.pop(); }
+    })(0);
+  } else {
+    for (let t = 0; t < 20000; t++) {
+      const idx = [...Array(m).keys()];
+      for (let i = 0; i < n; i++) { const k = i + Math.floor(Math.random() * (m - i)); [idx[i], idx[k]] = [idx[k], idx[i]]; }
+      add(idx.slice(0, n).sort((a, b) => a - b));
+    }
+  }
+  return out.sort((a, b) => a.mean - b.mean);
+}
+function varyColors() {
+  if (!LAST) return status("Calculez d'abord les couches", true);
+  const key = PAL_CUR || PAL_LAST, def = palDef(key);
+  if (!def) return status("Choisissez d'abord une palette (menu Palette de couleurs…)", true);
+  const layers = paletteTargets();
+  if (!layers.length) return noTargets();
+  const tones = layers.map(L => LAST.palette[L.tone]);
+  const ordered = $("palOrder").getAttribute("aria-pressed") === "true";
+  const sig = key + "|" + def[1].join(",") + "|" + layers.map(L => L.index + ":" + tones[layers.indexOf(L)]).join(",") + "|" + ordered;
+  if (!VARY || VARY.sig !== sig) VARY = { sig, list: paletteCombos(def[1], tones, ordered), pos: -1 };
+  const m = layerColors(), cur = layers.map(L => (m[L.index] || "").toLowerCase());
+  const need = Math.max(1, Math.ceil(layers.length / 2));
+  const diff = c => c.cols.reduce((s, x, i) => s + (x !== cur[i]), 0);
+  let pos = -1;
+  for (let k = 1; k <= VARY.list.length; k++) {
+    const q = (VARY.pos + k) % VARY.list.length;
+    if (diff(VARY.list[q]) >= need) { pos = q; break; }
+  }
+  if (pos < 0) return status("Pas d'autre combinaison avec cette palette", true);
+  VARY.pos = pos;
+  const c = VARY.list[pos];
+  layers.forEach((L, i) => { m[L.index] = c.cols[i]; });
+  $("layer_colors").value = Object.entries(m).map(([k, v]) => `${k}=${v}`).join(";");
+  PAL_LAST = key; showPaletteChoice(key);
+  status(`Palette « ${def[0]} » : combinaison ${pos + 1} sur ${VARY.list.length}${ordered ? ", ordre clair → foncé" : ""} (écart moyen à l'image ΔE ${c.mean.toFixed(1)})`);
   schedule();
 }
 const swatches = cols => cols.map(c => `<i style="background:${c}"></i>`).join("");

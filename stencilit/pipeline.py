@@ -798,15 +798,22 @@ def merge_zones(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None
                 continue
             if i != main and vis_lab[i] <= amax:
                 actions.append((float(vis_lab[i]), 1, i, (i,)))
-    fill = flab = fstats = None
-    if p.merge_channels:
-        r = p.merge_channel_mm * p.px_per_mm / 2
+    fills = []                          # (labels, stats) of the channels closed at each width
+    # Channels are searched at several widths up to the maximum: closing with the widest disk alone
+    # would also weld the narrow parts into large, costly pieces (a wider maximum must never give
+    # fewer merges than a narrower one)
+    wmax = p.merge_channel_mm
+    widths = sorted({wmax} | {wmax * 0.6 ** k for k in range(1, 6) if wmax * 0.6 ** k >= p.min_opening_mm})
+    for wd in (widths if p.merge_channels else []):
+        r = wd * p.px_per_mm / 2
         if r >= 0.5:
             closed = cv2.morphologyEx(material.astype(np.uint8), cv2.MORPH_CLOSE, disk(r)) > 0
             fill = closed & ~material
             if protect is not None:
                 fill &= ~protect
             nf, flab, fstats, _ = cv2.connectedComponentsWithStats(fill.astype(np.uint8), connectivity=8)
+            fi = len(fills)
+            fills.append((flab, fstats))
             if nf > 1:
                 vis_f = np.bincount(flab.ravel(), visible.ravel(), minlength=nf) * w
                 # material labels touching each filled part (4-neighbours)
@@ -822,7 +829,7 @@ def merge_zones(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None
                     touch.setdefault(c // n, []).append(c % n)
                 for j, labs in touch.items():
                     if len(labs) >= 2 and vis_f[j] <= amax:
-                        actions.append((float(vis_f[j]), 0, j, tuple(labs)))
+                        actions.append((float(vis_f[j]), 0, (fi, j), tuple(labs)))
     if not actions:
         return merged, 0
 
@@ -853,8 +860,9 @@ def merge_zones(opening: np.ndarray, p: Params, hidden: np.ndarray | None = None
             roots = {find(a) for a in labs if a not in removed}
             if len(roots) < 2:
                 continue
-            x, y, bw, bh = fstats[idx, :4]
-            sub = flab[y:y + bh, x:x + bw] == idx
+            flab, fstats = fills[idx[0]]
+            x, y, bw, bh = fstats[idx[1], :4]
+            sub = flab[y:y + bh, x:x + bw] == idx[1]
             opening[y:y + bh, x:x + bw][sub] = 0
             merged[y:y + bh, x:x + bw] |= sub
             rl = list(roots)
@@ -1213,6 +1221,36 @@ def _lab(bgr: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(arr, cv2.COLOR_BGR2LAB).reshape(-1, 3)
 
 
+def merge_line_islands(opening: np.ndarray, p: Params, color, support) -> tuple[np.ndarray, int]:
+    """"Merge instead of bridges" for a line stencil (lines-only style, separate outline stencil):
+    small islands enclosed by lines are painted (opened) instead of being held by bridges; the
+    lines themselves are never closed (no channel merge across a line). Same cost and scale as the
+    colour layers. Modifies `opening` in place; returns (mask of the changed areas, number of merges)."""
+    de = float(np.linalg.norm(_lab(np.asarray(color, np.uint8)) - _lab(np.asarray(support, np.uint8))))
+    return merge_zones(opening, replace(p, merge_line_islands=True), None,
+                       float(np.clip(de / 40.0, 0.15, 1.0)), opening > 0)
+
+
+def colors_only(p: Params) -> bool:
+    """True when the layer paints (`layer_colors`) do not change the cut: flat-colour style, no
+    merge (weighted by the colour difference), no key-detail search (made against the simulated
+    render of the paints), no silhouette limited to weak edges (same). A change of paint alone can
+    then reuse the geometry of the previous result (see `recolor`)."""
+    merges = p.merge_amount > 0 and (p.merge_channels or p.merge_islands)
+    return (p.stencil_style == "fill" and not merges and not p.outline
+            and not (p.outline_subject and p.outline_subject_weak))
+
+
+def recolor(res: "Result", p: Params) -> "Result":
+    """Previous result with the paints of `p.layer_colors` (same openings, bridges and paths):
+    only valid when `colors_only(p)` and nothing but `layer_colors` changed."""
+    paints = parse_layer_colors(p.layer_colors)
+    layers = [L if L.kind == "outline" or L.tone is None
+              else replace(L, color=paints.get(L.index, res.prepared.palette[L.tone]))
+              for L in res.layers]
+    return replace(res, params=p, layers=layers)
+
+
 def layer_job(job):
     """Merges + bridges + vectorisation of one layer (module-level function: can run in another process).
     `protect`: areas no merge may change (lines added to the layer); `weight`: see merge_zones."""
@@ -1358,10 +1396,12 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
             cleaned = clean_mask(target, p)
             lost = cv2.bitwise_xor(cleaned, target)
             opening = place(cleaned)
+            merged, n_merged = merge_line_islands(opening, p, color, support)
             bridges, n_isl, n_short = add_bridges(opening, p, None) if p.bridges else ([], 0, 0)
             layers.append(Layer(index=len(layers) + 1, color=color, target=target, opening=opening,
                                 lost=lost, bridges=bridges, paths=vectorize(opening, p),
-                                islands=n_isl, short_islands=n_short, kind="outline"))
+                                islands=n_isl, short_islands=n_short, merged=merged, n_merged=n_merged,
+                                kind="outline"))
     return res
 
 
@@ -1435,6 +1475,8 @@ def _line_response(L: np.ndarray, ppm: float, method: str, dark: bool,
 
 # noise floor of each method (L* units): weaker responses are never candidates
 _LINE_FLOOR = {"xdog": 1.5, "ridge": 2.0}
+# hysteresis of the key-detail selection (see detect_key_details)
+HYST_MM, HYST_LOSS, HYST_SCORE = 4.0, 0.6, 0.4
 
 
 def thin_features(L100: np.ndarray, ppm: float, floor: float = 6.0) -> np.ndarray:
@@ -1650,11 +1692,12 @@ def line_stencils(prep: Prepared, p: Params, region: np.ndarray | None, support:
         target = cv2.dilate(ln.astype(np.uint8) * 255, k)
         cleaned = clean_mask(target, p)
         opening = place(cleaned)
+        merged, n_merged = merge_line_islands(opening, p, c, support)
         bridges, n_isl, n_short = add_bridges(opening, p, None) if p.bridges else ([], 0, 0)
         layers.append(Layer(index=i + 1, color=c, target=target, opening=opening,
                             lost=cv2.bitwise_xor(cleaned, target), bridges=bridges,
                             paths=vectorize(opening, p), islands=n_isl, short_islands=n_short,
-                            kind="outline", sources=tuple(srcs)))
+                            merged=merged, n_merged=n_merged, kind="outline", sources=tuple(srcs)))
     return layers
 
 
@@ -1818,7 +1861,8 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     #    progressive scale (1 % at 0, ~10 % at 50, 95 % at 100: fine control of the few-lines end).
     #    Minimum lost share: 0.5 up to 15 % kept, then down to 0.2 at 95 % (as before version 1.2).
     keep_share = outline_keep_share(p.outline_sensitivity)
-    cand = edges & (loss >= 0.5 - 0.3 * float(np.clip((keep_share - 0.15) / 0.8, 0, 1)))
+    loss_min = 0.5 - 0.3 * float(np.clip((keep_share - 0.15) / 0.8, 0, 1))
+    cand = edges & (loss >= loss_min)
     # effective width: never less than the material's minimum opening (otherwise not cuttable)
     width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
     sil, gaps = subject_silhouette(prep, p, sim, gaps=True)   # selected subject's outline, always kept
@@ -1830,6 +1874,18 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     score = strength * loss
     thr = float(np.percentile(score[cand], 100 * (1 - keep_share)))
     sel = cand & (score >= thr)
+    # Hysteresis along the lines (DoG only): a selected point extends along its candidate line
+    # (up to HYST_MM) where the line stays nearly as important. The DoG pen line runs along an
+    # edge that the colour layers partly keep: its loss fluctuates around the limit, and without
+    # this it is selected in dashes that the minimum length removes (lines only at sensitivity
+    # ~100). Canny / ridges keep their calibrated scale.
+    weak = edges & (loss >= HYST_LOSS * loss_min) & (score >= HYST_SCORE * thr)
+    k3 = np.ones((3, 3), np.uint8)
+    for _ in range(int(round(HYST_MM * ppm)) if method == "xdog" else 0):
+        grown = ((cv2.dilate(sel.astype(np.uint8), k3) > 0) & weak) | sel
+        if np.array_equal(grown, sel):
+            break
+        sel = grown
     # rejoin small gaps along a same line, then remove pieces that are too short
     e8 = cv2.morphologyEx(sel.astype(np.uint8) * 255, cv2.MORPH_CLOSE, disk(max(1.0, 0.3 * ppm)))
     n, lab_e, stats, _ = cv2.connectedComponentsWithStats(e8, connectivity=8)
@@ -2145,6 +2201,19 @@ def _draw_bridges(img: np.ndarray, res: Result, L: Layer, color) -> None:
     bw = max(1, int(round(res.params.bridge_width_mm * res.params.px_per_mm)))
     for (x1, y1, x2, y2) in L.bridges:
         cv2.line(img, (x1, y1), (x2, y2), color, thickness=bw)
+
+
+def opening_without_bridges(res: Result, L: Layer) -> np.ndarray:
+    """Openings of a layer with its bridges painted over, as after retouching them: the bridge
+    strokes, limited to the gaps they cut in the opening (closing of the opening at the bridge
+    width), are added back to the opening."""
+    if not L.bridges:
+        return L.opening
+    a = np.zeros(L.opening.shape, np.uint8)
+    _draw_bridges(a, res, L, 255)
+    bw = max(1, int(round(res.params.bridge_width_mm * res.params.px_per_mm)))
+    closed = cv2.morphologyEx(L.opening, cv2.MORPH_CLOSE, disk(bw / 2 + 1))
+    return np.maximum(L.opening, cv2.bitwise_and(a, closed))
 
 
 def layer_overlays(res: Result, L: Layer) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
