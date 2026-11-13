@@ -1305,10 +1305,13 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
     if p.stencil_style == "line":
         return make_result(line_stencils(prep, p, region, support, place))
 
+    # Lines of the fill style: key details (`outline`) and/or silhouette (`outline_subject`), each
+    # can be on without the other.
+    lines_on = p.outline or p.outline_subject
     # Key-detail lines merged into the colour layers (instead of a separate outline stencil):
     # searched against the render of the layers before bridges, then added to the chosen layer.
     detect_sim, detect_painted, lines_added, strokes = None, None, 0, {}
-    if p.outline and p.outline_target != "stencil" and color_ids:
+    if lines_on and p.outline_target != "stencil" and color_ids:
         draft = make_result([Layer(index=li + 1, color=colors[li], target=targets[li], opening=place(c),
                                    lost=c, bridges=[], paths=[]) for li, c in enumerate(cleaned_all)])
         detect_sim = image_sim(draft)
@@ -1347,7 +1350,7 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
     res = make_result(layers, detect_sim=detect_sim, detect_painted=detect_painted, lines_added=lines_added)
 
     # Outline stencil: painted last, above all layers
-    if p.outline and p.outline_target == "stencil":
+    if lines_on and p.outline_target == "stencil":
         sim = res.detect_sim = image_sim(res)
         color = outline_color(prep, support, p)
         target = detect_key_details(prep, sim, p, region, outline_is_dark(color, support))
@@ -1781,8 +1784,11 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     # (lines are still detected on the preprocessed image, sharper and more contrasted)
     g_orig = g_ref if prep.raw is None or prep.raw is ref else grad(lab(prep.raw))
 
-    # 1. Candidate lines
-    if method == "canny":
+    # 1. Candidate lines (none when only the silhouette is drawn)
+    if not p.outline:
+        edges = np.zeros(ref.shape[:2], bool)
+        strength = g_ref
+    elif method == "canny":
         # Canny on the luminance AND on the colour channels (a, b), to also catch details as
         # bright as their surroundings.
         lab8 = cv2.cvtColor(cv2.bilateralFilter(ref, 7, 40, 5), cv2.COLOR_BGR2LAB)

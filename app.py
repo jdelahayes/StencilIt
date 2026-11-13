@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import threading
 import time
 import uuid
@@ -402,7 +403,7 @@ def api_process():
         H, W = sess["prep"].labels.shape
         region = cv2.resize(sess["mask"][y0:y1, x0:x1], (W, H), interpolation=cv2.INTER_NEAREST) > 0
     sess["prep"].subject = subject_area(sess, lay, sess["prep"].labels.shape, p.outline_subject_mask)
-    if (p.outline or p.stencil_style == "line") and p.outline_subject and sess["prep"].subject is None:
+    if p.outline_subject and sess["prep"].subject is None:
         warnings.append(f"Silhouette : le masque {SILHOUETTE_MASK_NAMES[p.outline_subject_mask]} est vide "
                         f"(onglet Masques)")
     res = pl.build(sess["prep"], p, region)
@@ -550,6 +551,24 @@ def pre_view(res):
         im = im.copy()
         im[~res.prepared.fg] = res.support_color.astype(np.uint8)
     return im
+
+
+@app.post("/api/palette")
+def api_palette():
+    """Palette applied in the interface (name + colours), written into the project file by the
+    export: it can change after the last computation, whose interface state is kept otherwise."""
+    data = request.get_json(force=True)
+    sess = SESSIONS.get(data.get("id", ""))
+    if not sess:
+        return jsonify(error="Session inconnue, rechargez l'image"), 404
+    pal = data.get("palette")
+    if pal is not None:
+        cols = [str(c).lower() for c in (pal.get("colors") or [])] if isinstance(pal, dict) else []
+        cols = [c for c in cols if re.fullmatch(r"#[0-9a-f]{6}", c)][:16]
+        pal = {"key": str(pal.get("key", ""))[:80], "name": str(pal.get("name", ""))[:60], "colors": cols} if cols else None
+    if isinstance(sess.get("ui"), dict):
+        sess["ui"] = {**sess["ui"], "palette": pal}
+    return jsonify(ok=True)
 
 
 @app.get("/api/export/<sid>")

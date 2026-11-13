@@ -178,23 +178,51 @@
   .colorpop .acts button { flex: 1; font-size: 12px; padding: 4px 6px; }
   .colorpop .cpnone { color: var(--muted); font-style: italic; }
   .cpick canvas.sv { width: 216px; height: 110px; display: block; border-radius: 6px; cursor: crosshair; touch-action: none; }
-  .cpick input.hue { width: 216px; margin: 6px 0 4px; -webkit-appearance: none; appearance: none; height: 12px; border-radius: 6px;
-    background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); outline: none; }
-  .cpick input.hue::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff;
-    border: 2px solid #333; cursor: pointer; }
-  .cpick input.hue::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid #333; }
   .cpick .cprow { display: flex; gap: 6px; align-items: center; }
   .cpick .cpprev { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(127,127,127,.45); flex: none; }
   .cpick .cphex { width: 76px; font: 12px ui-monospace, monospace; padding: 4px 6px; }
   .cpick .cprow button { flex: 1; font-size: 12px; padding: 4px 6px; }
+  .cpick .cpsl { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+  .cpick .cpsl > span { width: 10px; font-size: 11px; color: var(--muted); flex: none; }
+  .cpick .cpsl input[type=range] { flex: 1; min-width: 0; margin: 0; -webkit-appearance: none; appearance: none; height: 12px;
+    border-radius: 6px; border: 1px solid rgba(127,127,127,.45); outline: none; }
+  .cpick .cpsl input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cpick .cpsl input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--thumb, #fff); border: 2px solid #fff; box-shadow: 0 0 0 1px #333; cursor: pointer; }
+  .cpick .cpsl input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--thumb, #fff);
+    border: 2px solid #fff; box-shadow: 0 0 0 1px #333; }
+  .cpick .cpsl input[type=number] { width: 46px; flex: none; font: 12px ui-monospace, monospace; padding: 3px 4px; }
+  #pickPop { z-index: 62; }
+  .cpick .cprow button.cpeye { flex: none; width: 30px; padding: 2px 0; font-size: 15px; line-height: 1; }
+  body.eyedrop, body.eyedrop * { cursor: crosshair !important; }
+  .loupe { position: fixed; z-index: 70; pointer-events: none; background: var(--panel); border: 1px solid var(--line);
+           border-radius: 8px; padding: 4px; box-shadow: 0 8px 22px rgba(0,0,0,.45); font: 11px ui-monospace, monospace; }
+  .loupe canvas { display: block; width: 132px; height: 132px; image-rendering: pixelated; border-radius: 4px; }
+  .loupe .lhex { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .loupe .lhex i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(127,127,127,.6); }
   .palmenu .prow { display: flex; align-items: center; }
   .palmenu .prow > button:first-child { flex: 1; min-width: 0; }
   .palmenu .pdel { flex: none; width: 24px; padding: 2px 0; color: var(--muted); text-align: center; }
   .palmenu .pdel:hover { color: #dc2626; }
   .palmenu .psave { color: var(--accent); border-top: 1px solid var(--line); margin-top: 4px; border-radius: 0 0 5px 5px; }
-  .palmenu .pform { display: flex; gap: 4px; padding: 6px; }
-  .palmenu .pform input { flex: 1; min-width: 0; font-size: 12px; padding: 4px 6px; }
-  .palmenu .pform button { width: auto; flex: none; padding: 4px 8px; background: var(--soft); border: 1px solid var(--line); }
+  .palmenu .pedit { flex: none; width: 24px; padding: 2px 0; color: var(--muted); text-align: center; }
+  .palmenu .pedit:hover { color: var(--accent); }
+  .paledit { position: fixed; z-index: 61; max-height: calc(100vh - 16px); overflow: auto; background: var(--panel);
+             border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; box-shadow: 0 10px 28px rgba(0,0,0,.4); font-size: 12px; }
+  .paledit h4 { margin: 4px 0 6px; font-size: 13px; }
+  .paledit input#peName, .paledit input#pePaste { width: 100%; box-sizing: border-box; font-size: 12px; padding: 4px 6px; }
+  .paledit .pehint { color: var(--muted); font-weight: 400; }
+  .paledit .pecols { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; min-height: 30px; align-items: center; }
+  .paledit .pecol { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 2px; cursor: grab; }
+  .paledit .pecol input[type=color] { width: 28px; height: 24px; padding: 0; border: none; background: none; cursor: pointer; }
+  .paledit .pecol button { width: 18px; padding: 0; border: none; background: none; color: var(--muted); }
+  .paledit .pecol button:hover { color: #dc2626; }
+  .paledit .peacts { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+  .paledit .peacts button { flex: 1 1 auto; width: auto; font-size: 12px; padding: 4px 8px; }
+  .paledit .pepaste { display: flex; gap: 6px; margin: 6px 0 2px; }
+  .paledit .pepaste button { flex: none; width: auto; font-size: 12px; padding: 4px 8px; }
+  .paledit #peMsg { min-height: 1em; margin: 4px 0; }
+  .paledit #peMsg.err { color: #dc2626; }
   .lcreset { font-size: 11px; padding: 0 5px; border-radius: 4px; line-height: 18px; }
   .card .meta .t { display: flex; gap: 8px; align-items: center; color: var(--ink); font-weight: 600; font-size: 13px; margin-bottom: 3px; }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
@@ -363,6 +391,8 @@
   <p class="hint">Même effet que le bouton « Ajuster au mieux dans le pochoir » (section « Image : cadrage & taille »). Ne s'applique pas à l'ouverture d'un projet.</p>
 </div>
 <div class="colorpop" id="colorPop" role="dialog" aria-label="Couleur de la couche" hidden></div>
+<div class="paledit" id="palEdit" role="dialog" aria-label="Éditeur de palette" hidden></div>
+<div class="colorpop" id="pickPop" role="dialog" aria-label="Choix de la couleur" hidden></div>
 <main>
 <div class="colgrip left" data-side="left" role="separator" aria-orientation="vertical" aria-label="Largeur du panneau des réglages" title="Glisser pour élargir / réduire (double-clic : largeur par défaut)"></div>
 <div class="colgrip right" data-side="right" role="separator" aria-orientation="vertical" aria-label="Largeur de la colonne des pochoirs" title="Glisser pour élargir / réduire (double-clic : largeur par défaut)"></div>
@@ -1826,7 +1856,8 @@ const SECTION_SUMMARY = {
     (val("color_vividness") > 0 ? ` · vivacité ${val("color_vividness")} %` : ""),
   "Contours des détails clés": () => val("stencil_style") === "line"
     ? "trait seul : " + ([val("outline") && "détails", val("outline_subject") && "silhouette", val("line_zones") && "coloriage"].filter(Boolean).join(" · ") || "aucun trait")
-    : val("outline") ? `activé · ${MASK_EMPTY ? "toute l'image" : "masque"} · sens. ${val("outline_sensitivity")}` : "désactivé",
+    : val("outline") ? `activé · ${MASK_EMPTY ? "toute l'image" : "masque"} · sens. ${val("outline_sensitivity")}${val("outline_subject") ? " · silhouette" : ""}`
+    : val("outline_subject") ? "silhouette seule" : "désactivé",
   "Machine de découpe": () => {
     const m = $("machine").selectedOptions[0], st = stockSheet(), mat = cutMat();
     return [m ? m.text.split(" (")[0].replace(/^Silhouette /, "") : "", mat ? mat.label : "Rouleau", st ? st.label : ""].filter(Boolean).join(" · ");
@@ -1971,7 +2002,7 @@ const TIPS = {
   outline_sensitivity: "Quantité de détails retenus (bas = seulement les plus marqués). Échelle progressive : de 1 % des traits candidats à 0 jusqu'à 95 % à 100, environ 10 % à 50.",
   outline_width_mm: "Largeur du trait du pochoir de contours, en mm (jamais moins que l'ouverture mini du matériau).",
   outline_min_length_mm: "Les traits plus courts que cette longueur sont ignorés.",
-  outline_subject: "Ajoute au trait le contour d'un masque (le sujet sélectionné, un masque dédié à la silhouette ou le masque des détails clés), en plus des détails détectés. Utile quand le sujet se détache mal du fond. Le bord de l'image n'est pas tracé.",
+  outline_subject: "Trace le contour d'un masque (le sujet sélectionné, un masque dédié à la silhouette ou le masque des détails clés), avec ou sans les détails clés. Utile quand le sujet se détache mal du fond. Le bord de l'image n'est pas tracé.",
   outline_subject_mask: "Masque dont le contour est tracé : le masque sujet (objet sélectionné ou zone détourée), le masque silhouette dédié (onglet Masques), ou le masque des détails clés.",
   stencil_style: "Couleurs pleines : une couche de peinture par teinte (aplats), avec des traits en option. Trait seul : pas d'aplat, seulement des pochoirs de traits — détails clés, silhouette et/ou limites entre zones (coloriage) — un pochoir par couleur de trait.",
   line_zones: "Trace la limite entre les zones de teinte calculées, comme un coloriage. Le nombre de pochoirs et le niveau de détail fixent le nombre et la finesse des zones.",
@@ -2129,6 +2160,7 @@ async function init() {
   setupPalettes();
   $("palNearest").onclick = () => applyNearest(palDef(PAL_CUR || PAL_LAST) ? PAL_CUR || PAL_LAST : "");
   setupColorPop();
+  setupPickPop();
   setupHisto(); drawHisto();
   ["pre_auto_levels", "pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen"].forEach(k => $(k).addEventListener("change", () => { updateSummaries(); recommend(false); }));
   ["pre_clahe", "pre_gamma", "pre_saturation", "pre_sharpen"].forEach(k => $(k).addEventListener("input", preprocessPreview));
@@ -2281,7 +2313,8 @@ async function init() {
   $("lzColor").addEventListener("change", () => setHidden("line_zones_color", $("lzColor").value.toLowerCase()));
   $("silOwn").addEventListener("change", () => setHidden("line_sil_color", $("silOwn").checked ? $("silColor").value.toLowerCase() : ""));
   $("silColor").addEventListener("change", () => setHidden("line_sil_color", $("silColor").value.toLowerCase()));
-  ["outline_subject", "outline_subject_mask"].forEach(k => $(k).addEventListener("change", () => { syncSilhouetteSource(); if (val("outline_subject")) enableOutline(); }));
+  // the silhouette is independent of the key details: ticking it does not turn them on
+  ["outline_subject", "outline_subject_mask"].forEach(k => $(k).addEventListener("change", () => { syncSilhouetteSource(); updateSummaries(); schedule(); }));
   $("paintSilhouette").onclick = () => { $("maskKind").value = val("outline_subject_mask"); VIEW = "mask"; SEL = null; render(); };
   $("mCopy").onchange = () => { const to = $("mCopy").value; $("mCopy").value = ""; copyMask(maskKind(), to); };
   ["outline_sensitivity", "outline_width_mm", "outline_min_length_mm"].forEach(k => $(k).addEventListener("input", detectPreview));
@@ -2327,7 +2360,14 @@ async function init() {
   $("projectFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; f && openProject(f); };
 
   $("tabs").querySelectorAll("button").forEach(b => b.onclick = () => { VIEW = b.dataset.v; SEL = null; render(); });
-  $("export").onclick = () => { if (SID) location.href = "/api/export/" + SID + "?lang=" + I18N.lang; };
+  $("export").onclick = async () => {
+    if (!SID) return;
+    try {      // the palette shown can change without a new computation: sent just before the export
+      await fetch("/api/palette", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: SID, palette: projectPalette() }) });
+    } catch (e) { /* exported without it */ }
+    location.href = "/api/export/" + SID + "?lang=" + I18N.lang;
+  };
 }
 
 // ---------------- Preferences (gear button in the header) ----------------
@@ -2397,7 +2437,34 @@ function uiState() {
   [...PARAMS, ...UI_EXTRA].forEach(k => values[k] = val(k));
   CUT_FIELDS.forEach(f => values["cut_" + f] = $("cut_" + f).value);
   values.sens_scale = 2;
-  return { version: 1, values, crop: { ...CROP }, hidden_layers: [...HIDDEN] };
+  return { version: 1, values, crop: { ...CROP }, hidden_layers: [...HIDDEN], palette: projectPalette() };
+}
+// Palette applied to the layers (name + colours), saved in the project so that it comes back on
+// reopening, even on a computer that does not have it in "My palettes"
+function projectPalette() {
+  const d = palDef(PAL_CUR);
+  return d ? { key: PAL_CUR, name: d[0], colors: d[1].slice() } : null;
+}
+async function restoreProjectPalette(pal) {
+  const cols = pal && Array.isArray(pal.colors)
+    ? pal.colors.map(c => String(c).toLowerCase()).filter(c => /^#[0-9a-f]{6}$/.test(c)).slice(0, PAL_MAX) : [];
+  if (!cols.length || typeof pal.key !== "string") { showPaletteChoice(""); PAL_LAST = ""; return; }
+  const same = d => !!d && d[1].length === cols.length && d[1].every((c, i) => c.toLowerCase() === cols[i]);
+  let key = pal.key;
+  if (!same(palDef(key))) {
+    // palette missing here (or changed since the export): added to "My palettes", without
+    // overwriting a different palette of the same name
+    const base = String(pal.name || "Palette du projet").trim().slice(0, 36) || "Palette du projet";
+    let name = base, n = 2;
+    while ((UP.palette || {})[name] && !same(palDef("u:" + name))) name = `${base} (${n++})`;
+    key = "u:" + name;
+    if (!(UP.palette || {})[name]) {
+      if (!(await presetCall("POST", "/api/presets/palette", { name, values: { colors: cols } }))) return;
+      buildPaletteMenu();
+      status(`Palette « ${name} » du projet ajoutée à « Mes palettes »`);
+    }
+  }
+  PAL_LAST = key; showPaletteChoice(key);
 }
 function applyProjectSettings(info) {
   const ui = info && info.projet && info.projet.interface;
@@ -2419,6 +2486,7 @@ function applyProjectSettings(info) {
   ((ui && ui.hidden_layers) || []).forEach(i => HIDDEN.add(i));
   $("outline_color").disabled = $("outline_auto_color").checked;
   showValues(); cutInfo(); regHint(); cropInfo(); syncWidth(); updateSummaries(); renderOutlineSwatches();
+  restoreProjectPalette(ui && ui.palette);
 }
 function loadMaskImage(src, coverage, kind = "outline") {
   return new Promise(done => {
@@ -2578,7 +2646,7 @@ let SIL = null, SIL_EMPTY = true, SIL_INFO = "", SIL_SENDING = null;
 // masks containing an object selection (exact outline): kept exact when copied into the subject mask
 const MASK_OBJ = { outline: false, silhouette: false };
 const maskCv = k => k === "subject" ? SUBJ : k === "silhouette" ? SIL : MASK;
-const silFrom = k => val("outline") && val("outline_subject") && val("outline_subject_mask") === k;
+const silFrom = k => val("outline_subject") && val("outline_subject_mask") === k;
 function maskCanvas() {
   const s = Math.min(1, 1100 / Math.max(IMG.w, IMG.h));   // same size as the preview sent by the server
   const c = document.createElement("canvas");
@@ -2695,7 +2763,7 @@ async function sendSil() {
     if (SIL_SENDING !== req) return;
     silInfo(j.coverage);
     if (!SIL_EMPTY && !silFrom("silhouette")) {        // painting the silhouette mask = wanting its outline drawn
-      $("outline").checked = true; $("outline_subject").checked = true; $("outline_subject_mask").value = "silhouette";
+      $("outline_subject").checked = true; $("outline_subject_mask").value = "silhouette";
       syncSilhouetteSource(); updateSummaries();
       status("Contours : silhouette tracée d'après le masque silhouette");
     }
@@ -3647,39 +3715,176 @@ function buildPaletteMenu() {
   const menu = $("palMenu");
   const item = (k, label, cols) => `<button type="button" role="option" data-k="${escHtml(k)}" aria-selected="${k === PAL_CUR}" title="${escHtml(label)} : ${cols.join(" · ")}">` +
     `<span class="palprev" aria-hidden="true">${swatches(cols)}</span><span class="pname">${escHtml(label)}</span></button>`;
+  const edit = (k, label, mine) => `<button type="button" class="pedit" data-edit="${escHtml(k)}" title="${mine ? "Modifier" : "Copier et modifier"} la palette « ${escHtml(label)} »" aria-label="${mine ? "Modifier" : "Copier et modifier"} la palette « ${escHtml(label)} »">✎</button>`;
   const mine = Object.entries(UP.palette || {}).filter(([, p]) => p && Array.isArray(p.colors) && p.colors.length);
   let html = "";
   if (mine.length) {
     html += `<div class="pgroup">Mes palettes</div>` + mine.map(([name, p]) =>
-      `<div class="prow">${item("u:" + name, name, p.colors)}<button type="button" class="pdel" data-del="${escHtml(name)}" title="Supprimer la palette « ${escHtml(name)} »" aria-label="Supprimer ${escHtml(name)}">×</button></div>`).join("");
+      `<div class="prow">${item("u:" + name, name, p.colors)}${edit("u:" + name, name, true)}<button type="button" class="pdel" data-del="${escHtml(name)}" title="Supprimer la palette « ${escHtml(name)} »" aria-label="Supprimer ${escHtml(name)}">×</button></div>`).join("");
   }
   let group = "";
   html += Object.entries(PALETTES).map(([k, [label, cols, g]]) =>
-    (g !== group ? `<div class="pgroup">${(group = g)}</div>` : "") + item(k, label, cols)).join("");
-  html += `<button type="button" class="psave" data-save="1" title="Enregistre les couleurs actuelles des couches (de la 1re à la dernière) comme palette réutilisable">＋ Enregistrer les couleurs actuelles…</button>
-    <form class="pform" id="palForm" hidden><input id="palName" maxlength="40" placeholder="Nom de la palette" aria-label="Nom de la palette">
-      <button type="submit">OK</button><button type="button" data-cancel="1">Annuler</button></form>`;
+    (g !== group ? `<div class="pgroup">${(group = g)}</div>` : "") + `<div class="prow">${item(k, label, cols)}${edit(k, label, false)}</div>`).join("");
+  html += `<button type="button" class="psave" data-new="1" title="Crée une palette : ajoutez les couleurs une à une, collez-les ou reprenez celles des couches">＋ Nouvelle palette…</button>
+    <button type="button" class="psave" data-save="1" title="Crée une palette à partir des couleurs actuelles des couches (de la 1re à la dernière), modifiable avant de l'enregistrer">＋ Enregistrer les couleurs actuelles…</button>
+    <button type="button" class="psave" data-import="1" title="Crée une palette à partir d'une liste de couleurs, par exemple [&quot;#006ba6&quot;,&quot;#0496ff&quot;,&quot;#ffbc42&quot;] (copiée de coolors.co ou d'un autre site)">＋ Importer une palette…</button>`;
   menu.innerHTML = html;
 }
-async function savePalette(name) {
-  name = name.trim();
-  const cols = LAST ? LAST.layers.filter(L => L.kind !== "outline").map(L => L.color.toLowerCase()) : [];
-  if (!name || !cols.length) return status(cols.length ? "Donnez un nom à la palette" : "Calculez d'abord les couches", true);
-  if (!(await presetCall("POST", "/api/presets/palette", { name, values: { colors: cols } }))) return;
-  PAL_LAST = "u:" + name;
-  buildPaletteMenu(); showPaletteChoice("u:" + name);
-  status(`Palette « ${name} » enregistrée (${cols.length} couleur${cols.length > 1 ? "s" : ""})`);
+// Colours of an imported palette: JSON list, #rrggbb / #rgb codes separated by anything, or a
+// coolors.co link (codes without "#", separated by "-"); duplicates removed, order kept
+function parsePaletteText(txt) {
+  const cols = [];
+  for (const m of String(txt || "").matchAll(/(?:#|\b)([0-9a-f]{6}|[0-9a-f]{3})\b/gi)) {
+    let h = m[1].toLowerCase();
+    if (h.length === 3) {
+      if (!m[0].startsWith("#")) continue;                 // 3 digits only with "#" (else any word)
+      h = h.replace(/./g, c => c + c);
+    }
+    if (!cols.includes("#" + h)) cols.push("#" + h);
+  }
+  return cols;
 }
+const PAL_MAX = 16;
+const layerPaints = () => LAST ? [...new Set(LAST.layers.filter(L => L.kind !== "outline").map(L => L.color.toLowerCase()))] : [];
 async function deletePalette(name) {
   if (!(await presetCall("DELETE", "/api/presets/palette/" + encodeURIComponent(name)))) return;
   if (PAL_CUR === "u:" + name) showPaletteChoice("");
   if (PAL_LAST === "u:" + name) PAL_LAST = "";
+  if (PE.key === "u:" + name) PE.key = "";
   buildPaletteMenu();
   status(`Palette « ${name} » supprimée`);
+}
+
+// ---- Palette editor: new palette, copy of a built-in one, or one of "My palettes" (Save / Save as)
+const PE = { key: "", cols: [], confirm: "", drag: -1 };   // key: "u:<name>" being edited, "" = new palette
+function openPaletteEditor(mode, key = "") {
+  const def = key ? palDef(key) : null;
+  PE.key = mode === "edit" && key.startsWith("u:") && def ? key : "";
+  PE.cols = (mode === "layers" ? layerPaints() : def ? def[1].slice() : []).slice(0, PAL_MAX);
+  PE.confirm = ""; PE.drag = -1;
+  const pop = $("palEdit");
+  pop.innerHTML = `<h4>${PE.key ? `Modifier la palette « ${escHtml(def[0])} »` : def ? `Nouvelle palette, copie de « ${escHtml(def[0])} »` : "Nouvelle palette"}</h4>
+    <label class="full" for="peName">Nom</label>
+    <input id="peName" maxlength="40" placeholder="Nom de la palette" value="${escHtml(PE.key ? def[0] : def ? `${I18N.t(def[0])} (${I18N.t("copie")})` : "")}">
+    <label class="full">Couleurs <span class="pehint">(glisser pour réordonner)</span></label>
+    <div class="pecols" id="peCols"></div>
+    <div class="peacts">
+      <button type="button" data-pe="add" title="Ajoute une couleur à la fin de la palette">＋ Couleur</button>
+      <button type="button" data-pe="layers" title="Ajoute les couleurs actuelles des couches qui ne sont pas déjà dans la palette">＋ Couleurs des couches</button>
+      <button type="button" data-pe="sort" title="Classe les couleurs de la plus claire à la plus foncée, comme l'ordre de pulvérisation des couches">Trier clair → foncé</button>
+    </div>
+    <div class="pepaste">
+      <input id="pePaste" spellcheck="false" placeholder='["#006ba6","#0496ff"] ou lien coolors.co' aria-label="Couleurs à coller">
+      <button type="button" data-pe="paste" title="Ajoute les couleurs collées : liste JSON, codes #rrggbb séparés par des virgules ou des espaces, ou lien coolors.co">Ajouter</button>
+    </div>
+    <p class="hint" id="peMsg"></p>
+    <div class="peacts">
+      <button type="button" class="primary" data-pe="save" title="${PE.key ? "Enregistre les modifications de cette palette (sous le nom indiqué)" : "Enregistre la palette dans « Mes palettes »"}">Enregistrer</button>
+      ${PE.key ? `<button type="button" data-pe="saveas" title="Enregistre une nouvelle palette sous le nom indiqué, sans modifier l'originale">Enregistrer sous…</button>` : ""}
+      <button type="button" data-pe="cancel">Annuler</button>
+    </div>`;
+  const r = $("palBtn").getBoundingClientRect(), w = Math.min(320, innerWidth - 16);
+  Object.assign(pop.style, { width: w + "px", left: Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + "px",
+    top: Math.max(8, Math.min(r.bottom + 4, innerHeight - 380)) + "px" });
+  pop.hidden = false;
+  peRender();
+  peMsg(mode === "layers" && !PE.cols.length ? "Calculez d'abord les couches pour reprendre leurs couleurs" : "", mode === "layers" && !PE.cols.length);
+  (mode === "import" ? $("pePaste") : $("peName")).focus();
+}
+function closePaletteEditor() { $("palEdit").hidden = true; }
+function peMsg(t, err = false) { const m = $("peMsg"); m.textContent = t; m.classList.toggle("err", !!err); }
+function peRender() {
+  $("peCols").innerHTML = PE.cols.map((c, i) =>
+    `<span class="pecol" draggable="true" data-i="${i}"><input type="color" value="${c}" data-i="${i}" aria-label="Couleur ${i + 1}" title="Couleur ${i + 1} : ${c}">` +
+    `<button type="button" data-pe="del" data-i="${i}" title="Retirer cette couleur" aria-label="Retirer la couleur ${i + 1}">×</button></span>`).join("")
+    || `<span class="pehint">Aucune couleur : ajoutez-en ou collez une liste.</span>`;
+}
+function peAdd(cols) {
+  const before = PE.cols.length;
+  cols.forEach(c => { if (!PE.cols.includes(c) && PE.cols.length < PAL_MAX) PE.cols.push(c); });
+  peRender();
+  const n = PE.cols.length - before;
+  peMsg(n ? `${n} couleur${n > 1 ? "s" : ""} ajoutée${n > 1 ? "s" : ""}` : PE.cols.length >= PAL_MAX ? `${PAL_MAX} couleurs au maximum` : "Aucune nouvelle couleur", !n);
+}
+async function peSave(asNew) {
+  const name = $("peName").value.trim(), cols = PE.cols.slice();
+  const old = PE.key ? PE.key.slice(2) : "";
+  if (!cols.length) return peMsg("Ajoutez au moins une couleur", true);
+  if (!name) { $("peName").focus(); return peMsg("Donnez un nom à la palette", true); }
+  if (asNew && name === old) { $("peName").focus(); $("peName").select(); return peMsg("Enregistrer sous : choisissez un autre nom", true); }
+  // another palette of the same name: replaced only after a second click
+  if (name !== old && (UP.palette || {})[name] && PE.confirm !== name) {
+    PE.confirm = name;
+    return peMsg(`« ${name} » existe déjà : cliquez encore pour la remplacer`, true);
+  }
+  // Save under a new name = rename (the edited palette keeps its place)
+  if (!asNew && old && name !== old &&
+      !(await presetCall("POST", "/api/presets/palette/rename", { old, new: name, overwrite: true }))) return;
+  if (!(await presetCall("POST", "/api/presets/palette", { name, values: { colors: cols } }))) return;
+  const key = "u:" + name;
+  if (!asNew && old && name !== old && PAL_LAST === "u:" + old) PAL_LAST = key;
+  closePaletteEditor();
+  buildPaletteMenu();
+  if (LAST) { applyPalette(key); PAL_LAST = key; }
+  showPaletteChoice(key);
+  status(`Palette « ${name} » enregistrée (${cols.length} couleur${cols.length > 1 ? "s" : ""})` + (LAST ? "" : " : elle s'appliquera après le calcul des couches"));
+}
+function setupPaletteEditor() {
+  const pop = $("palEdit");
+  pop.onclick = e => {
+    const b = e.target.closest("[data-pe]");
+    if (!b) return;
+    const a = b.dataset.pe;
+    if (a === "cancel") return closePaletteEditor();
+    if (a === "save" || a === "saveas") return peSave(a === "saveas");
+    if (a === "del") { PE.cols.splice(+b.dataset.i, 1); peRender(); return peMsg(""); }
+    if (a === "add") {
+      if (PE.cols.length >= PAL_MAX) return peMsg(`${PAL_MAX} couleurs au maximum`, true);
+      PE.cols.push(PE.cols.length ? PE.cols[PE.cols.length - 1] : "#808080"); peRender(); peMsg("");
+      const inp = $("peCols").querySelectorAll("input[type=color]");
+      inp[inp.length - 1].click();              // opens the colour picker of the new colour
+      return;
+    }
+    if (a === "layers") return LAST ? peAdd(layerPaints()) : peMsg("Calculez d'abord les couches pour reprendre leurs couleurs", true);
+    if (a === "sort") { PE.cols.sort((x, y) => srgbLab(y)[0] - srgbLab(x)[0]); peRender(); return peMsg(""); }
+    if (a === "paste") {
+      const cols = parsePaletteText($("pePaste").value);
+      if (!cols.length) return peMsg("Aucune couleur reconnue : collez par exemple [\"#006ba6\",\"#0496ff\"]", true);
+      $("pePaste").value = ""; peAdd(cols);
+    }
+  };
+  pop.addEventListener("input", e => {          // colour picker of a swatch
+    if (e.target.matches(".pecol input[type=color]")) {
+      PE.cols[+e.target.dataset.i] = e.target.value.toLowerCase();
+      e.target.title = `Couleur ${+e.target.dataset.i + 1} : ${e.target.value}`;
+    }
+    if (e.target.id === "peName") PE.confirm = "";
+  });
+  pop.addEventListener("keydown", e => {
+    if (e.key === "Escape") { e.stopPropagation(); closePaletteEditor(); $("palBtn").focus(); }
+    else if (e.key === "Enter" && e.target.id === "pePaste") { e.preventDefault(); pop.querySelector('[data-pe="paste"]').click(); }
+    else if (e.key === "Enter" && e.target.id === "peName") { e.preventDefault(); peSave(false); }
+  });
+  // drag and drop to reorder the colours
+  pop.addEventListener("dragstart", e => {
+    const s = e.target.closest(".pecol");
+    if (!s) return;
+    PE.drag = +s.dataset.i; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", s.dataset.i);
+  });
+  pop.addEventListener("dragover", e => { if (PE.drag >= 0 && e.target.closest(".pecol")) e.preventDefault(); });
+  pop.addEventListener("drop", e => {
+    const s = e.target.closest(".pecol");
+    if (!s || PE.drag < 0) return;
+    e.preventDefault();
+    const to = +s.dataset.i, [c] = PE.cols.splice(PE.drag, 1);
+    PE.cols.splice(to, 0, c); PE.drag = -1; peRender();
+  });
+  pop.addEventListener("dragend", () => { PE.drag = -1; });
 }
 function setupPalettes() {
   const menu = $("palMenu"), btn = $("palBtn");
   buildPaletteMenu();
+  setupPaletteEditor();
   const open = on => {
     if (on) {   // positioned on the window: the (scrolling) stencil column does not clip it
       const r = btn.getBoundingClientRect(), w = Math.max(r.width, 260);
@@ -3693,20 +3898,18 @@ function setupPalettes() {
   menu.onclick = e => {
     const del = e.target.closest("[data-del]");
     if (del) { e.stopPropagation(); deletePalette(del.dataset.del); return; }
-    if (e.target.closest("[data-save]")) {
-      if (!LAST) return status("Calculez d'abord les couches", true);
-      $("palForm").hidden = false; $("palName").value = ""; $("palName").focus(); return;
-    }
-    if (e.target.closest("[data-cancel]")) { $("palForm").hidden = true; return; }
+    const ed = e.target.closest("[data-edit]");
+    if (ed) { open(false); openPaletteEditor("edit", ed.dataset.edit); return; }
+    if (e.target.closest("[data-new]")) { open(false); openPaletteEditor("new"); return; }
+    if (e.target.closest("[data-save]")) { open(false); openPaletteEditor("layers"); return; }
+    if (e.target.closest("[data-import]")) { open(false); openPaletteEditor("import"); return; }
     const b = e.target.closest("button[data-k]");
     if (!b) return;
     open(false); btn.focus();
     applyPalette(b.dataset.k);
     showPaletteChoice(b.dataset.k);
   };
-  menu.onsubmit = e => { e.preventDefault(); savePalette($("palName").value); };
   menu.onkeydown = e => {
-    if (e.target.id === "palName" && e.key !== "Escape") return;      // palette name input
     const items = [...menu.querySelectorAll("button")], i = items.indexOf(document.activeElement);
     if (e.key === "ArrowDown") { e.preventDefault(); items[Math.min(items.length - 1, i + 1)].focus(); }
     else if (e.key === "ArrowUp") { e.preventDefault(); items[Math.max(0, i - 1)].focus(); }
@@ -3751,9 +3954,11 @@ function hsv2hex(h, s, v) {
 }
 let PICK = null;
 function setupPicker(pop, start) {
-  const cv = pop.querySelector("canvas.sv"), ctx = cv.getContext("2d"), hue = pop.querySelector(".hue"),
+  const cv = pop.querySelector("canvas.sv"), ctx = cv.getContext("2d"),
         hexIn = pop.querySelector(".cphex"), prev = pop.querySelector(".cpprev");
-  let [h, s, v] = rgb2hsv(hex2rgb(start));
+  const sl = k => pop.querySelector(`.cpsl input[type=range][data-k="${k}"]`);
+  const [rh, rs, rv] = ["h", "s", "v"].map(sl);
+  let [h, s, v] = rgb2hsv(hex2rgb(start)), typing = null;
   const draw = () => {
     const W = cv.width, H = cv.height;
     ctx.fillStyle = hsv2hex(h, 1, 1); ctx.fillRect(0, 0, W, H);
@@ -3766,22 +3971,229 @@ function setupPicker(pop, start) {
     ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
     const hex = hsv2hex(h, s, v);
     prev.style.background = hex;
-    if (document.activeElement !== hexIn) hexIn.value = hex;
+    // the field being typed in is left as typed; every other one shows the current colour
+    if (typing !== hexIn) hexIn.value = hex;
+    [[fh, h], [fs, s * 100], [fv, v * 100]].forEach(([f, x]) => { if (typing !== f) f.value = Math.round(x); });
+    [[rh, h], [rs, s * 100], [rv, v * 100]].forEach(([r, x]) => { r.value = Math.round(x); r.style.setProperty("--thumb", hex); });
+    // each slider previews the colour obtained along it, the other two values staying as they are
+    rh.style.background = `linear-gradient(90deg, ${[0, 60, 120, 180, 240, 300, 360].map(d => hsv2hex(d % 360, s, v)).join(", ")})`;
+    rs.style.background = `linear-gradient(90deg, ${hsv2hex(h, 0, v)}, ${hsv2hex(h, 1, v)})`;
+    rv.style.background = `linear-gradient(90deg, #000000, ${hsv2hex(h, s, 1)})`;
   };
-  hue.value = Math.round(h);
-  hue.oninput = () => { h = +hue.value; draw(); };
+  [rh, rs, rv].forEach(r => r.oninput = () => {
+    typing = null;
+    h = +rh.value % 360; s = +rs.value / 100; v = +rv.value / 100; draw();
+  });
+  // hue / saturation / value typed in (0-360, 0-100, 0-100)
+  const [fh, fs, fv] = ["h", "s", "v"].map(k => pop.querySelector(`.cpsl input[type=number][data-k="${k}"]`));
+  [fh, fs, fv].forEach(f => f.oninput = () => {
+    typing = f;
+    if (f.value === "" || !isFinite(+f.value)) return;
+    h = clamp(+fh.value || 0, 0, 360) % 360; s = clamp(+fs.value || 0, 0, 100) / 100; v = clamp(+fv.value || 0, 0, 100) / 100;
+    draw();
+  });
+  [fh, fs, fv].forEach(f => f.onblur = () => { typing = null; draw(); });
   const fromPointer = e => {
     const r = cv.getBoundingClientRect();
+    typing = null;
     s = clamp((e.clientX - r.left) / r.width, 0, 1); v = 1 - clamp((e.clientY - r.top) / r.height, 0, 1); draw();
   };
   cv.onpointerdown = e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (err) {} fromPointer(e); cv.onpointermove = fromPointer; };
   cv.onpointerup = cv.onpointercancel = () => { cv.onpointermove = null; };
-  hexIn.oninput = () => {
-    const t = hexIn.value.trim().replace(/^([0-9a-f]{6})$/i, "#$1");
-    if (/^#[0-9a-f]{6}$/i.test(t)) { [h, s, v] = rgb2hsv(hex2rgb(t)); hue.value = Math.round(h); draw(); }
+  // hex code typed in: #rrggbb, rrggbb or #rgb
+  const setHex = t => {
+    t = String(t).trim().toLowerCase().replace(/^#?([0-9a-f]{6})$/, "#$1").replace(/^#?([0-9a-f])([0-9a-f])([0-9a-f])$/, "#$1$1$2$2$3$3");
+    if (!/^#[0-9a-f]{6}$/.test(t)) return false;
+    [h, s, v] = rgb2hsv(hex2rgb(t)); draw(); return true;
   };
+  hexIn.oninput = () => { typing = hexIn; if (hexIn.value.trim().replace("#", "").length !== 3) setHex(hexIn.value); };
+  hexIn.onblur = () => { if (typing === hexIn) setHex(hexIn.value); typing = null; draw(); };
   draw();
-  PICK = { hex: () => hsv2hex(h, s, v) };
+  PICK = { hex: () => { if (typing === hexIn) setHex(hexIn.value); return hsv2hex(h, s, v); },
+           set: c => { typing = null; return setHex(c); } };
+}
+// Picker block shared by the colour windows: saturation/value square, H S V sliders (each one
+// previewing the colours along it) with their fields, hex code
+const pickerHtml = (apply = "Appliquer") => `<div class="cpick">
+      <canvas class="sv" width="216" height="110" aria-label="Saturation (horizontal) et luminosité (vertical)"></canvas>
+      ${[["h", "T", 360, "Teinte (0-360°)"], ["s", "S", 100, "Saturation (0-100 %)"], ["v", "V", 100, "Valeur, luminosité (0-100 %)"]].map(([k, l, max, t]) =>
+        `<div class="cpsl" title="${t}"><span aria-hidden="true">${l}</span>` +
+        `<input type="range" data-k="${k}" min="0" max="${max}" step="1" aria-label="${t}">` +
+        `<input type="number" data-k="${k}" min="0" max="${max}" step="1" aria-label="${t}"></div>`).join("")}
+      <div class="cprow"><span class="cpprev"></span>
+        <input class="cphex" maxlength="7" spellcheck="false" aria-label="Code couleur hexadécimal" title="Code hexadécimal : #rrggbb ou #rgb">
+        <button type="button" class="cpeye" data-act="eyedrop" title="Pipette : prendre une couleur dans l'image (loupe au pixel ; Échap pour annuler)" aria-label="Pipette">⌖</button>
+        <button type="button" data-act="apply">${apply}</button></div>
+    </div>`;
+// ---- Every colour field of the page (<input type="color">) opens this same picker instead of
+// the system window; the field keeps the value and receives the usual input / change events
+let PICK_TARGET = null;
+function closePickPop() { $("pickPop").hidden = true; PICK_TARGET = null; }
+function openPickPop(inp) {
+  const pop = $("pickPop");
+  if (!pop.hidden && PICK_TARGET === inp) return closePickPop();
+  PICK_TARGET = inp;
+  const lbl = inp.getAttribute("aria-label") || (inp.closest("label") && inp.closest("label").textContent.trim()) || "Couleur";
+  const rec = recentColors();
+  pop.innerHTML = `<strong>${escHtml(lbl)}</strong>
+    ${rec.length ? `<h4>Dernières couleurs utilisées</h4><div class="sws">${rec.map(c => `<button type="button" data-c="${c}" style="background:${c}" title="${c}"></button>`).join("")}</div>` : ""}
+    <h4>Couleur</h4>${pickerHtml("OK")}`;
+  setupPicker(pop, /^#[0-9a-f]{6}$/i.test(inp.value) ? inp.value : "#888888");
+  const r = inp.getBoundingClientRect(), w = 236;
+  pop.hidden = false;
+  const hgt = pop.getBoundingClientRect().height;
+  Object.assign(pop.style, { left: Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px",
+    top: (r.bottom + 6 + hgt < innerHeight ? r.bottom + 6 : Math.max(8, r.top - hgt - 6)) + "px" });
+  pop.querySelector(".cphex").focus(); pop.querySelector(".cphex").select();
+}
+function setupPickPop() {
+  const pop = $("pickPop");
+  document.addEventListener("click", e => {
+    const inp = e.target.closest && e.target.closest('input[type="color"]');
+    if (!inp || inp.disabled) return;
+    e.preventDefault();               // no system colour window
+    openPickPop(inp);
+  }, true);
+  pop.onclick = e => {
+    const b = e.target.closest("button");
+    if (!b || !PICK_TARGET) return;
+    if (b.dataset.c) { PICK.set(b.dataset.c); return; }
+    if (b.dataset.act === "eyedrop") { startEyedrop(); return; }
+    if (b.dataset.act === "apply") {
+      const inp = PICK_TARGET, hex = PICK.hex();
+      closePickPop();
+      if (hex !== inp.value.toLowerCase()) {
+        inp.value = hex;
+        inp.dispatchEvent(new Event("input", { bubbles: true }));
+        inp.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      rememberColor(hex);
+      inp.focus();
+    }
+  };
+  pop.onkeydown = e => {
+    if (e.key === "Escape") { e.stopPropagation(); const inp = PICK_TARGET; closePickPop(); if (inp) inp.focus(); }
+    else if (e.key === "Enter" && e.target.matches(".cphex, .cpsl input[type=number]")) { e.preventDefault(); pop.querySelector('[data-act="apply"]').click(); }
+  };
+  document.addEventListener("pointerdown", e => {
+    if (!pop.hidden && !e.target.closest('#pickPop, input[type="color"]')) closePickPop();
+  });
+  window.addEventListener("resize", closePickPop);
+}
+// ---- Eyedropper: takes the colour of an image pixel anywhere on the page (stage, previews), with a
+// loupe showing the pixels of the image itself around the cursor (11 x 11, centre framed).
+// The colour goes into the open picker; Escape or a right click cancels.
+const EYE_N = 11, EYE_PIX = new WeakMap();
+let EYE = null;
+function pixelSource(el) {      // pixels of an <img> / <canvas>: offscreen copy, cached per image source
+  try {
+    if (el.tagName === "CANVAS") return el.width && el.height ? { ctx: el.getContext("2d", { willReadFrequently: true }), w: el.width, h: el.height } : null;
+    if (el.tagName !== "IMG" || !el.complete || !el.naturalWidth) return null;
+    let c = EYE_PIX.get(el);
+    if (!c || c.src !== el.currentSrc) {
+      const cv = document.createElement("canvas");
+      cv.width = el.naturalWidth; cv.height = el.naturalHeight;
+      const ctx = cv.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(el, 0, 0);
+      c = { src: el.currentSrc, ctx, w: cv.width, h: cv.height, cv };
+      EYE_PIX.set(el, c);
+    }
+    return c;
+  } catch (e) { return null; }     // unreadable image
+}
+function eyeSample(x, y) {      // topmost opaque image pixel under (x, y), screen coordinates
+  for (const el of document.elementsFromPoint(x, y)) {
+    if (el.closest("#pickPop, #colorPop, #palEdit, .loupe") || !/^(IMG|CANVAS)$/.test(el.tagName)) continue;
+    const src = pixelSource(el);
+    if (!src) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const px = Math.floor((x - r.left) / r.width * src.w), py = Math.floor((y - r.top) / r.height * src.h);
+    if (px < 0 || py < 0 || px >= src.w || py >= src.h) continue;
+    let d;
+    try { d = src.ctx.getImageData(px, py, 1, 1).data; } catch (e) { continue; }
+    if (d[3] < 128) continue;       // transparent: what is under it
+    return { src, px, py, hex: "#" + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, "0")).join("") };
+  }
+  return null;
+}
+function startEyedrop() {
+  if (EYE || !PICK) return;
+  const loupe = document.createElement("div");
+  loupe.className = "loupe";
+  loupe.innerHTML = `<canvas width="${EYE_N}" height="${EYE_N}"></canvas><div class="lhex"><i></i><span>—</span></div>`;
+  document.body.appendChild(loupe);
+  const lc = loupe.querySelector("canvas"), lctx = lc.getContext("2d");
+  // the zoomed pixels are drawn on a larger canvas (crisp pixel grid)
+  const Z = 12; lc.width = lc.height = EYE_N * Z;
+  EYE = { loupe, hit: null };
+  document.body.classList.add("eyedrop");
+  status("Pipette : cliquez sur un pixel de l'image (Échap pour annuler)");
+  const move = e => {
+    const hit = EYE.hit = eyeSample(e.clientX, e.clientY);
+    const W = lc.width, half = (EYE_N - 1) / 2;
+    lctx.imageSmoothingEnabled = false;
+    lctx.fillStyle = "#808080"; lctx.fillRect(0, 0, W, W);
+    if (hit) {
+      const sx = hit.px - half, sy = hit.py - half;
+      lctx.clearRect(0, 0, W, W);
+      // checkerboard under transparent pixels
+      for (let j = 0; j < EYE_N; j++) for (let i = 0; i < EYE_N; i++) {
+        lctx.fillStyle = (i + j) % 2 ? "#bbb" : "#eee"; lctx.fillRect(i * Z, j * Z, Z, Z);
+      }
+      const ix = Math.max(0, sx), iy = Math.max(0, sy), iw = Math.min(hit.src.w, sx + EYE_N) - ix, ih = Math.min(hit.src.h, sy + EYE_N) - iy;
+      if (iw > 0 && ih > 0) {
+        const block = hit.src.ctx.getImageData(ix, iy, iw, ih).data;
+        for (let j = 0; j < ih; j++) for (let i = 0; i < iw; i++) {
+          const k = (j * iw + i) * 4;
+          if (!block[k + 3]) continue;
+          lctx.fillStyle = `rgba(${block[k]},${block[k + 1]},${block[k + 2]},${block[k + 3] / 255})`;
+          lctx.fillRect((ix - sx + i) * Z, (iy - sy + j) * Z, Z, Z);
+        }
+      }
+      // grid + framed centre pixel
+      lctx.strokeStyle = "rgba(0,0,0,.18)"; lctx.lineWidth = 1;
+      for (let i = 1; i < EYE_N; i++) {
+        lctx.beginPath(); lctx.moveTo(i * Z + .5, 0); lctx.lineTo(i * Z + .5, W); lctx.stroke();
+        lctx.beginPath(); lctx.moveTo(0, i * Z + .5); lctx.lineTo(W, i * Z + .5); lctx.stroke();
+      }
+      lctx.lineWidth = 2; lctx.strokeStyle = "#fff"; lctx.strokeRect(half * Z + 1, half * Z + 1, Z - 2, Z - 2);
+      lctx.lineWidth = 1; lctx.strokeStyle = "#000"; lctx.strokeRect(half * Z - .5, half * Z - .5, Z + 1, Z + 1);
+    }
+    loupe.querySelector("i").style.background = hit ? hit.hex : "transparent";
+    loupe.querySelector("span").textContent = hit ? hit.hex : "—";
+    const bw = loupe.offsetWidth, bh = loupe.offsetHeight;
+    loupe.style.left = (e.clientX + 18 + bw < innerWidth ? e.clientX + 18 : e.clientX - 18 - bw) + "px";
+    loupe.style.top = (e.clientY + 18 + bh < innerHeight ? e.clientY + 18 : e.clientY - 18 - bh) + "px";
+  };
+  const stop = e => { e.preventDefault(); e.stopImmediatePropagation(); };
+  const down = e => {
+    if (e.target.closest && e.target.closest("#pickPop, #colorPop")) { end(); return; }   // back to the picker
+    stop(e);
+    if (e.button === 0) {
+      const hit = eyeSample(e.clientX, e.clientY);
+      if (hit) { PICK.set(hit.hex); status(`Pipette : ${hit.hex}`); }
+      else status("Pipette : aucun pixel d'image ici", true);
+    }
+    end();
+    // the click that follows must not act on the page (mask painting, selection…)
+    window.addEventListener("click", stop, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener("click", stop, true), 400);
+  };
+  const key = e => { if (e.key === "Escape") { stop(e); end(); status("Pipette annulée"); } };
+  const ctx = e => stop(e);
+  function end() {
+    window.removeEventListener("pointermove", move, true);
+    window.removeEventListener("pointerdown", down, true);
+    window.removeEventListener("keydown", key, true);
+    window.removeEventListener("contextmenu", ctx, true);
+    document.body.classList.remove("eyedrop");
+    loupe.remove(); EYE = null;
+  }
+  window.addEventListener("pointermove", move, true);
+  window.addEventListener("pointerdown", down, true);
+  window.addEventListener("keydown", key, true);
+  window.addEventListener("contextmenu", ctx, true);
 }
 function closeColorPop() { $("colorPop").hidden = true; POP_IDX = null; }
 // Colour choice window of a layer: applied palette (or all layer tones),
@@ -3801,13 +4213,7 @@ function openColorPop(btn) {
     <h4>Teintes de l'image (calculées)</h4>${row((LAST.palette || []).slice(), "—")}
     <h4>Dernières couleurs utilisées</h4>${row(recentColors(), "Aucune pour l'instant")}
     <h4>Couleur personnalisée</h4>
-    <div class="cpick">
-      <canvas class="sv" width="216" height="110" aria-label="Saturation (horizontal) et luminosité (vertical)"></canvas>
-      <input type="range" class="hue" min="0" max="360" step="1" aria-label="Teinte">
-      <div class="cprow"><span class="cpprev"></span>
-        <input class="cphex" maxlength="7" spellcheck="false" aria-label="Code couleur hexadécimal">
-        <button type="button" data-act="apply">Appliquer</button></div>
-    </div>
+    ${pickerHtml()}
     <div class="acts"><button type="button" data-act="auto" ${customColor(L) ? "" : "disabled"} title="Revenir à la teinte calculée">Auto (teinte calculée)</button></div>`;
   setupPicker(pop, cur || "#888888");
   const r = btn.getBoundingClientRect(), w = 236;
@@ -3825,6 +4231,7 @@ function setupColorPop() {
     const idx = POP_IDX;
     if (b.dataset.c) { closeColorPop(); setLayerColor(idx, b.dataset.c); }
     else if (b.dataset.act === "auto") { closeColorPop(); setLayerColor(idx, null); }
+    else if (b.dataset.act === "eyedrop") startEyedrop();
     else if (b.dataset.act === "apply") {
       const hex = PICK.hex();
       closeColorPop(); setLayerColor(idx, hex);
@@ -3832,7 +4239,7 @@ function setupColorPop() {
   };
   pop.onkeydown = e => {
     if (e.key === "Escape") closeColorPop();
-    else if (e.key === "Enter" && e.target.classList.contains("cphex")) pop.querySelector('[data-act="apply"]').click();
+    else if (e.key === "Enter" && e.target.matches(".cphex, .cpsl input[type=number]")) pop.querySelector('[data-act="apply"]').click();
   };
   document.addEventListener("pointerdown", e => { if (!pop.hidden && !e.target.closest("#colorPop, .lcolor")) closeColorPop(); });
   window.addEventListener("resize", closeColorPop);

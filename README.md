@@ -296,9 +296,9 @@ lines at 0, about 10 % at 50, 95 % at 100: fine control when you want only a few
 contrasting tone) or chosen (separate stencil only); with a line lighter than the support, DoG and
 ridges look for light lines.
 
-**Draw the silhouette (outline of a mask)** adds the outline of a mask to the lines, whatever its
-contrast, on top of the detected details: useful when the subject does not stand out from the
-background, since the detection mostly reinforces details inside it. **Silhouette mask** chooses
+**Draw the silhouette (outline of a mask)** draws the outline of a mask, whatever its contrast, with
+or without the key details (it works on its own when *Redraw the faded key details* is unticked):
+useful when the subject does not stand out from the background, since the detection mostly reinforces details inside it. **Silhouette mask** chooses
 which one: the subject mask (selected object or cut-out area), the dedicated silhouette mask, or the
 key-detail mask; **Paint…** opens it in the Masks tab. The image's own edge is not drawn.
 A closed silhouette would cut the whole subject out as one big island, held by a few bridges only.
@@ -404,16 +404,27 @@ finer material; if there are too many bridges, lower the level of detail or the 
 By default each layer gets the tone computed from the image. To paint with your own colours:
 
 - click the **colour swatch** of a layer card: choose a colour of the current palette, one of the
-  image tones, one of the 6 recently used colours, or any colour with the built-in picker (hex code
-  accepted). **Auto (computed tone)** goes back to the image tone. The outline stencil's card has the
-  same picker (it sets the line colour of the *Key-detail outlines* section). Choosing a colour of the
+  image tones, one of the 6 recently used colours, or any colour with the built-in picker: saturation /
+  value square, **H S V sliders** (each one previews the colours along it) with their fields – hue
+  0-360°, saturation and value 0-100 % –, a **hex code** `#rrggbb` / `#rgb`, or the **eyedropper ⌖**:
+  click a pixel of any image of the page (stage, preview, layer cards), with a loupe showing the
+  image's own pixels around the cursor (Escape cancels). Every other colour field (support, line,
+  silhouette, palette editor) opens the same picker. **Auto (computed tone)** goes back to the image
+  tone. The outline stencil's card has the same picker (it sets the line colour of the *Key-detail outlines* section). Choosing a colour of the
   current palette keeps that palette shown in the menu;
 - or use the **Colour palette…** menu at the top of the stencil column: 91 harmonious palettes in 10
   families (Classics, Vivid, Modern vivid, Soft, Modern soft, Trending, Cold, Warm, Nature,
   Monochromes), of 8 colours each. Each layer gets the palette colour closest to the tone it really
   paints in the image (CIEDE2000 difference, optimal assignment so that two layers never share a
   colour; blended in-between tones are added when there are more layers than colours); the status
-  bar shows the mean ΔE. **＋ Save the current colours…** creates your own palette (*My palettes*);
+  bar shows the mean ΔE. Your own palettes (*My palettes*) are made in the **palette editor**:
+  **＋ New palette…** (empty), **＋ Save the current colours…** (starts from the layer colours),
+  **＋ Import a palette…** (paste a JSON list such as `["#006ba6","#0496ff","#ffbc42","#d81159","#8f2d56"]`,
+  `#rrggbb` codes separated by commas or spaces, or a coolors.co link), or **✎** next to a palette
+  (edit one of yours; for a built-in palette, edit a copy). In the editor: change a colour by
+  clicking it, **×** removes it, drag to reorder, **＋ Colour**, **＋ Layer colours**, **Sort light →
+  dark**, paste more colours; **Save** saves (renames when the name was changed), **Save as…** keeps
+  the original and saves a new palette (up to 16 colours);
 - or click **Closest**: same closest-colour assignment with the chosen palette (useful after editing
   colours by hand); with no palette chosen, every palette (yours included) is tried and the one that
   best matches the image is applied.
@@ -484,7 +495,9 @@ squares with their hex codes, placed left of the page, to prepare your paints.
 
 - **Re-open a project**: *Open a project…* (or drop the file on the image box)
   - the **.zip** restores everything: image, masks, settings, crop, colours – then recomputes;
-  - the **_infos.json** alone applies the settings to the loaded image (or to the next one you load).
+  - the **_infos.json** alone applies the settings to the loaded image (or to the next one you load);
+  - the **colour palette** applied to the layers comes back too; if it is not in *My palettes* on
+    this computer (or differs from the one of the same name), it is added there.
 - **Presets**: the *Surface to paint* and *Material & cutting* sections, and the material sheet
   formats (*Cutting machine*), have **Save / Save as… /
   Rename… / Delete** buttons. A "● modified" marker shows unsaved changes. Your presets and palettes
