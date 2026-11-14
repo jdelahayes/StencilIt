@@ -70,7 +70,8 @@
   aside { background: var(--panel); border-right: 1px solid var(--line); padding: 12px 14px 40px;
           overflow-y: auto; overflow-x: hidden; max-height: calc(100vh - 49px); min-width: 0; }
   section.view { padding: 14px 18px; overflow-y: auto; max-height: calc(100vh - 49px); }
-  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 10px 10px; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 10px 10px; min-width: 0; }
+  .fxlh { flex-wrap: wrap; }
   legend { font-weight: 600; padding: 0 4px; font-size: 13px; }
   label.row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; margin: 6px 0; }
   label.row span.v { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
@@ -92,7 +93,7 @@
   button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
   button:disabled { opacity: .5; cursor: default; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
-  .tabs button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .tabs button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .stage { background: repeating-conic-gradient(var(--soft) 0 25%, var(--panel) 0 50%) 0 0 / 20px 20px;
            border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; justify-content: center; }
   .stage img { max-width: 100%; max-height: var(--stage-h, 72vh); display: block; image-rendering: auto; }
@@ -121,17 +122,30 @@
   .maskwrap img.detov { position: absolute; max-width: none; max-height: none; pointer-events: none; }
   .detlegend { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
   .detlegend i { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin-left: 6px; }
-  .maskwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; pointer-events: none; }
+  .maskwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: var(--mask-alpha, .5); pointer-events: none; }
   .maskwrap .cropguide { position: absolute; border: 1.5px dashed rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.4); pointer-events: none; }
   .stage .brush { position: absolute; z-index: 7; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7);
                      transform: translate(-50%, -50%); pointer-events: none; display: none; }
-  .stage .brush.erase { border-style: dashed; }
+  .stage .brush.erase { border-style: dashed; border-color: #ff5a5a; }
+  .stage .brush.erase::before { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 2px;
+                                 margin: -1px 0 0 -5px; background: #ff5a5a; box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
+  .stage .brush.smart::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px;
+                                border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7); }
+  .stage .brush.smart.erase::after { background: #ff5a5a; }
+  .masktools { flex-direction: column; align-items: stretch; gap: 6px; }
+  .masktools .mrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .masktools .mgroup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding-right: 10px;
+                       border-right: 1px solid var(--line); }
+  .masktools .mgroup.mopts { border-right: 0; }
+  .masktools [hidden] { display: none !important; }
+  .mkind { position: relative; }
+  .mkind .mdot { position: absolute; left: 50%; bottom: 1px; width: 12px; height: 3px; margin-left: -6px; border-radius: 2px; }
   .maskwrap.select { cursor: crosshair; }
   .maskwrap.select.wait { cursor: progress; }
   .seg { display: inline-flex; }
   .seg button { padding: 3px 10px; font-size: 12px; border-radius: 0; }
   .seg button:first-child { border-radius: 7px 0 0 7px; } .seg button:last-child { border-radius: 0 7px 7px 0; border-left: none; }
-  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .vt-size { display: inline-flex; align-items: center; gap: 6px; }
   .vt-size input { width: 120px; accent-color: var(--accent); }
   .card .eye { margin-left: auto; padding: 2px 5px; line-height: 0; border-radius: 999px; }
@@ -142,9 +156,12 @@
   .ibtn { display: inline-flex; align-items: center; justify-content: center; padding: 4px 6px; line-height: 0; }
   .ico { display: block; flex: none; }
   .undobar { margin-left: auto; display: inline-flex; gap: 4px; margin-right: 8px; }
+  .tabtools { margin-left: auto; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; }
+  .tabtools[hidden] { display: none; }
+  .tabtools:not([hidden]) + .undobar { margin-left: 4px; }
   .undobar .ibtn { padding: 3px 5px; }
   .ibtn:disabled { opacity: .35; cursor: default; }
-  .ibtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .ibtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .card.hidden-layer img { opacity: .35; }
   #compareRange { display: block; width: 100%; margin: 6px 0 0; accent-color: var(--accent); }
   /* Zoom of the computed views (preview, comparison, original, layer) */
@@ -183,7 +200,7 @@
   .colorpop .sws { display: flex; flex-wrap: wrap; gap: 5px; }
   .colorpop .sws button { width: 26px; height: 26px; padding: 0; border-radius: 6px; border: 1px solid rgba(127,127,127,.45); cursor: pointer; }
   .colorpop .sws button:hover, .colorpop .sws button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .colorpop .sws button.cur { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .colorpop .sws button.cur { outline: 2px solid var(--accent); outline-offset: 1px; }
   .colorpop .acts { display: flex; gap: 6px; margin-top: 10px; }
   .colorpop .acts button { flex: 1; font-size: 12px; padding: 4px 6px; }
   .colorpop .cpnone { color: var(--muted); font-style: italic; }
@@ -264,22 +281,28 @@
   .chip { border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; cursor: pointer;
           background: var(--panel); font-variant-numeric: tabular-nums; font-size: 11px; }
   .chip.rec { border-color: var(--accent); color: var(--accent); font-weight: 700; }
-  .chip.cur { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .chip.cur { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .warn { background: #fef3c7; color: #78350f; border: 1px solid #fcd34d; border-radius: 8px;
           padding: 7px 10px; margin-bottom: 8px; font-size: 13px; }
   @media (prefers-color-scheme: dark) { .warn { background: #3a2e12; color: #fde68a; border-color: #854d0e; } }
   .sw.pick { cursor: pointer; width: 20px; height: 20px; }
   /* Crop editor */
-  .cropwrap { position: relative; display: inline-block; overflow: hidden; user-select: none; touch-action: none; line-height: 0; }
+  .cropwrap { position: relative; display: inline-block; overflow: visible; user-select: none; touch-action: none; line-height: 0; }
+  /* darkened outside of the crop: clipped to the image (the frame and its handles are not) */
+  .cropshade { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .cropshade .cropdim { position: absolute; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); }
   .cropwrap img { max-width: 100%; max-height: var(--stage-h, 72vh); display: block; pointer-events: none; }
-  .croprect { position: absolute; border: 1.5px solid #fff; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); cursor: move;
+  .croprect { position: absolute; border: 2px solid #fff; outline: 1px solid rgba(0,0,0,.75); box-shadow: inset 0 0 0 1px rgba(0,0,0,.45); cursor: move;
               background-image: linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px);
               background-size: 33.333% 33.333%; background-position: -1px -1px; }
-  .croprect .h { position: absolute; width: 14px; height: 14px; background: #fff; border: 1px solid #333; border-radius: 3px; }
-  .h.nw { left: -7px; top: -7px; cursor: nwse-resize; } .h.ne { right: -7px; top: -7px; cursor: nesw-resize; }
-  .h.sw { left: -7px; bottom: -7px; cursor: nesw-resize; } .h.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
-  .h.n { left: calc(50% - 7px); top: -7px; cursor: ns-resize; } .h.s { left: calc(50% - 7px); bottom: -7px; cursor: ns-resize; }
-  .h.w { top: calc(50% - 7px); left: -7px; cursor: ew-resize; } .h.e { top: calc(50% - 7px); right: -7px; cursor: ew-resize; }
+  /* handles: orange, white rim and dark halo, centred on the frame line (half outside the image) */
+  .croprect .h, .lframe .h { position: absolute; width: 16px; height: 16px; background: var(--accent); border: 2px solid #fff; border-radius: 4px;
+                 box-shadow: 0 0 0 1px rgba(0,0,0,.7), 0 1px 4px rgba(0,0,0,.45); z-index: 1; }
+  .croprect .h:hover, .lframe .h:hover { transform: scale(1.15); }
+  .h.nw { left: -9px; top: -9px; cursor: nwse-resize; } .h.ne { right: -9px; top: -9px; cursor: nesw-resize; }
+  .h.sw { left: -9px; bottom: -9px; cursor: nesw-resize; } .h.se { right: -9px; bottom: -9px; cursor: nwse-resize; }
+  .h.n { left: calc(50% - 8px); top: -9px; cursor: ns-resize; } .h.s { left: calc(50% - 8px); bottom: -9px; cursor: ns-resize; }
+  .h.w { top: calc(50% - 8px); left: -9px; cursor: ew-resize; } .h.e { top: calc(50% - 8px); right: -9px; cursor: ew-resize; }
   /* Collapsible sections (accordion) */
   aside fieldset { padding-top: 0; }
   aside fieldset > legend { width: 100%; padding: 0; }
@@ -362,7 +385,10 @@
   .lay .sup.off .inner { display: none; }
   .lay .inner { position: absolute; border: 1px dashed rgba(127,127,127,.8); pointer-events: none; }
   .lay .dim { position: absolute; font-size: 11px; color: var(--muted); }
-  .lay .rz { position: absolute; width: 14px; height: 14px; background: #fff; border: 1px solid #333; border-radius: 3px; cursor: nwse-resize; z-index: 2; }
+  /* frame + 8 handles around the image, as in the crop editor (the frame lets the clicks through) */
+  .lay .lframe { position: absolute; border: 2px solid #fff; outline: 1px solid rgba(0,0,0,.75);
+                 box-shadow: inset 0 0 0 1px rgba(0,0,0,.45); pointer-events: none; z-index: 3; box-sizing: border-box; }
+  .lay .lframe .h { pointer-events: auto; }
   .err { color: #dc2626; }
   /* Medium screen: the stencil column moves below the image, as a grid */
   @media (max-width: 1150px) {
@@ -377,6 +403,65 @@
     .colgrip { display: none; }
     aside, section.view { max-height: none; }
   }
+  /* Layer effects */
+  .fxlayer { border: 1px solid var(--line); border-radius: 7px; padding: 5px 6px; margin: 6px 0; background: var(--soft); }
+  .fxlayer.drop { outline: 2px dashed var(--accent); outline-offset: 1px; }
+  .fxlayer.off .fxitems, .fxlayer.orphan .fxitems { opacity: .5; }
+  .fxlh { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .fxlh b { flex: 1; font-weight: 600; min-width: 0; }
+  .fxsw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); flex: none; }
+  .fxlh select { width: auto; max-width: 110px; padding: 2px 4px; font-size: 12px; }
+  .fxitem { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin: 4px 0 0; }
+  .fxitem.off .fxtog { opacity: .5; }
+  .fxitem.dragging { opacity: .4; }
+  .fxitem.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+  .fxitem.drop-after { box-shadow: 0 3px 0 var(--accent); }
+  .fxih { display: flex; align-items: center; gap: 4px; padding: 1px 3px; font-size: 12px; }
+  .fxgrip { cursor: grab; color: var(--muted); padding: 2px 4px; user-select: none; border-radius: 4px; }
+  .fxgrip:focus-visible { outline: 2px solid var(--accent); }
+  .fxtog { flex: 1; display: flex; gap: 6px; align-items: baseline; text-align: left; border: 0; background: none;
+           padding: 4px 2px; min-width: 0; font-size: 12px; }
+  .fxtog .chev { color: var(--muted); width: 8px; flex: none; }
+  .fxname { flex: none; font-weight: 600; }
+  .fxsum { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .fxdel { border: 0; background: none; padding: 2px 6px; color: var(--muted); font-size: 14px; line-height: 1; }
+  .fxdel:hover { color: var(--accent); }
+  .fxparams { padding: 0 8px 6px; font-size: 12px; }
+  .fxparams select { margin-bottom: 4px; }
+  .fxnone { margin: 4px 2px 0; }
+  .fxp[hidden] { display: none; }
+  .fxbadge { font-size: 11px; padding: 1px 6px; border-radius: 9px; line-height: 1.4; margin-left: 4px;
+             border: 1px solid var(--accent); color: var(--accent); background: none; }
+  .semopts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; flex-basis: 100%; }
+  .semopts[hidden], .semrim[hidden] { display: none; }
+  .semrim { display: inline-flex; gap: 14px; align-items: center; }
+  .semopts .vt-size input { width: 84px; }
+  .vt-icons { display: inline-flex; gap: 4px; margin-left: auto; }
+  .vt-icons[hidden] { display: none; }
+  .vt-ico { padding: 3px 8px; line-height: 0; }
+  .fxopts { margin: 2px 0 8px; padding: 4px 0 6px; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .fxopts .check { align-items: flex-start; }
+  .fxopts .check label { min-width: 0; }
+  .zonebar, .mzones { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .zonebar { margin: 4px 0 6px; }
+  .zchip.off { text-decoration: line-through; opacity: .6; }
+  .zadd { min-width: 28px; font-weight: 700; }
+  .zonetools { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 4px; }
+  label.row[hidden] { display: none; }
+  /* Key-detail outlines section: label and list on one line, groups for the zones and the silhouette */
+  label.row.sel { grid-template-columns: auto minmax(0, 1fr); }
+  label.row.sel > select, label.row.sel > .selc { width: 100%; min-width: 0; }
+  .selc { display: flex; gap: 6px; align-items: center; min-width: 0; }
+  .selc select { flex: 1; min-width: 0; }
+  .swc { width: 40px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; flex: none; }
+  .ohead { margin-top: 10px; }
+  .ohead label { font-weight: 600; }
+  .ogroup { border-left: 2px solid var(--line); padding: 2px 0 4px 10px; margin: 2px 0 8px 6px; }
+  .ogroup[hidden] { display: none; }
+  .ogroup .hint { margin-top: 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 10px; align-items: center; }
+  .pair label.row { grid-template-columns: 1fr auto; }
+  .pair input[type=number] { width: 60px; }
 </style>
 </head>
 <body>
@@ -787,79 +872,149 @@
   <fieldset>
     <legend>Contours des détails clés</legend>
     <div id="lineBox" hidden>
-      <p class="hint">Trait seul : chaque couleur de trait a son pochoir, pulvérisés du plus clair au plus foncé.</p>
+      <p class="hint">Trait seul : un pochoir par couleur de trait, du plus clair au plus foncé.</p>
       <div class="check"><input type="checkbox" id="line_zones"><label for="line_zones">Coloriage : tracer les limites entre les zones de teinte</label></div>
       <div id="lzBox" hidden>
-        <label class="full" for="lzMode">Couleur des limites</label>
-        <div style="display:flex; gap:8px; align-items:center">
-          <select id="lzMode" style="flex:1">
-            <option value="">Comme les détails clés</option>
-            <option value="tones">Teinte de la zone la plus foncée (un pochoir par teinte)</option>
-            <option value="custom">Couleur choisie</option>
-          </select>
-          <input type="color" id="lzColor" value="#1e1e1e" aria-label="Couleur des limites" style="width:54px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px" hidden>
-        </div>
+        <label class="row sel" for="lzMode">Couleur des limites
+          <span class="selc">
+            <select id="lzMode">
+              <option value="">Comme les détails clés</option>
+              <option value="tones">Teinte de la zone la plus foncée (un pochoir par teinte)</option>
+              <option value="custom">Couleur choisie</option>
+            </select>
+            <input type="color" id="lzColor" value="#1e1e1e" aria-label="Couleur des limites" class="swc" hidden>
+          </span></label>
       </div>
       <input type="hidden" id="line_zones_color" value="">
       <input type="hidden" id="line_sil_color" value="">
+      <input type="hidden" id="outline_zones" value="">
     </div>
-    <div class="check"><input type="checkbox" id="outline"><label for="outline">Retracer les détails clés estompés</label></div>
-    <div id="targetBox">
-    <label class="full">Où mettre les traits</label>
-    <select id="outline_target">
-      <option value="stencil">Pochoir de contours séparé (peint en dernier)</option>
-      <option value="darkest">Dans la couche la plus foncée</option>
-      <option value="nearest">Dans la couche de teinte la plus proche</option>
-    </select>
-    <p class="hint" id="outline_target_hint"></p>
-    </div>
-    <p class="hint">Détecte automatiquement les détails nets de l'image que la simplification et le flou de l'aérographe estompent (yeux, traits fins, mèches…) et les redessine d'un trait fin.</p>
-    <p class="hint">Pour limiter la recherche à certaines zones (visage, yeux…), peignez-les dans l'onglet <b>« Masque contours »</b>.</p>
-    <label class="full">Méthode de détection</label>
-    <select id="outline_method">
-      <option value="canny">Bords nets (Canny)</option>
-      <option value="xdog">Trait dessiné (DoG)</option>
-      <option value="ridge">Lignes fines (crêtes)</option>
-    </select>
-    <p class="hint" id="outline_method_hint"></p>
-    <button type="button" id="showDetect" class="vt-small">Voir la détection…</button>
-    <label class="row">Sensibilité <span class="v" id="outline_sensitivity_v"></span>
-      <input type="range" id="outline_sensitivity" min="0" max="100" step="1" value="50"></label>
-    <p class="hint" style="margin-top:-2px">Bas : seulement les détails les plus marqués · haut : beaucoup de détails.</p>
-    <label class="row">Largeur du trait (mm) <input type="number" id="outline_width_mm" value="0.8" min="0.2" max="10" step="0.1"></label>
-    <label class="row">Longueur mini d'un trait (mm) <input type="number" id="outline_min_length_mm" value="4" min="0" max="200" step="0.5"></label>
-    <p class="hint" style="margin-top:-2px">Le trait n'est jamais plus fin que l'ouverture mini du matériau.</p>
-    <div class="check"><input type="checkbox" id="outline_subject"><label for="outline_subject">Tracer la silhouette (contour d'un masque)</label></div>
-    <div id="silSrcBox" hidden>
-      <label class="full" for="outline_subject_mask">Masque de la silhouette</label>
-      <div style="display:flex; gap:8px; align-items:center">
-        <select id="outline_subject_mask" style="flex:1">
-          <option value="subject">Masque sujet (objet sélectionné ou détouré)</option>
-          <option value="silhouette">Masque silhouette (dédié)</option>
-          <option value="outline">Masque contours (détails clés)</option>
+
+    <div class="check ohead" title="Détecte les détails nets de l'image que la simplification et le flou de l'aérographe estompent (yeux, traits fins, mèches…) et les redessine d'un trait fin."><input type="checkbox" id="outline"><label for="outline">Détails clés estompés</label></div>
+    <div class="ogroup" id="zoneGroup">
+      <div id="zoneBox">
+        <div class="zonebar" id="zoneBar" role="group" aria-label="Zones de contours"></div>
+        <div class="zonetools">
+          <div class="check" style="margin:0" title="Une zone désactivée garde ses réglages et son masque mais ne trace rien"><input type="checkbox" id="zoneOn" checked><label for="zoneOn">Active</label></div>
+          <button type="button" class="vt-small" id="zoneRename" title="Renommer la zone affichée">Renommer…</button>
+          <button type="button" class="vt-small" id="zoneDel" title="Supprimer la zone affichée et son masque (la première zone ne se supprime pas)">Supprimer</button>
+          <button type="button" id="showDetect" class="vt-small" title="Ouvre l'onglet Masques sur cette zone avec l'aperçu de la détection">Voir la détection…</button>
+        </div>
+        <div class="nameform" id="zoneNameForm" hidden>
+          <input type="text" id="zoneName" maxlength="40" aria-label="Nom de la zone" data-noi18n>
+          <button type="button" class="ok">OK</button>
+          <button type="button" class="cancel">Annuler</button>
+        </div>
+        <p class="hint">Zone peinte dans l'onglet Masques (masque contours) ; non peinte = toute l'image.</p>
+      </div>
+      <div id="targetBox">
+        <label class="row sel" for="zoneDest">Destination
+          <select id="zoneDest" title="Couche de contours de la zone (les zones envoyées vers la même couche sont fusionnées dans un seul pochoir), ou une couche de couleur"></select></label>
+        <select id="outline_target" hidden>
+          <option value="stencil">Pochoir de contours séparé (peint en dernier)</option>
+          <option value="darkest">Dans la couche la plus foncée</option>
+          <option value="nearest">Dans la couche de teinte la plus proche</option>
         </select>
-        <button type="button" id="paintSilhouette" class="vt-small" title="Ouvre ce masque dans l'onglet Masques pour le peindre ou y sélectionner des objets">Peindre…</button>
+        <p class="hint" id="outline_target_hint"></p>
       </div>
-      <div class="check" id="silWeakRow"><input type="checkbox" id="outline_subject_weak"><label for="outline_subject_weak">Seulement là où le bord ressort peu</label></div>
-      <label class="row" id="silDeRow">Écart de couleur maxi (ΔE) <input type="number" id="outline_subject_de" value="20" min="1" max="100" step="1"></label>
-      <div id="silColorRow" hidden style="display:flex; gap:8px; align-items:center">
+      <label class="row sel" for="outline_method">Méthode
+        <select id="outline_method">
+          <option value="canny">Bords nets (Canny)</option>
+          <option value="xdog">Trait dessiné (DoG)</option>
+          <option value="ridge">Lignes fines (crêtes)</option>
+        </select></label>
+      <p class="hint" id="outline_method_hint"></p>
+      <label class="row sel" for="outline_channel" title="Ce dans quoi les traits sont cherchés. Luminosité : clair / foncé, mais le bord d'une ombre devient un trait. Couleur : la saturation, où une ombre se voit à peine alors qu'un trait noir ou gris reste net (utile quand une ombre couvre le dessin). Les deux : les traits de l'une ou de l'autre.">Détecter sur
+        <select id="outline_channel">
+          <option value="light">la luminosité</option>
+          <option value="colour">la couleur (ignore les ombres)</option>
+          <option value="both">la luminosité et la couleur</option>
+        </select></label>
+      <label class="row sel" for="outline_ref" title="Ce à quoi l'image est comparée pour trouver les détails clés de la zone. Rendu des couches avant leurs effets : les traits ne bougent pas quand on ajoute ou change un effet. Après leurs effets : les traits compensent ce que les effets font disparaître. Image seule : tous les traits de l'image, choisis par la sensibilité seule, sans tenir compte des couches.">Comparer à
+        <select id="outline_ref">
+          <option value="layers">Rendu des couches, avant leurs effets</option>
+          <option value="effects">Rendu des couches, après leurs effets</option>
+          <option value="image">Image seule (avant le calcul des couches)</option>
+        </select></label>
+      <div class="check" title="Coché : la sensibilité garde des traits entiers (chaque trait détecté est gardé ou écarté d'un bloc, des plus marqués aux plus faibles). Décoché : elle garde les points les plus marqués, et un trait plus faible par endroits peut être coupé en morceaux."><input type="checkbox" id="outline_whole_lines"><label for="outline_whole_lines">Garder les traits entiers</label></div>
+      <div id="sensBox">
+        <label class="row" title="Bas : seulement les détails les plus marqués · haut : beaucoup de détails.">Sensibilité <span class="v" id="outline_sensitivity_v"></span>
+          <input type="range" id="outline_sensitivity" min="0" max="100" step="1" value="50"></label>
+      </div>
+      <label class="row" id="lineSensBox" hidden>Sensibilité de détection <span class="v" id="outline_line_sens_v" data-noi18n></span>
+        <input type="range" id="outline_line_sens" min="0" max="100" step="1" value="50" list="lineSensTicks"></label>
+      <datalist id="lineSensTicks"></datalist>
+      <label class="row sel" for="outline_close_lines" title="Deux traits plus proches que la bande de matière mini laissent entre eux une bande trop fine pour être découpée. Remplir : la règle du matériau ouvre cette bande (aplat). Sinon, à ces endroits seulement, un seul trait est gardé : au milieu des deux, ou celui le plus loin (extérieur) ou le plus près (intérieur) du centre de la zone.">Traits trop proches
+        <select id="outline_close_lines">
+          <option value="">remplir l'espace entre eux (règle du matériau)</option>
+          <option value="median">un seul trait, au milieu</option>
+          <option value="outer">garder le trait extérieur</option>
+          <option value="inner">garder le trait intérieur</option>
+        </select></label>
+      <div class="pair">
+        <label class="row" title="Largeur du trait découpé ; jamais plus fin que l'ouverture mini du matériau">Largeur (mm) <input type="number" id="outline_width_mm" value="0.8" min="0.2" max="10" step="0.1"></label>
+        <label class="row" title="Les traits plus courts sont ignorés">Longueur mini (mm) <input type="number" id="outline_min_length_mm" value="4" min="0" max="200" step="0.5"></label>
+      </div>
+    </div>
+
+    <div class="check ohead"><input type="checkbox" id="outline_subject"><label for="outline_subject">Silhouette (contour d'un masque)</label></div>
+    <div class="ogroup" id="silSrcBox" hidden>
+      <label class="row sel" for="outline_subject_mask">Masque
+        <span class="selc">
+          <select id="outline_subject_mask">
+            <option value="subject">Masque sujet (objet sélectionné ou détouré)</option>
+            <option value="silhouette">Masque silhouette (dédié)</option>
+            <option value="outline">Masque contours (toutes les zones)</option>
+          </select>
+          <button type="button" id="paintSilhouette" class="vt-small" title="Ouvre ce masque dans l'onglet Masques pour le peindre ou y sélectionner des objets">Peindre…</button>
+        </span></label>
+      <div id="silDestBox">
+        <label class="row sel" for="silDest">Destination
+          <select id="silDest" title="Couche de contours de la silhouette, ou une couche de couleur"></select></label>
+      </div>
+      <div class="pair">
+        <div class="check" id="silWeakRow" title="Le contour n'est tracé que là où le rendu le montre mal (écart de couleur entre les deux côtés inférieur au ΔE maxi)"><input type="checkbox" id="outline_subject_weak"><label for="outline_subject_weak">Seulement où le bord ressort peu</label></div>
+        <label class="row" id="silDeRow">ΔE maxi <input type="number" id="outline_subject_de" value="20" min="1" max="100" step="1"></label>
+      </div>
+      <div id="silColorRow" hidden class="selc">
         <div class="check" style="flex:1"><input type="checkbox" id="silOwn"><label for="silOwn">Couleur propre pour la silhouette</label></div>
-        <input type="color" id="silColor" value="#1e1e1e" aria-label="Couleur de la silhouette" style="width:54px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px" disabled>
+        <input type="color" id="silColor" value="#1e1e1e" aria-label="Couleur de la silhouette" class="swc" disabled>
       </div>
     </div>
-    <div id="gapBox" hidden>
-      <label class="row">Interrompre tous les (mm) <input type="number" id="outline_subject_gap_every_mm" value="0" min="0" max="1000" step="5"></label>
-      <label class="row">Longueur d'une interruption (mm) <input type="number" id="outline_subject_gap_mm" value="1.5" min="0.3" max="20" step="0.5"></label>
-      <p class="hint" style="margin-top:-2px" id="gapHint">0 = trait continu. Une silhouette fermée découpe tout le sujet en un seul îlot ; les interruptions le tiennent comme des ponts répartis tout autour.</p>
+    <div class="ogroup" id="gapBox" hidden>
+      <div class="pair">
+        <label class="row" title="Le trait est interrompu à intervalles réguliers (0 = trait continu)">Interrompre tous les (mm) <input type="number" id="outline_subject_gap_every_mm" value="0" min="0" max="1000" step="5"></label>
+        <label class="row" title="Longueur de matière laissée à chaque interruption">sur (mm) <input type="number" id="outline_subject_gap_mm" value="1.5" min="0.3" max="20" step="0.5"></label>
+      </div>
+      <p class="hint" id="gapHint">0 = trait continu. Les interruptions tiennent la silhouette comme des ponts.</p>
     </div>
+
     <div id="outlineColorBox">
-    <label class="full">Couleur du trait</label>
-    <div class="check"><input type="checkbox" id="outline_auto_color" checked><label for="outline_auto_color">Automatique (teinte la plus contrastée avec le support)</label></div>
-    <div style="display:flex; gap:8px; align-items:center">
-      <input type="color" id="outline_color" value="#1e1e1e" aria-label="Couleur du trait" style="width:84px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px" disabled>
-      <div class="palette" id="outlineSwatches"></div>
+      <label class="full" id="olColorLbl">Couleur du trait</label>
+      <div class="selc">
+        <div class="check" style="margin:0" title="La teinte de l'image la plus contrastée avec le support"><input type="checkbox" id="outline_auto_color" checked><label for="outline_auto_color">Auto</label></div>
+        <input type="color" id="outline_color" value="#1e1e1e" aria-label="Couleur du trait" class="swc" disabled>
+        <div class="palette" id="outlineSwatches"></div>
+      </div>
     </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Effets des couches</legend>
+    <div class="check"><input type="checkbox" id="fxAll" checked><label for="fxAll">Appliquer les effets</label></div>
+    <div class="fxopts">
+      <div class="check" title="Empilement exclusif : ce qu'un effet ajoute à une couche (gonflement, ombre, halo peint…) est retiré des couches plus foncées, qui sinon le recouvriraient. Le Recouvrement n'est pas concerné (il passe dessous exprès)."><input type="checkbox" id="fxSync" checked><label for="fxSync">Les ajouts d'un effet passent devant les couches plus foncées</label></div>
+      <label class="full" for="fxFreed" title="Empilement exclusif : ce que deviennent les zones qu'un effet retire d'une couche (entre les points d'une trame, à l'intérieur d'un contour seul…). Couche qui entoure la zone : chaque zone de la couche prend la teinte qu'on trouve le plus le long de son bord (ou reste nue si c'est le support).">Zones retirées par un effet</label>
+        <select id="fxFreed">
+          <option value="support">support nu</option>
+          <option value="nearest">couche qui entoure la zone</option>
+          <option value="lighter">couche plus claire précédente</option>
+        </select>
+      <p class="hint" id="fxExclHint" hidden>Empilement cumulatif : ces deux options sont sans effet (les couches se recouvrent déjà).</p>
     </div>
+    <div id="fxList"></div>
+    <input type="hidden" id="layer_effects" value="">
+    <p class="hint">Chaque couche a sa propre pile d'effets, appliqués de haut en bas avant les ponts. Glissez ≡ pour changer l'ordre ou déplacer un effet vers une autre couche (Ctrl : copier).</p>
   </fieldset>
 
   <fieldset>
@@ -940,65 +1095,111 @@
     <button data-v="preview" class="on">Prévisualisation</button>
     <button data-v="compare">Comparer à l'original</button>
     <button data-v="reference">Original</button>
+    <span class="tabtools" id="tabTools" hidden>
+      <span class="vt-opts" role="group" aria-label="Afficher">
+        <button type="button" class="vt-opt" id="optSupport" aria-pressed="true"
+          title="Support : sa couleur sous la prévisualisation, son bord et la feuille du pochoir en pointillés verts, dans toutes les vues et à la même échelle. Désactivé : les couches seules, sur fond transparent.">Support</button>
+        <button type="button" class="vt-opt" id="optMat" aria-pressed="false"
+          title="Tapis de découpe (feuille posée dans son coin) dans toutes les vues, à la même échelle">Tapis</button>
+        <button type="button" class="vt-opt" id="optStock" aria-pressed="false"
+          title="Contour de la feuille du pochoir (pointillés verts) et feuille de matière (posée dans le même coin) dans toutes les vues, à la même échelle">Feuille</button>
+        <input type="checkbox" id="show_support" checked hidden>
+        <button type="button" class="vt-opt" id="optReg" aria-pressed="true"
+          title="Repères de calage (croix, équerres ou trous) et encoches du numéro de couche, dans toutes les vues">Repères</button>
+        <input type="checkbox" id="show_stock" hidden>
+        <input type="checkbox" id="show_reg" checked hidden>
+        <input type="checkbox" id="show_calage" hidden>
+        <input type="checkbox" id="show_mat" hidden>
+      </span>
+      <span class="vt-zoom" id="zoomTools" role="group" aria-label="Zoom" hidden>
+        <button type="button" id="zoomOut" title="Zoom arrière (molette vers le bas)" aria-label="Zoom arrière">−</button>
+        <button type="button" id="zoomLevel" title="Ajuster à la vue (double-clic sur l'image). Zoomé : glisser (Cadrage, Mise en page, Masques : bouton du milieu ou Espace + glisser) pour se déplacer">100 %</button>
+        <button type="button" id="zoomIn" title="Zoom avant (molette vers le haut)" aria-label="Zoom avant">+</button>
+      </span>
+    </span>
     <span class="undobar" role="group" aria-label="Historique des réglages">
       <button type="button" class="ibtn" id="undoBtn" disabled aria-label="Annuler le changement" title="Annuler le dernier changement de réglage (Ctrl + Z)"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
       <button type="button" class="ibtn" id="redoBtn" disabled aria-label="Rétablir" title="Rétablir le changement annulé (Ctrl + Y ou Ctrl + Maj + Z)"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
     </span>
-    <span class="palette" id="palette"></span>
   </div>
   <div id="warnings"></div>
   <div class="viewtools" id="viewtools" hidden>
-    <span class="vt-opts" role="group" aria-label="Afficher">
-      <button type="button" class="vt-opt" id="optSupport" aria-pressed="true"
-        title="Support : sa couleur sous la prévisualisation, son bord et la feuille du pochoir en pointillés verts, dans toutes les vues et à la même échelle. Désactivé : les couches seules, sur fond transparent.">Support</button>
-      <button type="button" class="vt-opt" id="optMat" aria-pressed="false"
-        title="Tapis de découpe (feuille posée dans son coin) dans toutes les vues, à la même échelle">Tapis</button>
-      <button type="button" class="vt-opt" id="optStock" aria-pressed="false"
-        title="Contour de la feuille du pochoir (pointillés verts) et feuille de matière (posée dans le même coin) dans toutes les vues, à la même échelle">Feuille</button>
-      <input type="checkbox" id="show_support" checked hidden>
-      <button type="button" class="vt-opt" id="optReg" aria-pressed="true"
-        title="Repères de calage (croix, équerres ou trous) et encoches du numéro de couche, dans toutes les vues">Repères</button>
-      <input type="checkbox" id="show_stock" hidden>
-      <input type="checkbox" id="show_reg" checked hidden>
-      <input type="checkbox" id="show_calage" hidden>
-      <input type="checkbox" id="show_mat" hidden>
-    </span>
     <button type="button" class="vt-opt vt-pre" id="optPre" aria-pressed="true" hidden
       title="Onglet Original : image prétraitée (activé) ou image d'origine brute">Prétraitée</button>
     <span class="vt-layers vt-label">Couches</span>
     <span id="layerToggles" class="vt-toggles vt-layers"></span>
     <button type="button" id="showAll" class="vt-small vt-layers">Tout afficher</button>
-    <label class="vt-sim vt-layers"><input type="checkbox" id="preview_sim"> Rendu simulé <span class="hint">(flou de l'aérographe)</span></label>
-    <label class="vt-sim vt-layers" title="Prévisualisation sans les ponts : leur trace est peinte, comme après la retouche"><input type="checkbox" id="preview_nobridges"> Sans les ponts</label>
-    <span class="vt-zoom" id="zoomTools" role="group" aria-label="Zoom" hidden>
-      <button type="button" id="zoomOut" title="Zoom arrière (molette vers le bas)" aria-label="Zoom arrière">−</button>
-      <button type="button" id="zoomLevel" title="Ajuster à la vue (double-clic sur l'image). Zoomé : glisser (Cadrage, Mise en page, Masques : bouton du milieu ou Espace + glisser) pour se déplacer">100 %</button>
-      <button type="button" id="zoomIn" title="Zoom avant (molette vers le haut)" aria-label="Zoom avant">+</button>
+    <span class="vt-icons vt-layers">
+      <button type="button" class="vt-opt vt-ico" id="optSim" aria-pressed="false" aria-label="Rendu simulé (flou de l'aérographe)"
+        title="Rendu simulé : bords adoucis comme par le flou de l'aérographe (réglage « Flou de pulvérisation »)"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="9" height="11" rx="1.5"/><path d="M6.5 10V7h4v3"/><path d="M8.5 7V4.5h3"/><circle cx="16" cy="5" r=".9" fill="currentColor" stroke="none"/><circle cx="19.5" cy="3" r=".9" fill="currentColor" stroke="none"/><circle cx="19.5" cy="7" r=".9" fill="currentColor" stroke="none"/><circle cx="22" cy="5" r=".9" fill="currentColor" stroke="none"/><circle cx="17" cy="9" r=".9" fill="currentColor" stroke="none"/></svg></button>
+      <button type="button" class="vt-opt vt-ico" id="optNoBridges" aria-pressed="false" aria-label="Sans les ponts"
+        title="Prévisualisation sans les ponts : leur trace est peinte, comme après la retouche"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20"/><path d="M5 18v-4a7 7 0 0 1 14 0v4"/><path d="M9 18v-3"/><path d="M15 18v-3"/><path d="M3 3l18 18"/></svg></button>
+      <input type="checkbox" id="preview_sim" hidden>
+      <input type="checkbox" id="preview_nobridges" hidden>
     </span>
   </div>
-  <div class="viewtools" id="masktools" hidden>
-    <select id="maskKind" aria-label="Masque à peindre" title="Masque à peindre" style="width:auto; flex:none">
-      <option value="outline">Masque contours (détails clés)</option>
-      <option value="subject">Masque sujet (fond supprimé)</option>
-      <option value="silhouette">Masque silhouette (contour tracé)</option>
-    </select>
-    <div class="seg" role="group" aria-label="Outil">
-      <button type="button" id="mBrush" aria-pressed="true" title="Peindre une zone (B)">Pinceau</button>
-      <button type="button" id="mErase" aria-pressed="false" title="Effacer (E)">Gomme</button>
-      <button type="button" id="mSelect" aria-pressed="false" title="Sélection d'objet (S) : cliquez sur un objet pour l'ajouter au masque, recliquez dessus pour changer de découpage (partie, objet, ensemble), Alt + clic pour retirer un objet. Le pinceau et la gomme restent utilisables pour retoucher.">Objet</button>
+  <div class="viewtools masktools" id="masktools" hidden>
+    <div class="mrow">
+      <span class="mgroup" role="group" aria-label="Masque à peindre">
+        <button type="button" class="vt-opt vt-ico mkind" data-kind="outline" aria-pressed="false" aria-label="Masque contours" title="Masque contours (détails clés) : zones où les détails clés du pochoir de contours sont cherchés"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/><path d="M5 4l1.5 2M12 2.5V4.5M19 4l-1.5 2"/></svg><i class="mdot"></i></button>
+        <button type="button" class="vt-opt vt-ico mkind" data-kind="subject" aria-pressed="false" aria-label="Masque sujet" title="Masque sujet (fond supprimé) : le sujet à garder, le fond reste support nu"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="2" stroke-dasharray="3 2.5"/><circle cx="12" cy="9.5" r="3.2" fill="currentColor"/><path d="M6 19c.8-3.2 3.2-5 6-5s5.2 1.8 6 5z" fill="currentColor"/></svg><i class="mdot"></i></button>
+        <button type="button" class="vt-opt vt-ico mkind" data-kind="silhouette" aria-pressed="false" aria-label="Masque silhouette" title="Masque silhouette (contour tracé) : zone dont le contour est tracé par les contours"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 21c1-4.3 4-6.8 7.5-6.8s6.5 2.5 7.5 6.8"/></svg><i class="mdot"></i></button>
+      <span class="mzones" id="mZones" hidden role="group" aria-label="Zone de contours à peindre"></span>
+      <select id="maskKind" hidden aria-label="Masque à peindre" title="Masque à peindre" style="width:auto; flex:none">
+        <option value="outline">Masque contours (toutes les zones)</option>
+        <option value="subject">Masque sujet (fond supprimé)</option>
+        <option value="silhouette">Masque silhouette (contour tracé)</option>
+      </select>
+      </span>
+      <span class="mgroup">
+        <div class="seg" role="group" aria-label="Outil">
+          <button type="button" id="mBrush" aria-pressed="true" title="Pinceau (B) : peindre une zone. Maj + clic gauche : effacer">Pinceau</button>
+          <button type="button" id="mSelect" aria-pressed="false" title="Sélection d'objet (S) : cliquez sur un objet pour l'ajouter au masque, recliquez dessus pour changer de découpage (partie, objet, ensemble), Alt + clic pour retirer un objet. Le pinceau reste utilisable pour retoucher (Maj + clic : effacer).">Objet</button>
+        </div>
+        <button type="button" class="vt-opt" id="mSmart" aria-pressed="false" title="Pinceau intelligent (M) : ne peint (ou, avec Maj, n'efface) que la zone de couleur sous le centre du pinceau, et s'arrête à ses limites (bords, changement de teinte). La couleur est comparée en continu autour du pinceau.">Intelligent</button>
+      </span>
+      <span class="mgroup mopts">
+        <label class="vt-size" id="mSizeBox" title="Taille du pinceau : touches [ et ], ou Ctrl + molette sur l'image">Taille <input type="range" id="mSize" min="4" max="160" value="40" aria-label="Taille du pinceau"> <span id="mSizeV">40</span> px</label>
+        <label class="vt-size" id="smartOpts" hidden title="Sensibilité aux limites du pinceau intelligent : plus haut = s'arrête aux moindres changements de couleur (zone plus serrée), plus bas = déborde sur les teintes proches">Sensibilité
+          <input type="range" id="smartSens" min="0" max="100" value="50" aria-label="Sensibilité du pinceau intelligent"> <span id="smartSensV">50</span></label>
+      <div class="semopts" id="semOpts" hidden>
+        <label class="vt-size" title="Sensibilité de la sélection d'objet : plus haut = sélection plus large (les bords sont inclus plus généreusement), plus bas = plus serrée. Changer la valeur refait la dernière sélection.">Sensibilité
+          <input type="range" id="semSens" min="0" max="100" value="50" aria-label="Sensibilité de la sélection d'objet"> <span id="semSensV">50</span></label>
+        <label class="vt-sim" style="margin-left:0" title="Ajoute automatiquement à chaque objet sélectionné le trait sombre qui l'entoure (liseré noir d'un dessin, contour), souvent laissé hors de la sélection"><input type="checkbox" id="semRim"> Inclure le liseré sombre</label>
+        <span class="semrim" id="semRimBox">
+          <label class="vt-size" title="Largeur maximale du liseré ajouté, en pixels de l'image d'origine">jusqu'à
+            <input type="range" id="semRimPx" min="1" max="40" value="8" aria-label="Largeur maximale du liseré"> <span id="semRimPxV">8</span> px</label>
+          <label class="vt-size" title="Luminosité maximale d'un pixel du liseré (L*, 0 = noir, 100 = blanc) : plus haut = des gris plus clairs sont aussi pris">seuil
+            <input type="range" id="semDark" min="5" max="80" value="35" aria-label="Seuil de luminosité du liseré"> <span id="semDarkV">35</span></label>
+        </span>
+        <label class="vt-size" title="Agrandit en plus chaque objet sélectionné de cette distance tout autour (pixels de l'image d'origine)">Marge
+          <input type="range" id="semMargin" min="0" max="30" value="0" aria-label="Marge ajoutée autour de l'objet"> <span id="semMarginV">0</span> px</label>
+        <button type="button" id="semGrow" class="vt-small" title="Applique le liseré sombre et la marge ci-contre au masque affiché entier (par exemple un masque déjà fait ou peint au pinceau)">Agrandir le masque</button>
+      </div>
+      </span>
     </div>
-    <label class="vt-size">Taille <input type="range" id="mSize" min="4" max="160" value="40" aria-label="Taille du pinceau"> <span id="mSizeV">40</span> px</label>
-    <label class="vt-sim" style="margin-left:0"><input type="checkbox" id="mShow" checked> Afficher le masque</label>
-    <button type="button" id="mClear" class="vt-small">Tout effacer</button>
-    <select id="mCopy" aria-label="Copier ce masque dans un autre masque" title="Copie le masque affiché dans un autre masque (son contenu est remplacé)" style="width:auto; flex:none">
-      <option value="">Copier vers…</option>
-      <option value="outline">Masque contours</option>
-      <option value="subject">Masque sujet</option>
-      <option value="silhouette">Masque silhouette</option>
-    </select>
-    <label class="vt-sim mdet" style="margin-left:0"><input type="checkbox" id="mDetect"> Aperçu de la détection</label>
-    <span class="mdet detlegend" id="detLegend" hidden><span id="detInfo"></span><i style="background:#e11e28"></i>trait du pochoir <i style="background:#ff9600"></i>trop court <i style="background:#2896eb"></i>détecté, non retenu<span id="detPresentLeg"> <i style="background:#be3cc8"></i>déjà dans la couche</span></span>
-    <span class="hint" id="mInfo"></span>
+    <div class="mrow">
+      <span class="mgroup">
+        <label class="vt-sim" style="margin-left:0"><input type="checkbox" id="mShow" checked> Afficher le masque</label>
+        <select id="mColor" aria-label="Couleur du masque" title="Couleur d'affichage du masque affiché (chaque masque garde la sienne)" style="width:auto; flex:none"></select>
+        <label class="vt-size" title="Opacité d'affichage des masques sur l'image">Opacité
+          <input type="range" id="mAlpha" min="10" max="100" step="5" value="50" aria-label="Opacité du masque"> <span id="mAlphaV">50</span> %</label>
+      </span>
+      <span class="mgroup">
+        <button type="button" id="mClear" class="vt-small">Tout effacer</button>
+        <select id="mCopy" aria-label="Copier ce masque dans un autre masque" title="Copie le masque affiché dans un autre masque (son contenu est remplacé)" style="width:auto; flex:none">
+          <option value="">Copier vers…</option>
+          <option value="outline">Masque contours</option>
+          <option value="subject">Masque sujet</option>
+          <option value="silhouette">Masque silhouette</option>
+        </select>
+      </span>
+      <button type="button" class="vt-opt vt-ico mdet" id="optDetect" aria-pressed="false" aria-label="Aperçu de la détection"
+        title="Aperçu de la détection : traits du pochoir de contours que donnent les réglages actuels, sur l'image (rouge = trait gardé, orange = trop court, bleu = détecté mais non retenu)"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5.5 5.5"/><path d="M7 12c1.2-2.4 2.6-2.4 3.5-1s2.3 1.4 3.5-1"/></svg></button>
+      <input type="checkbox" id="mDetect" hidden>
+      <span class="mdet detlegend" id="detLegend" hidden><span id="detInfo"></span><i style="background:#e11e28"></i>trait du pochoir <i style="background:#ff9600"></i>trop court <i style="background:#2896eb"></i>détecté, non retenu<span id="detPresentLeg"> <i style="background:#be3cc8"></i>déjà dans la couche</span></span>
+      <span class="hint" id="mInfo"></span>
+    </div>
   </div>
   <div class="stage" id="stage"><div class="empty">Aucune image chargée.</div></div>
   <input type="range" id="compareRange" min="0" max="100" value="50" aria-label="Position de la comparaison" hidden>
@@ -1030,7 +1231,6 @@
   </div>
   <div class="legend">
     <span><i style="background:#dcd3c3"></i>matière</span>
-    <span><i style="background:#e6a98b"></i>ouverture</span>
     <button type="button" class="lgbtn" id="lgBridges" aria-pressed="true" title="Afficher / masquer les ponts sur les vues des couches"><i style="background:#e62828"></i>pont</button>
     <button type="button" class="lgbtn" id="lgLost" aria-pressed="true" title="Afficher / masquer les détails supprimés par les contraintes du matériau"><i style="background:#ff8c00"></i>détail supprimé</button>
     <button type="button" class="lgbtn" id="lgMerged" aria-pressed="true" title="Afficher / masquer les zones fusionnées au lieu d'un pont (chenal fermé ou petit îlot supprimé)"><i style="background:#963cc8"></i>fusion</button>
@@ -1048,9 +1248,9 @@ const MAT_FIELDS = ["min_opening_mm", "min_strip_mm", "bridge_width_mm", "min_ar
 const PARAMS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_mm",
   "image_scale", "image_height_factor", "image_pos_x", "image_pos_y", "margin_mm", "sheet_mode", "sheet_border_mm", "reg_dims", "machine_max_mm", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline",
   "pre_auto_levels", "pre_clahe", "pre_gamma", "manual_thresholds", "thresholds", "pre_saturation", "pre_sharpen", "pre_remove_bg",
-  "layer_colors",
+  "layer_colors", "layer_effects",
   "n_layers", "detail", "hue_weight", "color_vividness", "color_mode", "layering", "skip_support", "protect_lines",
-  "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_subject", "outline_subject_mask", "outline_subject_weak", "outline_subject_de", "outline_subject_gap_every_mm", "outline_subject_gap_mm", "stencil_style", "line_zones", "line_zones_color", "line_sil_color", "outline_auto_color", "outline_color",
+  "outline", "outline_target", "outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_subject", "outline_subject_mask", "outline_subject_weak", "outline_subject_de", "outline_subject_gap_every_mm", "outline_subject_gap_mm", "stencil_style", "line_zones", "line_zones_color", "line_sil_color", "outline_auto_color", "outline_color", "outline_zones", "outline_ref", "outline_whole_lines", "outline_line_sens", "outline_close_lines", "outline_channel",
   ...MAT_FIELDS, "merge_amount", "merge_channel_mm", "merge_channels", "merge_islands", "merge_line_islands",
   "tolerance_mm", "smooth_curves", "spray_mm", "px_per_mm"];
 const SUPPORT_COLORS = [["Blanc", "#ffffff"], ["Ivoire", "#f3ecd9"], ["Kraft", "#c8a26e"], ["Gris", "#9a9a9a"], ["Noir", "#1e1e1e"]];
@@ -1477,10 +1677,15 @@ function setLayout(scale, px, py) {
 
 function cropEditor(st) {
   st.innerHTML = `<div class="cropwrap" id="cropwrap"><img src="${IMG.src}" alt="Image source" draggable="false">
+    <div class="cropshade"><div class="cropdim" id="cropdim"></div></div>
     <div class="croprect" id="croprect">${["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(h => `<span class="h ${h}" data-h="${h}"></span>`).join("")}</div></div>`;
   const wrap = $("cropwrap"), rect = $("croprect");
   frameSource(st, wrap);
-  const draw = () => Object.assign(rect.style, { left: CROP.x * 100 + "%", top: CROP.y * 100 + "%", width: CROP.w * 100 + "%", height: CROP.h * 100 + "%" });
+  const dim = $("cropdim");
+  const draw = () => {
+    const r = { left: CROP.x * 100 + "%", top: CROP.y * 100 + "%", width: CROP.w * 100 + "%", height: CROP.h * 100 + "%" };
+    Object.assign(rect.style, r); Object.assign(dim.style, r);
+  };
   draw();
   let drag = null;
   rect.onpointerdown = e => {
@@ -1565,11 +1770,11 @@ function layoutEditor(st) {
         <div class="inner" style="left:${L0.im * k}px;top:${L0.im * k}px;right:${L0.im * k}px;bottom:${L0.im * k}px"></div>
       </div>
       ${mattop}
-      <div class="rz" title="Redimensionner (Maj = proportions libres)"></div>
+      <div class="lframe">${["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(h => `<span class="h ${h}" data-h="${h}" title="Redimensionner (Maj = proportions libres)"></span>`).join("")}</div>
       <div class="dim" style="left:${ox}px;top:${oy + L0.SH * k + 4}px"></div>
     </div>`;
   const lay = $("lay"), ghost = lay.querySelector(".ghost"), inpic = lay.querySelector(".inpic"),
-        rz = lay.querySelector(".rz"), dim = lay.querySelector(".dim");
+        frame = lay.querySelector(".lframe"), dim = lay.querySelector(".dim");
   function paint() {
     const L = layoutCalc();
     const bgW = L.w * k / CROP.w, bgH = L.h * k / CROP.h;
@@ -1580,37 +1785,55 @@ function layoutEditor(st) {
         backgroundPosition: `${-CROP.x * bgW}px ${-CROP.y * bgH}px`
       });
     }
-    Object.assign(rz.style, { left: ox + (L.x + L.w) * k - 7 + "px", top: oy + (L.y + L.h) * k - 7 + "px" });
+    Object.assign(frame.style, { left: ox + L.x * k + "px", top: oy + L.y * k + "px", width: L.w * k + "px", height: L.h * k + "px" });
     dim.textContent = `Support ${L.SW} × ${L.SH} mm · image ${Math.round(L.w)} × ${Math.round(L.h)} mm`
       + ` · à ${Math.round(L.x)} mm du bord gauche, ${Math.round(L.y)} mm du haut`;
   }
   paint();
   let drag = null;
   lay.onpointerdown = e => {
-    const isRz = e.target === rz;
-    if (!isRz && !e.target.classList.contains("pic")) return;
+    const hd = e.target.closest(".lframe .h")?.dataset.h || null;
+    if (!hd && !e.target.classList.contains("pic")) return;
     e.preventDefault();
     DRAGGING = true;
     // px per mm on screen (zoom included)
     const ks = k * lay.getBoundingClientRect().width / lay.offsetWidth;
-    drag = { rz: isRz, sx: e.clientX, sy: e.clientY, px: val("image_pos_x"), py: val("image_pos_y"), L: layoutCalc(), ks };
+    drag = { h: hd, sx: e.clientX, sy: e.clientY, px: val("image_pos_x"), py: val("image_pos_y"), L: layoutCalc(), ks };
     lay.setPointerCapture(e.pointerId);
   };
   lay.onpointermove = e => {
     if (!drag) return;
     const dx = (e.clientX - drag.sx) / drag.ks, dy = (e.clientY - drag.sy) / drag.ks, L = drag.L;
-    if (drag.rz) {
-      // top-left corner fixed
-      const w = Math.max(5, L.w + dx);
-      let h = w * L.ar * L.hf;
-      if (!$("keep_ratio").checked || e.shiftKey) {
-        h = Math.max(5, L.h + dy);
+    if (drag.h) {
+      // corner: the opposite corner stays in place; edge: the opposite edge stays in place
+      // (proportional: the image stays centred on the other axis). Shift or "Keep proportions"
+      // unticked: free stretching.
+      const H = drag.h, corner = H.length === 2, r = L.h / L.w;
+      let x0 = L.x, y0 = L.y, x1 = L.x + L.w, y1 = L.y + L.h;
+      if (H.includes("w")) x0 = Math.min(x0 + dx, x1 - 5);
+      if (H.includes("e")) x1 = Math.max(x1 + dx, x0 + 5);
+      if (H.includes("n")) y0 = Math.min(y0 + dy, y1 - 5);
+      if (H.includes("s")) y1 = Math.max(y1 + dy, y0 + 5);
+      let w = x1 - x0, h = y1 - y0;
+      const free = !$("keep_ratio").checked || e.shiftKey;
+      if (free) {
         setHF(h / (w * L.ar));
         if (e.shiftKey) $("keep_ratio").checked = false;
+      } else {
+        if (corner) {
+          // the larger relative change wins, the other side follows
+          if (Math.abs(w / L.w - 1) >= Math.abs(h / L.h - 1)) h = w * r; else w = h / r;
+          if (H.includes("w")) x0 = x1 - w;
+          if (H.includes("n")) y0 = y1 - h;
+        } else if (H === "e" || H === "w") {
+          h = w * r; y0 = L.y + L.h / 2 - h / 2;
+        } else {
+          w = h / r; x0 = L.x + L.w / 2 - w / 2;
+        }
       }
       $("image_scale").value = w / L.fitW * 100;
-      $("image_pos_x").value = (L.x + w / 2) / L.SW * 100;
-      $("image_pos_y").value = (L.y + h / 2) / L.SH * 100;
+      $("image_pos_x").value = (x0 + w / 2) / L.SW * 100;
+      $("image_pos_y").value = (y0 + h / 2) / L.SH * 100;
     } else {
       $("image_pos_x").value = clamp(drag.px + dx / L.SW * 100, -50, 150);
       $("image_pos_y").value = clamp(drag.py + dy / L.SH * 100, -50, 150);
@@ -1634,13 +1857,15 @@ let UP = { support: {}, material: {}, sheet: {} };
 const SUPPORT_FIELDS = ["support_w_mm", "support_h_mm", "support_color", "inner_margin_mm",
   "margin_mm", "sheet_mode", "sheet_border_mm", "reg_dims", "mat_preset", "mat_w_mm", "mat_h_mm", "mat_orient", "reg_corners", "reg_shape", "reg_size_mm", "layer_notches", "sheet_outline"];
 function setVals(o) {
+  // settings saved before the key-detail zones: the zones are rebuilt from the outline_* fields
+  if (o && "outline_method" in o && !("outline_zones" in o) && $("outline_zones")) $("outline_zones").value = "";
   for (const [k, v] of Object.entries(o || {})) {
     const e = $(k); if (!e) continue;
     if (e.type === "checkbox") e.checked = !!v; else e.value = v;
   }
   if (!$("stock_preset").value) $("stock_preset").value = "custom";   // deleted ★ format
   syncSheetMode(); syncStockPreset(); syncMat();   // state of the fields, sheet, cutting mat and material sheet
-  methodHint(); syncStyle();
+  methodHint(); syncStyle(); renderFx(true); zonesAfterLoad();
 }
 async function presetCall(method, url, body) {
   try {
@@ -1797,6 +2022,7 @@ async function resetSettings() {
   $("material").value = d.material; applyMaterial(d.material); delete d.material;
   setVals(d);
   $("layer_colors").value = ""; showPaletteChoice(""); PAL_LAST = "";
+  HIDDEN.clear();                                    // every layer shown again in the preview
   CROP = { x: 0, y: 0, w: 1, h: 1 }; $("crop_ratio").value = "free";
   $("image_scale").value = 100; $("image_pos_x").value = 50; $("image_pos_y").value = 50;
   setHF(1); $("keep_ratio").checked = true;
@@ -1810,6 +2036,7 @@ async function resetSettings() {
   if (prefs().auto_fit !== false) { fitToStencil(); clearTimeout(timer); }
   render();
   process();
+  historySoon();                                     // the reset can be undone (Ctrl + Z)
   status("Réglages par défaut rétablis (image conservée)");
 }
 // Outline sensitivity: progressive scale since 1.2 (marker sens_scale = 2). Older saved values
@@ -1878,8 +2105,15 @@ const SECTION_SUMMARY = {
     (val("color_vividness") > 0 ? ` · vivacité ${val("color_vividness")} %` : ""),
   "Contours des détails clés": () => val("stencil_style") === "line"
     ? "trait seul : " + ([val("outline") && "détails", val("outline_subject") && "silhouette", val("line_zones") && "coloriage"].filter(Boolean).join(" · ") || "aucun trait")
+    : val("outline") && zState().zones.length > 1 ? `activé · ${zState().zones.filter(z => z.on !== false).length} zones${val("outline_subject") ? " · silhouette" : ""}`
     : val("outline") ? `activé · ${MASK_EMPTY ? "toute l'image" : "masque"} · sens. ${val("outline_sensitivity")}${val("outline_subject") ? " · silhouette" : ""}`
     : val("outline_subject") ? "silhouette seule" : "désactivé",
+  "Effets des couches": () => {
+    const s = fxState();
+    const ls = Object.values(s.layers).filter(L => L.on && L.fx.some(f => f.on));
+    const n = ls.reduce((a, L) => a + L.fx.filter(f => f.on).length, 0);
+    return !n ? "aucun" : !s.on ? "désactivés" : `${n} effet${n > 1 ? "s" : ""} sur ${ls.length} couche${ls.length > 1 ? "s" : ""}`;
+  },
   "Machine de découpe": () => {
     const m = $("machine").selectedOptions[0], st = stockSheet(), mat = cutMat();
     return [m ? m.text.split(" (")[0].replace(/^Silhouette /, "") : "", mat ? mat.label : "Rouleau", st ? st.label : ""].filter(Boolean).join(" · ");
@@ -2014,7 +2248,7 @@ const TIPS = {
   color_vividness: "Couleurs calculées des couches (bouton Auto). Elles sont mesurées sur la photo d'origine, sans le prétraitement. 0 % = moyenne des pixels de chaque ton, souvent terne (les teintes voisines, ombres et reflets se compensent) ; 100 % = même teinte et même clarté, avec la saturation des pixels les plus vifs. Ne change pas la découpe. Sans effet en noir et blanc.",
   color_mode: "Couleur, noir et blanc, ou automatique (détecté selon l'image).",
   layering: "Cumulatif : chaque pochoir ouvre sa couleur et toutes les plus foncées (moins de raccords). Exclusif : chaque pochoir n'ouvre que sa couleur.",
-  protect_lines: "Les traits fins, sombres ou clairs (yeux, sourcils, narines, mèches), gardent leur teinte au lieu d'être absorbés par la zone voisine lors de la simplification. Les traits plus fins que l'ouverture mini disparaissent quand même : utilisez alors « Retracer les détails clés estompés ».",
+  protect_lines: "Les traits fins, sombres ou clairs (yeux, sourcils, narines, mèches), gardent leur teinte au lieu d'être absorbés par la zone voisine lors de la simplification. Les traits plus fins que l'ouverture mini disparaissent quand même : utilisez alors « Détails clés estompés ».",
   outline_target: "Pochoir séparé : un pochoir de plus, peint en dernier, de la couleur choisie. Dans une couche : pas de pochoir en plus, les traits sont découpés dans une couche de couleur (plus foncée que la zone qu'ils traversent).",
   skip_support: "La teinte de l'image la plus proche de la couleur du support n'a pas de pochoir : le support reste visible à la place.",
   outline: "Retrace d'un trait fin les détails estompés par la simplification et le flou de l'aérographe, dans un pochoir séparé ou dans une couche de couleur.",
@@ -2087,7 +2321,483 @@ function applyTips() {
   set("aside input[type=text][placeholder^=\"Nom\"]", "Nom du réglage à enregistrer (Entrée pour valider, Échap pour annuler)");
 }
 
+// ---------------- Layer effects (one ordered stack per colour layer) ----------------
+// State in the hidden field `layer_effects` (JSON, read by stencilit/effects.py):
+// {on, layers: {"1": {on, fx: [{id, type, on, p: {param: value}}]}}}
+let FXCAT = {};                  // effect catalogue (/api/effects)
+const FXOPEN = new Set();        // effects whose settings are unfolded (ids)
+let FXSIG = "", FXDRAG = null;
+const fxId = () => Math.random().toString(36).slice(2, 9);
+const escH = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function fxState() {
+  let s = null;
+  try { s = JSON.parse($("layer_effects").value || "null"); } catch (e) { s = null; }
+  if (!s || typeof s !== "object") s = {};
+  if (typeof s.on !== "boolean") s.on = true;
+  if (typeof s.sync !== "boolean") s.sync = true;
+  if (!["support", "nearest", "lighter"].includes(s.freed)) s.freed = "support";
+  if (!s.layers || typeof s.layers !== "object") s.layers = {};
+  for (const L of Object.values(s.layers)) {
+    if (!Array.isArray(L.fx)) L.fx = [];
+    if (typeof L.on !== "boolean") L.on = true;
+    L.fx = L.fx.filter(f => f && typeof f === "object");
+    L.fx.forEach(f => { if (!f.id) f.id = fxId(); if (!f.p || typeof f.p !== "object") f.p = {}; if (typeof f.on !== "boolean") f.on = true; });
+  }
+  return s;
+}
+function fxLayerOf(s, n) { return s.layers[n] || (s.layers[n] = { on: true, fx: [] }); }
+function fxSave(s, compute = true) {
+  for (const [k, L] of Object.entries(s.layers)) if (!L.fx.length && L.on) delete s.layers[k];
+  const custom = !s.on || s.sync === false || s.freed !== "support";      // options kept even without effects
+  $("layer_effects").value = (Object.keys(s.layers).length || custom) ? JSON.stringify(s) : "";
+  renderFx(true); updateSummaries();
+  if (compute) schedule();
+}
+// Colour layers shown: those of the last computation, else the requested number of stencils;
+// layers that no longer exist but still have effects are listed as "absent" (kept, not applied)
+function fxLayers() {
+  const out = LAST && LAST.layers
+    ? LAST.layers.filter(L => L.kind !== "outline").map(L => ({ n: L.index, color: L.color }))
+    : (val("stencil_style") === "line" ? [] : Array.from({ length: val("n_layers") }, (_, i) => ({ n: i + 1, color: null })));
+  const s = fxState();
+  Object.keys(s.layers).map(Number).filter(n => !out.some(L => L.n === n) && s.layers[n].fx.length)
+    .sort((a, b) => a - b).forEach(n => out.push({ n, color: null, orphan: true }));
+  return out;
+}
+function fxValue(spec, f) { const v = f.p[spec.key]; return v === undefined || v === null ? spec.default : v; }
+function fxShown(spec, f) {
+  if (!spec.when) return true;
+  const ps = FXCAT[f.type].params;
+  return Object.entries(spec.when).every(([k, v]) => {
+    const cur = fxValue(ps.find(q => q.key === k), f);
+    return Array.isArray(v) ? v.includes(cur) : cur === v;
+  });
+}
+function fxFmt(spec, v) {
+  if (spec.kind === "choice") { const c = spec.choices.find(c => c[0] === v); return c ? I18N.t(c[1]) : v; }
+  return `${+(+v).toFixed(2)}${spec.unit ? (spec.unit === "°" ? "°" : " " + spec.unit) : ""}`;
+}
+function fxSummary(f) {
+  const d = FXCAT[f.type]; if (!d) return "";
+  return d.params.filter(q => fxShown(q, f)).map(q => fxFmt(q, fxValue(q, f))).join(" · ");
+}
+// Active effects of a layer (for the layer cards)
+function fxActive(n) {
+  const s = fxState(), L = s.layers[n];
+  return s.on && L && L.on ? L.fx.filter(f => f.on && FXCAT[f.type]) : [];
+}
+function fxParamHtml(f, q) {
+  const v = fxValue(q, f), tip = escH(q.tip || ""), hid = fxShown(q, f) ? "" : " hidden";
+  if (q.kind === "choice")
+    return `<div class="fxp"${hid}><label class="full" title="${tip}">${escH(q.label)}</label>
+      <select data-k="${q.key}" title="${tip}">${q.choices.map(c => `<option value="${escH(c[0])}"${c[0] === v ? " selected" : ""}>${escH(c[1])}</option>`).join("")}</select></div>`;
+  return `<label class="row fxp" title="${tip}"${hid}>${escH(q.label)} <span class="v">${fxFmt(q, v)}</span>
+    <input type="range" data-k="${q.key}" min="${q.min}" max="${q.max}" step="${q.step}" value="${v}"></label>`;
+}
+function renderFx(force) {
+  const box = $("fxList"); if (!box) return;
+  const layers = fxLayers(), s = fxState();
+  const sig = JSON.stringify(layers) + $("layer_effects").value + Object.keys(FXCAT).length;
+  if (!force && sig === FXSIG) return;
+  FXSIG = sig;
+  $("fxAll").checked = s.on;
+  $("fxSync").checked = s.sync; $("fxFreed").value = s.freed;
+  const cumul = val("layering") === "cumulative";
+  $("fxSync").disabled = $("fxFreed").disabled = cumul; $("fxExclHint").hidden = !cumul;
+  // focused control kept across the rebuild (keyboard use of the sliders)
+  const a = document.activeElement, keep = a && box.contains(a)
+    ? { id: a.closest(".fxitem")?.dataset.id, k: a.dataset.k, cls: a.className.split(" ")[0], l: a.closest(".fxlayer")?.dataset.l } : null;
+  if (!layers.length) {
+    box.innerHTML = `<p class="hint">Les effets s'appliquent aux couches en aplat (pas au style trait seul).</p>`;
+    return;
+  }
+  // effects grouped by category, in the order of the catalogue
+  const cats = [...new Set(Object.values(FXCAT).map(d => d.category || ""))];
+  const addOpts = cats.map(c => `<optgroup label="${escH(c)}">` + Object.entries(FXCAT).filter(([, d]) => (d.category || "") === c)
+    .map(([k, d]) => `<option value="${k}" title="${escH(d.tip)}">${escH(d.label)}</option>`).join("") + "</optgroup>").join("");
+  box.innerHTML = layers.map(Ly => {
+    const L = s.layers[Ly.n] || { on: true, fx: [] };
+    const others = layers.filter(o => o.n !== Ly.n && !o.orphan);
+    const items = L.fx.map(f => {
+      const d = FXCAT[f.type], open = FXOPEN.has(f.id);
+      if (!d) return "";
+      return `<div class="fxitem${f.on ? "" : " off"}" data-id="${f.id}">
+        <div class="fxih">
+          <span class="fxgrip" draggable="true" tabindex="0" role="button" aria-label="Déplacer l'effet (flèches haut / bas)"
+            title="Glisser pour changer l'ordre ou déplacer vers une autre couche (Ctrl : copier). Clavier : flèches haut / bas">≡</span>
+          <input type="checkbox" class="fxon"${f.on ? " checked" : ""} aria-label="Activer l'effet" title="Activer / désactiver cet effet (ses réglages sont gardés)">
+          <button type="button" class="fxtog" aria-expanded="${open}" title="${escH(d.tip)}"><span class="chev" aria-hidden="true">${open ? "▾" : "▸"}</span><span class="fxname">${escH(d.label)}</span><span class="fxsum" data-noi18n>${escH(fxSummary(f))}</span></button>
+          <button type="button" class="fxdel" aria-label="Supprimer l'effet" title="Supprimer cet effet">×</button>
+        </div>
+        <div class="fxparams"${open ? "" : " hidden"}>${d.params.map(q => fxParamHtml(f, q)).join("")}</div>
+      </div>`;
+    }).join("");
+    return `<div class="fxlayer${L.on ? "" : " off"}${Ly.orphan ? " orphan" : ""}" data-l="${Ly.n}">
+      <div class="fxlh">
+        <span class="fxsw" style="background:${Ly.color || "transparent"}"></span>
+        <input type="checkbox" class="fxlon"${L.on ? " checked" : ""} title="Activer les effets de la couche ${Ly.n}" aria-label="Activer les effets de la couche ${Ly.n}">
+        <b>Couche ${Ly.n}</b>${Ly.orphan ? `<span class="hint" title="Cette couche n'existe pas avec le nombre de pochoirs actuel : ses effets sont gardés mais pas appliqués">absente</span>` : ""}
+        ${L.fx.length && others.length ? `<select class="fxcopy" title="Copier la pile d'effets de cette couche vers une autre couche (elle remplace la sienne)">
+          <option value="">⧉ Copier vers…</option>${others.map(o => `<option value="${o.n}">Couche ${o.n}</option>`).join("")}${others.length > 1 ? `<option value="all">toutes les couches</option>` : ""}</select>` : ""}
+        ${Ly.orphan ? "" : `<select class="fxadd" title="Ajouter un effet à cette couche (à la fin de sa pile)"><option value="">+ Ajouter…</option>${addOpts}</select>`}
+      </div>
+      <div class="fxitems">${items || `<p class="hint fxnone">aucun effet</p>`}</div>
+    </div>`;
+  }).join("");
+  if (keep && keep.l) {
+    const sel = keep.id ? `.fxitem[data-id="${keep.id}"] ${keep.k ? `[data-k="${keep.k}"]` : "." + keep.cls}`
+                        : `.fxlayer[data-l="${keep.l}"] .${keep.cls}`;
+    try { box.querySelector(sel)?.focus(); } catch (e) { /* invalid selector: focus lost */ }
+  }
+}
+function fxFind(s, id) {
+  for (const [n, L] of Object.entries(s.layers)) { const i = L.fx.findIndex(f => f.id === id); if (i >= 0) return { n, L, i, f: L.fx[i] }; }
+  return null;
+}
+function setupFx() {
+  const box = $("fxList");
+  document.addEventListener("langchange", () => renderFx(true));     // summaries are built translated
+  $("fxAll").addEventListener("change", () => { const s = fxState(); s.on = $("fxAll").checked; fxSave(s); });
+  $("fxSync").addEventListener("change", () => { const s = fxState(); s.sync = $("fxSync").checked; fxSave(s); });
+  $("fxFreed").addEventListener("change", () => { const s = fxState(); s.freed = $("fxFreed").value; fxSave(s); });
+  $("layering").addEventListener("change", () => renderFx(true));
+  box.addEventListener("change", e => {
+    const t = e.target, s = fxState(), ly = t.closest(".fxlayer"), it = t.closest(".fxitem");
+    if (t.classList.contains("fxadd")) {
+      const type = t.value; if (!type) return;
+      const f = { id: fxId(), type, on: true, p: {} };
+      FXCAT[type].params.forEach(q => f.p[q.key] = q.default);
+      fxLayerOf(s, ly.dataset.l).fx.push(f); FXOPEN.add(f.id);
+      return fxSave(s);
+    }
+    if (t.classList.contains("fxcopy")) {
+      const src = fxLayerOf(s, ly.dataset.l), to = t.value; if (!to) return;
+      const targets = to === "all" ? fxLayers().filter(o => !o.orphan && String(o.n) !== ly.dataset.l).map(o => o.n) : [to];
+      targets.forEach(n => { s.layers[n] = { on: true, fx: src.fx.map(f => ({ ...f, id: fxId(), p: { ...f.p } })) }; });
+      status(to === "all" ? "Effets copiés vers toutes les couches" : `Effets copiés vers la couche ${to}`);
+      return fxSave(s);
+    }
+    if (t.classList.contains("fxlon")) { fxLayerOf(s, ly.dataset.l).on = t.checked; return fxSave(s); }
+    const hit = it && fxFind(s, it.dataset.id); if (!hit) return;
+    if (t.classList.contains("fxon")) { hit.f.on = t.checked; return fxSave(s); }
+    if (t.dataset.k) {
+      const q = FXCAT[hit.f.type].params.find(q => q.key === t.dataset.k);
+      hit.f.p[q.key] = q.kind === "choice" ? t.value : q.kind === "int" ? parseInt(t.value, 10) : parseFloat(t.value);
+      fxSave(s);
+    }
+  });
+  // live value of a slider while dragging (the computation starts on release)
+  box.addEventListener("input", e => {
+    const t = e.target; if (t.type !== "range" || !t.dataset.k) return;
+    const hit = fxFind(fxState(), t.closest(".fxitem").dataset.id); if (!hit) return;
+    const q = FXCAT[hit.f.type].params.find(q => q.key === t.dataset.k);
+    t.closest("label").querySelector(".v").textContent = fxFmt(q, t.value);
+  });
+  box.addEventListener("click", e => {
+    const it = e.target.closest(".fxitem"); if (!it) return;
+    if (e.target.closest(".fxtog")) {
+      const id = it.dataset.id; FXOPEN.has(id) ? FXOPEN.delete(id) : FXOPEN.add(id);
+      return renderFx(true);
+    }
+    if (e.target.closest(".fxdel")) {
+      const s = fxState(), hit = fxFind(s, it.dataset.id); if (!hit) return;
+      hit.L.fx.splice(hit.i, 1); FXOPEN.delete(it.dataset.id);
+      status(`Effet supprimé : ${FXCAT[hit.f.type]?.label || hit.f.type}`);
+      fxSave(s);
+    }
+  });
+  box.addEventListener("keydown", e => {
+    if (!e.target.classList.contains("fxgrip") || !["ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    const s = fxState(), hit = fxFind(s, e.target.closest(".fxitem").dataset.id); if (!hit) return;
+    const j = hit.i + (e.key === "ArrowUp" ? -1 : 1);
+    if (j < 0 || j >= hit.L.fx.length) return;
+    hit.L.fx.splice(hit.i, 1); hit.L.fx.splice(j, 0, hit.f);
+    fxSave(s);
+    box.querySelector(`.fxitem[data-id="${hit.f.id}"] .fxgrip`)?.focus();
+  });
+  // Drag & drop: reorder in a layer, move to another layer, Ctrl = copy
+  const clearMarks = () => box.querySelectorAll(".drop, .drop-before, .drop-after, .dragging")
+    .forEach(el => el.classList.remove("drop", "drop-before", "drop-after", "dragging"));
+  box.addEventListener("dragstart", e => {
+    const g = e.target.closest && e.target.closest(".fxgrip"); if (!g) return;
+    const it = g.closest(".fxitem");
+    FXDRAG = it.dataset.id;
+    e.dataTransfer.effectAllowed = "copyMove";
+    try { e.dataTransfer.setData("text/plain", FXDRAG); e.dataTransfer.setDragImage(it, 10, 10); } catch (err) { /* old browser */ }
+    it.classList.add("dragging");
+  });
+  const dropPlace = e => {
+    const ly = e.target.closest && e.target.closest(".fxlayer"); if (!ly || ly.classList.contains("orphan")) return null;
+    const it = e.target.closest(".fxitem");
+    if (it) { const r = it.getBoundingClientRect(); return { ly, it, after: e.clientY > r.top + r.height / 2 }; }
+    return { ly, it: null };
+  };
+  box.addEventListener("dragover", e => {
+    if (!FXDRAG) return;
+    const d = dropPlace(e); if (!d) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = e.ctrlKey || e.metaKey ? "copy" : "move";
+    box.querySelectorAll(".drop, .drop-before, .drop-after").forEach(el => el.classList.remove("drop", "drop-before", "drop-after"));
+    if (d.it) d.it.classList.add(d.after ? "drop-after" : "drop-before"); else d.ly.classList.add("drop");
+  });
+  box.addEventListener("dragend", () => { FXDRAG = null; clearMarks(); });
+  box.addEventListener("drop", e => {
+    if (!FXDRAG) return;
+    const d = dropPlace(e); clearMarks();
+    const id = FXDRAG; FXDRAG = null;
+    if (!d) return;
+    e.preventDefault();
+    const s = fxState(), hit = fxFind(s, id); if (!hit) return;
+    const copy = e.ctrlKey || e.metaKey;
+    const f = copy ? { ...hit.f, id: fxId(), p: { ...hit.f.p } } : hit.f;
+    if (!copy) hit.L.fx.splice(hit.i, 1);
+    const dest = fxLayerOf(s, d.ly.dataset.l);
+    let j = dest.fx.length;
+    if (d.it) { const k = dest.fx.findIndex(x => x.id === d.it.dataset.id); if (k >= 0) j = k + (d.after ? 1 : 0); }
+    dest.fx.splice(j, 0, f);
+    if (FXOPEN.has(id)) FXOPEN.add(f.id);
+    fxSave(s);
+  });
+}
+// Layer card badge: number of active effects, click = settings of that layer
+function fxBadge(L) {
+  if (L.kind === "outline") return "";
+  const fx = fxActive(L.index); if (!fx.length) return "";
+  return `<button type="button" class="fxbadge" data-idx="${L.index}" title="Effets de la couche ${L.index} — cliquer pour les régler">✦ ${fx.length}</button>`;
+}
+function showFxLayer(n) {
+  const box = $("fxList"); openSectionOf(box);
+  const ly = box.querySelector(`.fxlayer[data-l="${n}"]`);
+  if (ly) { ly.scrollIntoView({ block: "nearest" }); (ly.querySelector(".fxadd") || ly.querySelector(".fxlon")).focus({ preventScroll: true }); }
+}
+
+// Some browsers (Firefox in particular) put back the values the fields had before a reload. The
+// interface state captured below as "Default settings" must be the page's own defaults: every
+// field is brought back to the value written in the HTML, and the browser is asked not to restore it.
+function resetFormControls() {
+  document.querySelectorAll("input, select, textarea").forEach(e => {
+    if (e.type === "file") return;
+    e.setAttribute("autocomplete", "off");
+    if (e.type === "checkbox" || e.type === "radio") e.checked = e.defaultChecked;
+    else if (e.tagName === "SELECT") {
+      const i = [...e.options].findIndex(o => o.defaultSelected);
+      if (e.options.length) e.selectedIndex = i >= 0 ? i : 0;
+    } else e.value = e.defaultValue;
+  });
+}
+// ---------------- Key-detail zones ----------------
+// Each zone = its own painted mask (Masks tab, outline mask; not painted = whole image), its own
+// detection settings and a destination: an outline layer (A, B…; zones sent to the same one are
+// merged into one stencil) or the colour layers (darkest / nearest). The colour belongs to the
+// outline layer. State in the hidden field `outline_zones` (JSON, read by pipeline.outline_plan);
+// the fields of the outline section edit the zone shown (ZONE_CUR).
+let ZONE_CUR = "z1";
+let ZCV = {};                     // zone id -> mask canvas (MASK = the zone shown)
+const ZOBJ = {};                  // zone id -> its mask contains an object selection (exact)
+const zkey = id => "outline:" + id;
+const isGroup = d => /^[A-Z]$/.test(d || "");
+const mcol = k => MASK_COLORS[String(k).split(":")[0]];
+function zoneCanvas(id) { if (!ZCV[id]) ZCV[id] = maskCanvas(); return ZCV[id]; }
+function zLegacy() {               // one zone made of the outline fields (earlier projects)
+  const t = val("outline_target"), dest = t === "stencil" ? "A" : t;
+  return { zones: [{ id: "z1", name: "Zone 1", on: true, method: val("outline_method"), sensitivity: val("outline_sensitivity"),
+                     width_mm: val("outline_width_mm"), min_length_mm: val("outline_min_length_mm"), dest, ref: val("outline_ref"), whole: val("outline_whole_lines"), line_sens: val("outline_line_sens"), close: val("outline_close_lines"), channel: val("outline_channel") }],
+           groups: { A: { auto: val("outline_auto_color"), color: val("outline_color") } }, sil_dest: dest };
+}
+function zState() {
+  let s = null;
+  try { s = JSON.parse($("outline_zones").value || "null"); } catch (e) { s = null; }
+  if (!s || !Array.isArray(s.zones) || !s.zones.length) s = zLegacy();
+  if (!s.groups || typeof s.groups !== "object") s.groups = {};
+  if (!s.sil_dest) s.sil_dest = s.zones[0].dest;
+  return s;
+}
+const zUsed = s => new Set([...s.zones.map(z => z.dest), s.sil_dest].filter(isGroup));
+function zSave(s) {
+  const used = zUsed(s);
+  for (const g of used) if (!s.groups[g]) s.groups[g] = { auto: true, color: "#1e1e1e" };
+  for (const g of Object.keys(s.groups)) if (!used.has(g)) delete s.groups[g];
+  $("outline_zones").value = JSON.stringify(s);
+}
+const zCur = s => s.zones.find(z => z.id === ZONE_CUR) || s.zones[0];
+const zNewGroup = s => [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].find(g => !zUsed(s).has(g)) || "Z";
+// outline layer whose colour the section shows: the zone's, else the silhouette's (line style: the first)
+function colourGroup(s, z) {
+  if (isGroup(z.dest)) return z.dest;
+  if (val("outline_subject") && isGroup(s.sil_dest)) return s.sil_dest;
+  if (val("stencil_style") === "line") return Object.keys(s.groups).sort()[0] || "A";
+  return null;
+}
+const destLabel = d => d === "darkest" ? "dans la couche la plus foncée" : d === "nearest" ? "dans la couche de teinte la plus proche" : `Contours ${d}`;
+// fields of the section -> zone shown (and the colour of its outline layer)
+function fieldsToZone() {
+  const s = zState(), z = zCur(s);
+  Object.assign(z, { method: val("outline_method"), sensitivity: val("outline_sensitivity"),
+                     width_mm: val("outline_width_mm"), min_length_mm: val("outline_min_length_mm"), ref: val("outline_ref"), whole: val("outline_whole_lines"), line_sens: val("outline_line_sens"), close: val("outline_close_lines"), channel: val("outline_channel") });
+  const g = colourGroup(s, z);
+  if (g) s.groups[g] = { auto: val("outline_auto_color"), color: val("outline_color") };
+  zSave(s);
+}
+// zone shown -> fields of the section
+function zoneToFields() {
+  const s = zState(), z = zCur(s);
+  ZONE_CUR = z.id;
+  $("outline_method").value = [...$("outline_method").options].some(o => o.value === z.method) ? z.method : "canny"; $("outline_sensitivity").value = z.sensitivity;
+  $("outline_width_mm").value = z.width_mm; $("outline_min_length_mm").value = z.min_length_mm;
+  $("outline_ref").value = ["layers", "effects", "image"].includes(z.ref) ? z.ref : "layers";
+  $("outline_close_lines").value = ["", "median", "outer", "inner"].includes(z.close) ? z.close : "";
+  $("outline_channel").value = ["light", "colour", "both"].includes(z.channel) ? z.channel : "light";
+  $("outline_whole_lines").checked = z.whole === true;
+  $("outline_line_sens").value = Number.isFinite(+z.line_sens) ? z.line_sens : 50;
+  syncLineSens();
+  $("outline_target").value = isGroup(z.dest) ? "stencil" : z.dest;
+  const g = colourGroup(s, z), gc = g && (s.groups[g] || { auto: true, color: "#1e1e1e" });
+  if (gc) { $("outline_auto_color").checked = gc.auto !== false; $("outline_color").value = gc.color || "#1e1e1e"; }
+  $("outline_color").disabled = $("outline_auto_color").checked;
+  showValues(); methodHint(); syncOutlineTarget(); renderOutlineSwatches(); updateSummaries(); syncOutlineGroups();
+}
+// mask canvas of the zone shown
+// Whole lines: own detection sensitivity instead of the point sensitivity; the label also shows the
+// lines kept / detected in the zone by the last computation
+function syncOutlineGroups() { if ($("zoneGroup")) $("zoneGroup").hidden = !$("outline").checked; }
+const LINE_SENS_TIP = "Traits entiers : contraste à partir duquel un trait compte comme détecté, comparé aux traits les plus marqués de la zone. Bas : seulement les traits très marqués · haut : aussi les traits faibles. Un trait détecté est gardé en entier ; les traits plus courts que la longueur mini ne comptent pas. Les graduations marquent les sensibilités où un trait apparaît.";
+function syncLineSens() {
+  const whole = $("outline_whole_lines").checked;
+  $("sensBox").hidden = whole; $("lineSensBox").hidden = !whole;
+  const v = +$("outline_line_sens").value, c = LAST && LAST.zone_lines && LAST.zone_lines[ZONE_CUR];
+  const steps = c && Array.isArray(c[2]) ? c[2] : [];
+  // marks on the slider: the sensitivities from which a line of the zone appears
+  $("lineSensTicks").innerHTML = [...new Set(steps.map(x => Math.round(x)))].map(x => `<option value="${x}"></option>`).join("");
+  if (!c || !c[1]) { $("outline_line_sens_v").textContent = `${v}`; $("lineSensBox").title = LINE_SENS_TIP; return; }
+  const kept = steps.length ? steps.filter(x => x <= v).length : c[0], next = steps.find(x => x > v);
+  $("outline_line_sens_v").textContent = `${v} · ${kept} / ${c[1]}` + (next != null ? ` · ${Math.ceil(next)} ▸` : "");
+  $("lineSensBox").title = LINE_SENS_TIP + (next != null ? `\nProchain trait à ${Math.ceil(next)}.` : "");
+}
+function zoneActivate(id) {
+  ZONE_CUR = id;
+  if (!IMG) return;
+  MASK = zoneCanvas(id);
+  MASK_EMPTY = maskIsEmpty(MASK);
+  if (!MASKV[zkey(id)]) MASKV[zkey(id)] = { png: null, exact: false };
+  let n = 0;
+  if (!MASK_EMPTY) { const d = MASK.getContext("2d").getImageData(0, 0, MASK.width, MASK.height).data; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; }
+  maskInfo(Math.round(1000 * n / (MASK.width * MASK.height)) / 10);
+}
+function destOptions(s) {
+  const gs = [...new Set([...Object.keys(s.groups), ...zUsed(s)])].sort();
+  return gs.map(g => `<option value="${g}">Contours ${g}</option>`).join("") +
+    `<option value="new">+ nouvelle couche de contours</option>` +
+    `<option value="darkest">dans la couche la plus foncée</option><option value="nearest">dans la couche de teinte la plus proche</option>`;
+}
+function renderZones() {
+  if (!$("zoneBar")) return;
+  const s = zState(), z = zCur(s);
+  const html = s.zones.map(x => `<button type="button" class="vt-opt zchip${x.on === false ? " off" : ""}" data-z="${x.id}" aria-pressed="${x.id === z.id}" title="${escH(destLabel(x.dest))}" data-noi18n>${escH(x.name)}</button>`).join("") +
+    `<button type="button" class="vt-opt zadd" title="Ajouter une zone de contours (copie des réglages de la zone affichée)" aria-label="Ajouter une zone de contours">+</button>`;
+  $("zoneBar").innerHTML = html; $("mZones").innerHTML = html;
+  $("mZones").hidden = maskKind() !== "outline";
+  $("zoneOn").checked = z.on !== false;
+  $("zoneDel").disabled = s.zones.length < 2 || z.id === "z1";
+  $("zoneDest").innerHTML = destOptions(s); $("zoneDest").value = z.dest;
+  $("silDest").innerHTML = destOptions(s); $("silDest").value = s.sil_dest;
+}
+function zonesAfterLoad() {        // after the settings were set (restore, undo, project, reset)
+  if (!$("zoneBar")) return;
+  const s = zState();
+  zSave(s);
+  if (!s.zones.some(z => z.id === ZONE_CUR)) ZONE_CUR = s.zones[0].id;
+  zoneToFields(); zoneActivate(ZONE_CUR); renderZones();
+}
+function zoneSelect(id) {
+  if (id === ZONE_CUR) return;
+  fieldsToZone();
+  ZONE_CUR = id;
+  zoneToFields(); zoneActivate(id); renderZones();
+  SEM_LAST = null;
+  if (VIEW === "mask") render(); else detectPreview();
+}
+function zoneAdd() {
+  fieldsToZone();
+  const s = zState(), z = zCur(s);
+  const n = Math.max(0, ...s.zones.map(x => parseInt(x.id.slice(1), 10) || 0)) + 1;
+  const nz = { ...z, id: "z" + n, name: `Zone ${n}`, on: true };
+  s.zones.splice(s.zones.indexOf(z) + 1, 0, nz);
+  zSave(s);
+  ZONE_CUR = nz.id;
+  zoneToFields(); zoneActivate(nz.id); renderZones();
+  status(`Zone ajoutée : ${nz.name} (non peinte = toute l'image : peignez-la dans l'onglet Masques)`);
+  if (VIEW === "mask") render();
+  schedule();
+}
+async function zoneDelete() {
+  const s = zState(), z = zCur(s);
+  if (z.id === "z1" || s.zones.length < 2) return;
+  s.zones = s.zones.filter(x => x.id !== z.id);
+  zSave(s);
+  delete ZCV[z.id]; delete ZOBJ[z.id]; delete MASKV[zkey(z.id)];
+  if (SID) fetch("/api/mask", { method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: SID, png: null, zone: z.id }) }).catch(() => {});
+  ZONE_CUR = s.zones[0].id;
+  zoneToFields(); zoneActivate(ZONE_CUR); renderZones();
+  status(`Zone supprimée : ${z.name}`);
+  if (VIEW === "mask") render();
+  schedule();
+}
+function setupZones() {
+  Object.defineProperty(MASK_OBJ, "outline", { get: () => !!ZOBJ[ZONE_CUR], set: v => { ZOBJ[ZONE_CUR] = !!v; } });
+  const onChip = e => {
+    const c = e.target.closest(".zchip"); if (c) return zoneSelect(c.dataset.z);
+    if (e.target.closest(".zadd")) zoneAdd();
+  };
+  $("zoneBar").addEventListener("click", onChip);
+  $("mZones").addEventListener("click", onChip);
+  $("zoneOn").addEventListener("change", () => { const s = zState(); zCur(s).on = $("zoneOn").checked; zSave(s); renderZones(); updateSummaries(); schedule(); });
+  const destChange = (sel, apply) => {
+    const s = zState();
+    let v = sel.value;
+    if (v === "new") v = zNewGroup(s);
+    apply(s, v); zSave(s);
+    zoneToFields(); renderZones(); detectPreview(); schedule();
+  };
+  $("zoneDest").addEventListener("change", () => destChange($("zoneDest"), (s, v) => { zCur(s).dest = v; }));
+  $("silDest").addEventListener("change", () => destChange($("silDest"), (s, v) => { s.sil_dest = v; }));
+  $("zoneDel").onclick = zoneDelete;
+  // rename (inline form)
+  const form = $("zoneNameForm"), input = $("zoneName");
+  $("zoneRename").onclick = () => { form.hidden = false; input.value = zCur(zState()).name; input.focus(); input.select(); };
+  const close = ok => {
+    if (ok && input.value.trim()) { const s = zState(); zCur(s).name = input.value.trim().slice(0, 40); zSave(s); renderZones(); historySoon(); }
+    form.hidden = true;
+  };
+  form.querySelector(".ok").onclick = () => close(true);
+  form.querySelector(".cancel").onclick = () => close(false);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); close(true); } else if (e.key === "Escape") close(false); });
+  // the fields of the section edit the zone shown
+  ["outline_method", "outline_sensitivity", "outline_width_mm", "outline_min_length_mm", "outline_auto_color", "outline_color", "outline_ref", "outline_whole_lines", "outline_line_sens", "outline_close_lines", "outline_channel"]
+    .forEach(k => { $(k).addEventListener("change", fieldsToZone); $(k).addEventListener("input", fieldsToZone); });
+  ["outline_ref", "outline_whole_lines", "outline_line_sens", "outline_close_lines", "outline_channel"].forEach(k => $(k).addEventListener("change", () => { enableOutline(); detectPreview(); }));
+  $("outline_whole_lines").addEventListener("change", syncLineSens);
+  $("outline_line_sens").addEventListener("input", syncLineSens);
+  $("outline_subject").addEventListener("change", () => { zoneToFields(); renderZones(); });
+  $("outline").addEventListener("change", syncOutlineGroups);
+  $("stencil_style").addEventListener("change", () => zoneToFields());
+  zonesAfterLoad();
+}
+// colour of an outline layer (card colour picker, line-style sources "details:<group>")
+function setGroupColor(g, color) {
+  const s = zState();
+  s.groups[g] = { auto: !color, color: color ? color.toLowerCase() : (s.groups[g] || {}).color || "#1e1e1e" };
+  zSave(s);
+  if (colourGroup(s, zCur(s)) === g) {
+    $("outline_auto_color").checked = !color; $("outline_color").disabled = !color;
+    if (color) $("outline_color").value = color.toLowerCase();
+  }
+}
+const groupAuto = g => (zState().groups[g] || { auto: true }).auto !== false;
+
 async function init() {
+  resetFormControls();
   setupColumns();
   applyTips();
   setupAccordion();
@@ -2095,6 +2805,8 @@ async function init() {
   // Started after the sections are built (they read the original French titles).
   I18N.start();
   setupPrefs();
+  setupSemOpts();
+  setupMaskLook();
   $("lang").value = I18N.lang;
   $("lang").addEventListener("change", () => { I18N.setLang($("lang").value); drawHisto(); if (LAST) render(); });
   document.querySelector("aside").addEventListener("change", updateSummaries);
@@ -2104,6 +2816,10 @@ async function init() {
   Object.entries(MATS).forEach(([k, m]) => sel.add(new Option(m.label, k)));
   sel.add(new Option("Personnalisé", "custom"));
   sel.value = "mylar"; applyMaterial("mylar");
+  // catalogue as a list (keeps the order of stencilit/effects.py)
+  try { FXCAT = Object.fromEntries((await (await fetch("/api/effects")).json()).map(d => [d.type, d])); } catch (e) { FXCAT = {}; }
+  setupFx();
+  setupZones();
   try { UP = await (await fetch("/api/presets")).json(); } catch (e) { /* no saved presets */ }
   refreshUserPresets();
   DEFAULTS = collectSettings(true);
@@ -2282,8 +2998,10 @@ async function init() {
     $("show_calage").checked = !$("show_calage").checked; $("show_calage").dispatchEvent(new Event("change"));
   });
   $("show_calage").addEventListener("change", () => { renderCalage(); render(); rememberSettings(); });
-  [["optSupport", "show_support"], ["optMat", "show_mat"], ["optStock", "show_stock"], ["optReg", "show_reg"]].forEach(([b, c]) => $(b).onclick = () => {
+  [["optSupport", "show_support"], ["optMat", "show_mat"], ["optStock", "show_stock"], ["optReg", "show_reg"],
+   ["optSim", "preview_sim"], ["optNoBridges", "preview_nobridges"]].forEach(([b, c]) => $(b).onclick = () => {
     $(c).checked = !$(c).checked;
+    $(b).setAttribute("aria-pressed", String($(c).checked));
     $(c).dispatchEvent(new Event("change"));
   });
   $("machine_max_mm").addEventListener("input", syncMat);
@@ -2332,12 +3050,34 @@ async function init() {
   regHint();
   // Key-detail mask
   $("mBrush").onclick = () => setMaskTool("brush");
-  $("mErase").onclick = () => setMaskTool("erase");
   $("mSelect").onclick = () => setMaskTool("select");
+  // mask chosen with the icons (the hidden list keeps the value read everywhere)
+  document.querySelectorAll(".mkind").forEach(b => b.onclick = () => {
+    $("maskKind").value = b.dataset.kind;
+    $("maskKind").dispatchEvent(new Event("change"));
+  });
+  // Shift held: the brush circle shows the eraser at once, without moving the mouse
+  const shiftCursor = e => {
+    if (e.key !== "Shift" || VIEW !== "mask") return;
+    const b = $("stage").querySelector(".brush");
+    if (b && !DRAGGING) b.classList.toggle("erase", e.type === "keydown");
+  };
+  document.addEventListener("keydown", shiftCursor);
+  document.addEventListener("keyup", shiftCursor);
+  // Alt state followed by the page itself: some systems send the wheel events without altKey
+  document.addEventListener("keydown", e => { if (e.key === "Alt") { ALT_DOWN = true; ALT_WHEEL = false; if (VIEW === "mask") e.preventDefault(); } });
+  document.addEventListener("keyup", e => { if (e.key === "Alt") { ALT_DOWN = false; if (ALT_WHEEL || VIEW === "mask") e.preventDefault(); ALT_WHEEL = false; } });
+  window.addEventListener("blur", () => { ALT_DOWN = false; });
+  $("mSmart").onclick = () => setSmart(!SMART_ON);
+  SMART_ON = !!prefs().smart_on; syncSmart();
+  $("smartSens").value = prefs().smart_sens ?? 50; $("smartSensV").textContent = $("smartSens").value;
+  $("smartSens").addEventListener("input", () => { $("smartSensV").textContent = $("smartSens").value; });
+  $("smartSens").addEventListener("change", () => savePref("smart_sens", +$("smartSens").value));
   $("mSize").addEventListener("input", () => { $("mSizeV").textContent = $("mSize").value; });
   $("mShow").addEventListener("change", () => { if (VIEW === "mask") render(); });
   // Outline detection preview (Masks tab)
-  $("mDetect").addEventListener("change", detectPreview);
+  $("mDetect").addEventListener("change", () => { $("optDetect").setAttribute("aria-pressed", String($("mDetect").checked)); detectPreview(); });
+  $("optDetect").onclick = () => { $("mDetect").checked = !$("mDetect").checked; $("mDetect").dispatchEvent(new Event("change")); };
   $("outline_method").addEventListener("change", methodHint);
   $("showDetect").onclick = () => {
     $("maskKind").value = "outline"; $("mDetect").checked = true; VIEW = "mask"; SEL = null;
@@ -2369,9 +3109,9 @@ async function init() {
     sendMask(kind);
   };
   document.addEventListener("keydown", e => {
-    if (VIEW !== "mask" || e.target.closest("input, textarea, select")) return;
+    if (VIEW !== "mask" || e.target.closest?.("input, textarea, select")) return;
     if (e.key === "b" || e.key === "B") setMaskTool("brush");
-    else if (e.key === "e" || e.key === "E") setMaskTool("erase");
+    else if ((e.key === "m" || e.key === "M") && MASK_TOOL !== "select") setSmart(!SMART_ON);
     else if (e.key === "s" || e.key === "S") setMaskTool("select");
     else if (e.key === "[" || e.key === "]") {
       $("mSize").value = Math.max(4, Math.min(160, val("mSize") + (e.key === "]" ? 8 : -8)));
@@ -2533,13 +3273,15 @@ function applyProjectSettings(info) {
   showValues(); cutInfo(); regHint(); cropInfo(); syncWidth(); updateSummaries(); renderOutlineSwatches();
   restoreProjectPalette(ui && ui.palette);
 }
-function loadMaskImage(src, coverage, kind = "outline") {
+function loadMaskImage(src, coverage, kind = "outline:z1") {
+  if (kind === "outline") kind = "outline:z1";
   return new Promise(done => {
     const im = new Image();
     im.onload = () => {
-      if (kind === "subject") createSubj(); else if (kind === "silhouette") createSil(); else createMask();
+      if (kind === "subject") createSubj(); else if (kind === "silhouette") createSil();
+      else { const zid = kind.slice(8); ZCV[zid] = maskCanvas(); ZOBJ[zid] = false; if (zid === ZONE_CUR) MASK = ZCV[zid]; }
       const CV = maskCv(kind), c = CV.getContext("2d");
-      const [r, g, b] = MASK_COLORS[kind].match(/\w\w/g).map(h => parseInt(h, 16));
+      const [r, g, b] = mcol(kind).match(/\w\w/g).map(h => parseInt(h, 16));
       c.drawImage(im, 0, 0, CV.width, CV.height);
       const d = c.getImageData(0, 0, CV.width, CV.height);
       for (let i = 0; i < d.data.length; i += 4) {      // grey 0/255 -> mask colour, transparent
@@ -2549,7 +3291,7 @@ function loadMaskImage(src, coverage, kind = "outline") {
       c.putImageData(d, 0, 0);
       if (kind === "subject") { SUBJ_EMPTY = !(coverage > 0); }
       else if (kind === "silhouette") { SIL_EMPTY = !(coverage > 0); silInfo(coverage); }
-      else { MASK_EMPTY = !(coverage > 0); maskInfo(coverage); }
+      else if (kind.slice(8) === ZONE_CUR) { MASK_EMPTY = !(coverage > 0); maskInfo(coverage); }
       MASKV[kind] = { png: coverage > 0 ? CV.toDataURL("image/png") : null, exact: false };
       done();
     };
@@ -2583,7 +3325,9 @@ async function openProject(file) {
   PENDING_PROJECT = null;
   setSession(j, `${file.name} (projet)`);
   applyProjectSettings(j.info);
-  if (j.mask) await loadMaskImage(j.mask, j.mask_coverage);
+  if (j.mask) await loadMaskImage(j.mask, j.mask_coverage, "outline:z1");
+  for (const [zid, m] of Object.entries(j.zone_masks || {})) await loadMaskImage(m.png, m.coverage, zkey(zid));
+  zoneActivate(ZONE_CUR);
   if (j.subject && j.subject.png) {
     await loadMaskImage(j.subject.png, j.subject.coverage, "subject");
     SUBJ_EXACT = !!j.subject.exact; MASKV.subject = { ...MASKV.subject, exact: SUBJ_EXACT };
@@ -2682,8 +3426,9 @@ function historyGo(step) {
   showValues(); cutInfo(); regHint(); cropInfo(); syncWidth(); updateSummaries(); renderOutlineSwatches();
   showPaletteChoice(s.pal); PAL_LAST = s.palLast; VARY = null;
   // masks that differ: put back (canvas + server), in the background
-  for (const k of Object.keys(MASKV))
-    if (s.masks && JSON.stringify(s.masks[k]) !== JSON.stringify(MASKV[k])) restoreMask(k, s.masks[k]);
+  const none = { png: null, exact: false };
+  for (const k of new Set([...Object.keys(MASKV), ...Object.keys(s.masks || {})]))
+    if (s.masks && JSON.stringify(s.masks[k] || none) !== JSON.stringify(MASKV[k] || none)) restoreMask(k, s.masks[k] || none);
   historyButtons();
   status(step < 0 ? "Annulé" : "Rétabli");
   render(); schedule();
@@ -2736,18 +3481,54 @@ let SUBJ_EXACT = false;
 let OUT_INFO = "", SUBJ_INFO = "";
 const maskKind = () => $("maskKind").value;
 const MASK_COLORS = { outline: "#e61e1e", subject: "#1fbf4f", silhouette: "#1f6fe6" };
+// display colours offered for the masks (only the display: the server reads the transparency)
+const MASK_PALETTE = [["Rouge", "#e61e1e"], ["Vert", "#1fbf4f"], ["Bleu", "#1f6fe6"], ["Jaune", "#f5d000"],
+  ["Orange", "#ff8c00"], ["Magenta", "#e01ee0"], ["Cyan", "#00c8e6"], ["Violet", "#8a2be2"], ["Noir", "#000000"], ["Blanc", "#ffffff"]];
+// mask icons: the one shown is pressed, each with a bar of its display colour
+function syncMaskKinds() {
+  if ($("mZones")) $("mZones").hidden = maskKind() !== "outline";
+  $("optDetect").setAttribute("aria-pressed", String($("mDetect").checked));
+  document.querySelectorAll(".mkind").forEach(b => {
+    b.setAttribute("aria-pressed", String(b.dataset.kind === maskKind()));
+    b.querySelector(".mdot").style.background = MASK_COLORS[b.dataset.kind];
+  });
+}
+function recolorCanvas(CV, hex) {          // every painted pixel takes the colour (transparency kept)
+  if (!CV) return;
+  const c = CV.getContext("2d"), d = c.getImageData(0, 0, CV.width, CV.height), [r, g, b] = hex.match(/\w\w/g).map(h => parseInt(h, 16));
+  for (let i = 0; i < d.data.length; i += 4) if (d.data[i + 3]) { d.data[i] = r; d.data[i + 1] = g; d.data[i + 2] = b; }
+  c.putImageData(d, 0, 0);
+}
+function setupMaskLook() {
+  const p = prefs();
+  Object.entries(p.mask_colors || {}).forEach(([k, v]) => { if (k in MASK_COLORS && MASK_PALETTE.some(c => c[1] === v)) MASK_COLORS[k] = v; });
+  $("mColor").innerHTML = MASK_PALETTE.map(([n, h]) => `<option value="${h}" style="color:${h === "#ffffff" ? "inherit" : h}">● ${n}</option>`).join("");
+  const alpha = Math.min(100, Math.max(10, +(p.mask_alpha ?? 50)));
+  const setAlpha = v => { $("mAlphaV").textContent = v; document.documentElement.style.setProperty("--mask-alpha", String(v / 100)); };
+  $("mAlpha").value = alpha; setAlpha(alpha);
+  $("mAlpha").addEventListener("input", () => setAlpha(+$("mAlpha").value));
+  $("mAlpha").addEventListener("change", () => savePref("mask_alpha", +$("mAlpha").value));
+  $("mColor").addEventListener("change", () => {
+    const k = maskKind(), hex = $("mColor").value;
+    MASK_COLORS[k] = hex;
+    recolorCanvas(maskCv(k), hex);
+    savePref("mask_colors", { ...MASK_COLORS });
+    syncMaskKinds();
+  });
+}
 const MASK_NAMES = { outline: "contours", subject: "sujet", silhouette: "silhouette" };
 // Third mask: area whose outline the outline stencil draws (option "Draw the silhouette")
 let SIL = null, SIL_EMPTY = true, SIL_INFO = "", SIL_SENDING = null;
 // masks containing an object selection (exact outline): kept exact when copied into the subject mask
 const MASK_OBJ = { outline: false, silhouette: false };
-const maskCv = k => k === "subject" ? SUBJ : k === "silhouette" ? SIL : MASK;
+const maskCv = k => k === "subject" ? SUBJ : k === "silhouette" ? SIL : String(k).startsWith("outline:") ? zoneCanvas(k.slice(8)) : MASK;
 // Masks in the undo history: PNG of each mask (null = empty) + exact flag, updated when a mask is
 // sent to the server (end of a stroke, object, copy, clear) or loaded; MASK_RESTORE > 0 while
 // undo / redo puts a mask back (no history entry, no automatic option change)
-const MASKV = { outline: { png: null, exact: false }, subject: { png: null, exact: false }, silhouette: { png: null, exact: false } };
+// (key-detail zones: one entry per zone, "outline:<zone id>")
+const MASKV = { subject: { png: null, exact: false }, silhouette: { png: null, exact: false } };
 let MASK_RESTORE = 0;
-const maskExact = k => k === "subject" ? SUBJ_EXACT : MASK_OBJ[k];
+const maskExact = k => k === "subject" ? SUBJ_EXACT : String(k).startsWith("outline:") ? !!ZOBJ[k.slice(8)] : MASK_OBJ[k];
 function maskCommit(kind, png) {
   if (MASK_RESTORE) return;
   MASKV[kind] = { png, exact: !!maskExact(kind) };
@@ -2760,9 +3541,11 @@ async function restoreMask(kind, st) {
   ctx.clearRect(0, 0, c.width, c.height);
   if (st.png) {
     const im = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = st.png; });
-    if (im) ctx.drawImage(im, 0, 0, c.width, c.height);
+    if (im) { ctx.drawImage(im, 0, 0, c.width, c.height); recolorCanvas(c, mcol(kind)); }
   }
-  if (kind === "subject") SUBJ_EXACT = !!st.exact; else MASK_OBJ[kind] = !!st.exact;
+  if (kind === "subject") SUBJ_EXACT = !!st.exact;
+  else if (kind.startsWith("outline:")) ZOBJ[kind.slice(8)] = !!st.exact;
+  else MASK_OBJ[kind] = !!st.exact;
   SEM_LAST = null;
   MASK_RESTORE++;
   try { await sendMask(kind); } finally { MASK_RESTORE--; }
@@ -2777,10 +3560,13 @@ function maskCanvas() {
   c.setAttribute("aria-hidden", "true");
   return c;
 }
-function createMask() {
-  MASK = maskCanvas();
-  MASKV.outline = { png: null, exact: false };
-  MASK_EMPTY = true; SEM_LAST = null; MASK_OBJ.outline = false;
+function createMask() {          // new image: every zone mask starts empty
+  ZCV = {};
+  for (const k of Object.keys(MASKV)) if (k.startsWith("outline:")) delete MASKV[k];
+  for (const k of Object.keys(ZOBJ)) delete ZOBJ[k];
+  MASK = zoneCanvas(ZONE_CUR);
+  MASKV[zkey(ZONE_CUR)] = { png: null, exact: false };
+  MASK_EMPTY = true; SEM_LAST = null;
   maskInfo(0);
 }
 function createSil() {
@@ -2791,7 +3577,7 @@ function createSil() {
 }
 function silInfo(coverage) {
   SIL_INFO = SIL_EMPTY
-    ? "Peignez ou sélectionnez (outil Objet) la zone dont le contour sera tracé : option « Tracer la silhouette » des contours, masque silhouette."
+    ? "Peignez ou sélectionnez (outil Objet) la zone dont le contour sera tracé : option « Silhouette » des contours, masque silhouette."
     : `Zone peinte : ${coverage} % de l'image — son contour est tracé par les contours (masque silhouette).`;
   showMaskInfo();
 }
@@ -2802,8 +3588,8 @@ function syncSilhouetteSource() {
   $("silWeakRow").hidden = line; $("silDeRow").hidden = line || !val("outline_subject_weak");
   $("gapBox").hidden = !(val("outline_subject") || line);
   $("gapHint").textContent = line
-    ? "0 = trait continu. En trait seul, s'applique à tous les traits : les boucles fermées (silhouette, zones du coloriage) découpent des îlots ; les interruptions les tiennent comme des ponts."
-    : "0 = trait continu. Une silhouette fermée découpe tout le sujet en un seul îlot ; les interruptions le tiennent comme des ponts répartis tout autour.";
+    ? "0 = continu. En trait seul : tous les traits ; les interruptions tiennent les boucles fermées comme des ponts."
+    : "0 = continu. Les interruptions tiennent la silhouette comme des ponts.";
   // line style: own colours of the silhouette and of the colouring-book limits
   $("silColorRow").hidden = !line;
   const sc = val("line_sil_color");
@@ -2836,18 +3622,30 @@ function maskInfo(coverage) {
 function subjInfo(j) {
   SUBJ_INFO = SUBJ_EMPTY || !j
     ? "Cliquez sur le sujet avec l'outil Objet, ou peignez-le grossièrement (en débordant un peu) : le fond autour est détecté et supprimé."
-    : j.exact ? `Sujet sélectionné : ${j.subject_pct} % de l'image — le fond (assombri) restera support nu. Le masque est pris tel quel : retouchez-le au pinceau ou à la gomme.`
-    : `Sujet détouré : ${j.subject_pct} % de l'image — le fond (assombri) restera support nu. Gomme = retirer une zone.`;
+    : j.exact ? `Sujet sélectionné : ${j.subject_pct} % de l'image — le fond (assombri) restera support nu. Le masque est pris tel quel : retouchez-le au pinceau (Maj + clic pour effacer).`
+    : `Sujet détouré : ${j.subject_pct} % de l'image — le fond (assombri) restera support nu. Maj + clic = retirer une zone.`;
   $("subjInfoSide").textContent = SUBJ_EMPTY || !j ? "Aucun sujet peint." : `Sujet détouré (${j.subject_pct} % de l'image).`;
   showMaskInfo();
 }
+// Smart mode of the brush and the eraser (application preference)
+let SMART_ON = false;
+let ALT_WHEEL = false;          // Alt used with the wheel: its release must not open the browser menu
+let ALT_DOWN = false;           // Alt held (followed with keydown / keyup)
+function syncSmart() {
+  $("mSmart").setAttribute("aria-pressed", String(SMART_ON));
+  $("mSmart").disabled = MASK_TOOL === "select";
+  $("smartOpts").hidden = !SMART_ON || MASK_TOOL === "select";
+}
+function setSmart(on) { SMART_ON = on; savePref("smart_on", on); syncSmart(); }
 function setMaskTool(t) {
   MASK_TOOL = t;
   $("mBrush").setAttribute("aria-pressed", String(t === "brush"));
-  $("mErase").setAttribute("aria-pressed", String(t === "erase"));
   $("mSelect").setAttribute("aria-pressed", String(t === "select"));
+  syncSmart();
   const w = document.querySelector("#stage .maskwrap");
   if (w) { w.classList.toggle("select", t === "select"); const b = $("stage").querySelector(".brush"); if (b && t === "select") b.style.display = "none"; }
+  $("semOpts").hidden = t !== "select";
+  $("mSizeBox").hidden = t === "select";
   if (t === "select") semanticPrepare();
 }
 function maskIsEmpty(c = MASK) {
@@ -2940,17 +3738,19 @@ async function sendMask(kind = maskKind()) {
   if (kind === "subject") return sendSubject();
   if (kind === "silhouette") return sendSil();
   if (!SID || !MASK) return;
-  MASK_EMPTY = maskIsEmpty();
-  const png = MASK_EMPTY ? null : MASK.toDataURL("image/png");
-  maskCommit("outline", png);
-  const req = fetch("/api/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png }) });
-  MASK_SENDING = req;
+  const zid = String(kind).startsWith("outline:") ? kind.slice(8) : ZONE_CUR, cv = zoneCanvas(zid), cur = zid === ZONE_CUR;
+  const empty = maskIsEmpty(cv);
+  if (cur) MASK_EMPTY = empty;
+  const png = empty ? null : cv.toDataURL("image/png");
+  maskCommit(zkey(zid), png);
+  const req = fetch("/api/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: SID, png, zone: zid }) });
+  if (cur) MASK_SENDING = req;
   try {
     const r = await req, j = await r.json();
     if (!r.ok) { status(j.error || "Erreur du masque", true); return; }
-    if (MASK_SENDING !== req) return;                 // a more recent upload is in progress
-    maskInfo(j.coverage);
-    if (!MASK_EMPTY && !$("outline").checked && !MASK_RESTORE) {   // painting a mask only makes sense with the outline stencil
+    if (cur && MASK_SENDING !== req) return;          // a more recent upload is in progress
+    if (cur) maskInfo(j.coverage);
+    if (!empty && !$("outline").checked && !MASK_RESTORE) {   // painting a mask only makes sense with the outline stencil
       $("outline").checked = true; updateSummaries();
       status("Pochoir de contours activé (masque peint)");
     }
@@ -2961,9 +3761,9 @@ async function sendMask(kind = maskKind()) {
 // Outline detection preview: lines found by the chosen method over the source image (colour layers
 // of the last computation, current outline settings), refreshed live while settings change.
 const METHOD_HINTS = {
-  canny: "Bords nets de l'image (luminance et couleur). Polyvalent, mais un trait fin donne deux bords parallèles.",
-  xdog: "Un seul trait le long de chaque contour, du côté sombre, comme un dessin à la plume. Peu sensible au bruit.",
-  ridge: "Ligne centrale des traits fins (cils, sourcils, rides, mèches) : un seul trait là où Canny en trouve deux.",
+  canny: "Bords nets ; un trait fin donne deux bords.",
+  xdog: "Un trait par contour, comme à la plume.",
+  ridge: "Ligne centrale des traits fins (cils, mèches).",
 };
 function enableOutline() {
   if ($("outline").checked) return;
@@ -2971,14 +3771,17 @@ function enableOutline() {
   status("Pochoir de contours activé");
 }
 const TARGET_HINTS = {
-  stencil: "Un pochoir de plus, peint en dernier, de la couleur du trait choisie ci-dessous.",
-  darkest: "Pas de pochoir en plus : les traits sont découpés dans la dernière couche (la plus foncée). Elle aura plus d'îlots et de ponts.",
-  nearest: "Pas de pochoir en plus : chaque trait va dans la couche de teinte la plus proche de la sienne, parmi celles plus foncées que la zone qu'il traverse.",
+  stencil: "Pochoir de contours peint après les couleurs ; les zones de même destination y sont fusionnées.",
+  darkest: "Découpés dans la couche la plus foncée (plus d'îlots et de ponts).",
+  nearest: "Découpés dans la couche de teinte la plus proche de celle du trait.",
 };
 function syncOutlineTarget() {
   const t = $("outline_target").value;
   $("outline_target_hint").textContent = TARGET_HINTS[t] || "";
-  $("outlineColorBox").hidden = t !== "stencil" && val("stencil_style") !== "line";
+  const zs = zState(), g = colourGroup(zs, zCur(zs));
+  $("outlineColorBox").hidden = !g;
+  $("olColorLbl").textContent = g ? `Couleur du trait — Contours ${g}` : "Couleur du trait";
+  if ($("silDestBox")) $("silDestBox").hidden = val("stencil_style") === "line";
 }
 function methodHint() { $("outline_method_hint").textContent = METHOD_HINTS[$("outline_method").value] || ""; }
 let DET = null, DET_TIMER = null, DET_REQ = 0;
@@ -3003,7 +3806,7 @@ function detectPreview() {
     const id = ++DET_REQ;
     try {
       const r = await fetch("/api/outline_preview", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: SID, params: params() }) });
+        body: JSON.stringify({ id: SID, params: params(), zone: ZONE_CUR }) });
       const j = await r.json();
       if (id !== DET_REQ) return;
       if (!r.ok) { $("detInfo").textContent = j.error || "Erreur de l'aperçu de la détection"; return; }
@@ -3034,6 +3837,58 @@ function semanticPrepare() {
     .catch(e => { status("Serveur injoignable : " + e.message, true); if (SEM_SID === sid) SEM_READY = null; return false; });
   return SEM_READY;
 }
+// Options of the Object tool (application preferences): sensitivity of the selection, automatic
+// enlargement (dark outline around the object, margin), distances in pixels of the source image
+const SEM_DEF = { sens: 50, rim: false, rim_px: 8, dark: 35, margin_px: 0 };
+function semOpts() { return { ...SEM_DEF, ...(prefs().semantic || {}) }; }
+function semGrow() { const o = semOpts(); return { rim: o.rim, rim_px: o.rim_px, dark: o.dark, margin_px: o.margin_px }; }
+function setupSemOpts() {
+  const o = semOpts(), ids = { semSens: "sens", semRimPx: "rim_px", semDark: "dark", semMargin: "margin_px" };
+  Object.entries(ids).forEach(([id, k]) => $(id).value = o[k]);
+  $("semRim").checked = !!o.rim;
+  const sync = () => {
+    Object.keys(ids).forEach(id => $(id + "V").textContent = $(id).value);
+    $("semRimBox").hidden = !$("semRim").checked;
+  };
+  const save = () => {
+    const v = { rim: $("semRim").checked };
+    Object.entries(ids).forEach(([id, k]) => v[k] = +$(id).value);
+    savePref("semantic", v); sync();
+  };
+  Object.keys(ids).forEach(id => $(id).addEventListener("input", sync));
+  ["semSens", "semRim", "semRimPx", "semDark", "semMargin"].forEach(id => $(id).addEventListener("change", () => { save(); semanticRedo(); }));
+  $("semGrow").onclick = growMask;
+  sync();
+}
+// New options: the last object added is selected again with them (same cut)
+function semanticRedo() {
+  const L = SEM_LAST, wrap = document.querySelector("#stage .maskwrap");
+  if (!L || L.sid !== SID || !wrap || maskCv(maskKind()) !== L.canvas) return;
+  const W = L.canvas.width, H = L.canvas.height;
+  // click again inside the object: the cut is kept (level - 1, the click moves to the next one)
+  SEM_LAST = { ...L, level: L.level - 1 };
+  semanticClick(L.canvas, L.kind, L.fx, L.fy, false, wrap, true);
+}
+// "Enlarge the mask" button: dark outline and margin applied to the whole mask shown
+async function growMask() {
+  if (!SID) return;
+  const kind = maskKind(), CV = maskCv(kind);
+  if (!CV || maskIsEmpty(CV)) { status("Masque vide : rien à agrandir", true); return; }
+  const g = semGrow();
+  if (!(g.rim || g.margin_px > 0)) { status("Rien à agrandir : cochez « Inclure le liseré sombre » ou choisissez une marge", true); return; }
+  try {
+    const r = await fetch("/api/mask/grow", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: SID, png: CV.toDataURL("image/png"), grow: g }) });
+    const j = await r.json();
+    if (!r.ok) { status(j.error || "Erreur de l'agrandissement", true); return; }
+    const im = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = j.png; });
+    const m = grayToMaskCanvas(im, CV.width, CV.height, MASK_COLORS[kind]), ctx = CV.getContext("2d");
+    ctx.clearRect(0, 0, CV.width, CV.height); ctx.drawImage(m.canvas, 0, 0);
+    SEM_LAST = null;
+    status(`Masque agrandi : +${j.added} % de l'image (${j.pct} % au total)`);
+    sendMask(kind);
+  } catch (e) { status("Serveur injoignable : " + e.message, true); }
+}
 function grayToMaskCanvas(im, w, h, color) {
   const t = document.createElement("canvas");
   t.width = w; t.height = h;
@@ -3047,7 +3902,7 @@ function grayToMaskCanvas(im, w, h, color) {
   c.putImageData(d, 0, 0);
   return { canvas: t, data: d.data };
 }
-async function semanticClick(CV, kind, fx, fy, remove, wrap) {
+async function semanticClick(CV, kind, fx, fy, remove, wrap, redo = false) {
   if (SEM_BUSY || !SID) return;
   SEM_BUSY = true; wrap.classList.add("wait");
   try {
@@ -3057,14 +3912,16 @@ async function semanticClick(CV, kind, fx, fy, remove, wrap) {
     // second click inside the object just added: another cut of it (replaces the previous addition)
     let level = 0;
     const L = SEM_LAST;
-    if (!remove && L && L.canvas === CV && L.sid === SID && L.data[(py * W + px) * 4 + 3]) {
+    if (!remove && L && L.canvas === CV && L.sid === SID && (redo || L.data[(py * W + px) * 4 + 3])) {
       level = L.level + 1;
       ctx.putImageData(L.before, 0, 0);
       fx = L.fx; fy = L.fy;
     }
     const before = ctx.getImageData(0, 0, W, H);
+    const o = semOpts();
     const r = await fetch("/api/semantic/select", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: SID, w: W, h: H, points: [[fx, fy, 1]], level }) });
+      body: JSON.stringify({ id: SID, w: W, h: H, points: [[fx, fy, 1]], level, sensitivity: o.sens,
+                             grow: remove ? null : semGrow() }) });
     const j = await r.json();
     if (!r.ok) { status(j.error || "Erreur de la sélection d'objet", true); return; }
     const im = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = j.png; });
@@ -3072,14 +3929,87 @@ async function semanticClick(CV, kind, fx, fy, remove, wrap) {
     ctx.globalCompositeOperation = remove ? "destination-out" : "source-over";
     ctx.drawImage(m.canvas, 0, 0);
     ctx.globalCompositeOperation = "source-over";
-    SEM_LAST = remove ? null : { canvas: CV, sid: SID, before, data: m.data, level, fx, fy };
+    SEM_LAST = remove ? null : { canvas: CV, kind, sid: SID, before, data: m.data, level, fx, fy };
     if (kind === "subject") SUBJ_EXACT = true; else MASK_OBJ[kind] = true;
-    status(remove ? `Objet retiré du masque (${j.pct} % de l'image)`
+    status(redo ? `Sélection refaite avec les nouveaux réglages : ${j.pct} % de l'image`
+      : remove ? `Objet retiré du masque (${j.pct} % de l'image)`
       : level ? `Autre découpage : ${j.pct} % de l'image (recliquez pour en changer encore)`
       : `Objet ajouté : ${j.pct} % de l'image (recliquez dessus pour changer de découpage, Alt + clic pour retirer)`);
     sendMask();
   } catch (e) { status("Serveur injoignable : " + e.message, true); }
   finally { SEM_BUSY = false; wrap.classList.remove("wait"); }
+}
+// ---------------- Smart brush (Masks tab) ----------------
+// Paints, inside the brush, the area connected to the brush centre whose colour stays close to the
+// reference colour taken at the start of the stroke: the stroke stops at the limits of the zone.
+// Colours compared in CIELab (image slightly blurred against noise), at the size of the mask canvas.
+let SMART_LAB = null;           // {key, w, h, L, a, b}
+function smartLab(W, H) {
+  const key = `${IMG.src.length}:${IMG.src.slice(-64)}:${W}x${H}`;
+  if (SMART_LAB && SMART_LAB.key === key) return SMART_LAB;
+  const im = document.querySelector("#stage .maskwrap img");
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.filter = "blur(1px)"; x.drawImage(im, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data, n = W * H;
+  const L = new Float32Array(n), A = new Float32Array(n), B = new Float32Array(n);
+  const lin = v => (v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  const f = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+  for (let i = 0; i < n; i++) {
+    const r = lin(d[i * 4]), g = lin(d[i * 4 + 1]), b = lin(d[i * 4 + 2]);
+    const fx = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047);
+    const fy = f(0.2126 * r + 0.7152 * g + 0.0722 * b);
+    const fz = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+    L[i] = 116 * fy - 16; A[i] = 500 * (fx - fy); B[i] = 200 * (fy - fz);
+  }
+  return (SMART_LAB = { key, w: W, h: H, L, a: A, b: B });
+}
+// colour tolerance (ΔE) for a sensitivity 0..100
+const smartTol = () => 6 + (100 - val("smartSens")) * 0.4;
+function smartRef(lab, x, y, h = 2) {     // mean colour around the brush centre ((2h + 1)²)
+  let n = 0, L = 0, a = 0, b = 0;
+  for (let j = -h; j <= h; j++) for (let i = -h; i <= h; i++) {
+    const xx = Math.round(x) + i, yy = Math.round(y) + j;
+    if (xx < 0 || yy < 0 || xx >= lab.w || yy >= lab.h) continue;
+    const k = yy * lab.w + xx; L += lab.L[k]; a += lab.a[k]; b += lab.b[k]; n++;
+  }
+  return n ? { L: L / n, a: a / n, b: b / n } : null;
+}
+// one dab: flood fill from (cx, cy) within the radius, through pixels close to the colour found
+// right now around the brush centre (the reference follows the brush along the stroke)
+function smartDab(ctx, lab, cx, cy, r, tol, color, erase) {
+  const ref = smartRef(lab, cx, cy, Math.max(1, Math.min(4, Math.round(r * 0.15))));
+  if (!ref) return;
+  const W = lab.w, H = lab.h, t2 = tol * tol, r2 = r * r;
+  const x0 = Math.max(0, Math.floor(cx - r)), y0 = Math.max(0, Math.floor(cy - r));
+  const x1 = Math.min(W - 1, Math.ceil(cx + r)), y1 = Math.min(H - 1, Math.ceil(cy + r));
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  if (bw <= 0 || bh <= 0) return;
+  const close = k => { const dl = lab.L[k] - ref.L, da = lab.a[k] - ref.a, db = lab.b[k] - ref.b; return dl * dl + da * da + db * db <= t2; };
+  const sx = Math.min(x1, Math.max(x0, Math.round(cx))), sy = Math.min(y1, Math.max(y0, Math.round(cy)));
+  if (!close(sy * W + sx)) return;                     // brush centre outside the zone: nothing
+  const seen = new Uint8Array(bw * bh), stack = [sx - x0 + (sy - y0) * bw];
+  seen[stack[0]] = 1;
+  const out = new ImageData(bw, bh), od = out.data, [cr, cg, cb] = color.match(/\w\w/g).map(h => parseInt(h, 16));
+  while (stack.length) {
+    const p = stack.pop(), px = p % bw, py = (p - px) / bw;
+    od[p * 4] = cr; od[p * 4 + 1] = cg; od[p * 4 + 2] = cb; od[p * 4 + 3] = 255;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = px + dx, ny = py + dy;
+      if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
+      const q = nx + ny * bw;
+      if (seen[q]) continue;
+      seen[q] = 1;
+      const gx = nx + x0, gy = ny + y0;
+      if ((gx - cx) ** 2 + (gy - cy) ** 2 > r2 || !close(gy * W + gx)) continue;
+      stack.push(q);
+    }
+  }
+  const t = document.createElement("canvas"); t.width = bw; t.height = bh;
+  t.getContext("2d").putImageData(out, 0, 0);
+  ctx.globalCompositeOperation = erase ? "destination-out" : "source-over";
+  ctx.drawImage(t, x0, y0);
+  ctx.globalCompositeOperation = "source-over";
 }
 function maskEditor(st) {
   if (!MASK) createMask();
@@ -3087,6 +4017,8 @@ function maskEditor(st) {
   if (!SIL) createSil();
   const kind = maskKind(), CV = maskCv(kind);
   [...$("mCopy").options].forEach(o => { o.hidden = o.value === kind; });
+  $("mColor").value = MASK_COLORS[kind];
+  syncMaskKinds();
   const wrap = document.createElement("div");
   wrap.className = "maskwrap" + (MASK_TOOL === "select" ? " select" : "");
   wrap.innerHTML = `<img src="${IMG.src}" alt="Image source — ${kind === "subject" ? "peignez le sujet à garder" : kind === "silhouette" ? "peignez la zone dont le contour sera tracé" : "peignez les zones à détailler"}" draggable="false">
@@ -3116,10 +4048,21 @@ function maskEditor(st) {
     const size = val("mSize"), sr = st.getBoundingClientRect();
     Object.assign(brush.style, { display: "block", left: e.clientX - sr.left - st.clientLeft + "px",
       top: e.clientY - sr.top - st.clientTop + "px", width: size + "px", height: size + "px" });
-    brush.classList.toggle("erase", MASK_TOOL === "erase");
+    // erasing: Eraser tool, or Shift held with the brush (shown before clicking)
+    brush.classList.toggle("erase", DRAGGING ? erasing : e.shiftKey);
+    brush.classList.toggle("smart", SMART_ON);
   };
+  let smart = null, erasing = false;   // stroke in progress: smart (Lab image) or plain, erasing or painting
   const paint = q => {
-    ctx.globalCompositeOperation = MASK_TOOL === "erase" ? "destination-out" : "source-over";
+    if (smart) {
+      const r = val("mSize") * q.k / 2, tol = smartTol();
+      const from = last || q, d = Math.hypot(q.x - from.x, q.y - from.y), n = Math.max(1, Math.ceil(d / Math.max(1, r / 3)));
+      for (let i = last ? 1 : 0; i <= n; i++)
+        smartDab(ctx, smart.lab, from.x + (q.x - from.x) * i / n, from.y + (q.y - from.y) * i / n, r, tol, MASK_COLORS[kind], erasing);
+      last = q;
+      return;
+    }
+    ctx.globalCompositeOperation = erasing ? "destination-out" : "source-over";
     ctx.strokeStyle = ctx.fillStyle = MASK_COLORS[kind];
     ctx.lineWidth = val("mSize") * q.k; ctx.lineCap = ctx.lineJoin = "round";
     ctx.beginPath();
@@ -3136,14 +4079,39 @@ function maskEditor(st) {
       semanticClick(CV, kind, q.x / CV.width, q.y / CV.height, e.altKey, wrap);
       return;
     }
-    DRAGGING = true; last = null; SEM_LAST = null;
+    DRAGGING = true; last = null; SEM_LAST = null; smart = null;
     if (!$("mShow").checked) { $("mShow").checked = true; CV.style.display = ""; }
     wrap.setPointerCapture(e.pointerId);
-    paint(toMask(e));
+    const q0 = toMask(e);
+    erasing = e.shiftKey;
+    moveBrush(e);
+    if (SMART_ON) {
+      smart = { lab: smartLab(CV.width, CV.height) };
+      // a precise outline: the subject mask is used as is (no GrabCut), like an object selection
+      if (!erasing) { if (kind === "subject") SUBJ_EXACT = true; else MASK_OBJ[kind] = true; }
+    }
+    paint(q0);
   };
   wrap.onpointermove = e => { moveBrush(e); if (DRAGGING && last) paint(toMask(e)); };
-  wrap.onpointerup = wrap.onpointercancel = () => { if (DRAGGING) { DRAGGING = false; last = null; sendMask(); } };
+  wrap.onpointerup = wrap.onpointercancel = e => { if (DRAGGING) { DRAGGING = false; last = null; smart = null; erasing = false; moveBrush(e); sendMask(); } };
   wrap.onpointerleave = () => { if (!DRAGGING) brush.style.display = "none"; };
+}
+// Ctrl + wheel (or Alt + wheel where the system passes it on) anywhere over the view of the Masks
+// tab: brush size, instead of the zoom of the image and of the browser page. Some systems turn
+// Alt + wheel into a horizontal scroll: deltaX is used when there is no deltaY.
+function brushWheel(e) {
+  if (!(e.ctrlKey || e.metaKey || e.altKey || ALT_DOWN) || VIEW !== "mask" || SEL !== null || MASK_TOOL === "select") return false;
+  e.preventDefault(); e.stopPropagation();
+  const d = e.deltaY || e.deltaX;
+  if (!d) return true;
+  ALT_WHEEL = true;
+  const v = val("mSize"), step = Math.max(1, Math.round(v * 0.1));
+  $("mSize").value = Math.max(4, Math.min(160, v + (d < 0 ? step : -step)));
+  $("mSizeV").textContent = $("mSize").value;
+  const b = $("stage").querySelector(".brush");
+  if (b && b.style.display === "block") b.style.width = b.style.height = $("mSize").value + "px";
+  status(`Taille du pinceau : ${$("mSize").value} px`);
+  return true;
 }
 
 // ---------------- Preview composed in the browser ----------------
@@ -3278,6 +4246,7 @@ function zoomTo(z, cx, cy) {
 function setupZoom() {
   const st = $("stage");
   st.addEventListener("wheel", e => {
+    if (brushWheel(e)) return;
     if (!zoomTarget()) return;
     e.preventDefault();
     zoomTo(ZOOM.z * Math.pow(1.0015, -e.deltaY * (e.deltaMode === 1 ? 33 : 1)), e.clientX, e.clientY);
@@ -3342,14 +4311,18 @@ function renderToolbar() {
   const layersShown = !!LAST && SEL === null && (VIEW === "preview" || VIEW === "compare");
   // the bar (Support / Mat options) is there in every view once an image is loaded;
   // layer buttons only in preview and comparison
-  $("viewtools").hidden = !(IMG || LAST);
+  // Support / Mat / Sheet / Marks and the zoom sit on the tab line, left of undo / redo
+  $("tabTools").hidden = !(IMG || LAST);
   document.querySelectorAll("#viewtools .vt-layers").forEach(e => e.hidden = !layersShown);
   $("optSupport").setAttribute("aria-pressed", String($("show_support").checked));
   $("optPre").hidden = !(LAST && LAST.reference_pre && SEL === null && VIEW === "reference");
   $("optPre").setAttribute("aria-pressed", String(SHOW_PRE));
+  $("viewtools").hidden = !(layersShown || !$("optPre").hidden);     // nothing left to show: no empty line
   $("optMat").setAttribute("aria-pressed", String($("show_mat").checked));
   $("optStock").setAttribute("aria-pressed", String($("show_stock").checked));
   $("optReg").setAttribute("aria-pressed", String($("show_reg").checked));
+  $("optSim").setAttribute("aria-pressed", String($("preview_sim").checked));
+  $("optNoBridges").setAttribute("aria-pressed", String($("preview_nobridges").checked));
   document.body.classList.toggle("no-reg", !$("show_reg").checked);
   document.body.classList.toggle("no-stock", !$("show_stock").checked);
   if (!LAST) return;
@@ -3442,11 +4415,7 @@ function render() {
     warns.push(`Pochoir de contours : aucun détail clé trouvé${MASK_EMPTY ? "" : " dans les zones peintes du masque"}. Augmentez la sensibilité (actuellement ${val("outline_sensitivity")}) ou réduisez la longueur mini d'un trait.`);
   $("warnings").innerHTML = warns.map(w => `<div class="warn">⚠ ${w}</div>`).join("");
 
-  const pal = [];
-  pal.push(`<span class="sw" title="Support ${LAST.base}${LAST.support_tone ? " (remplace la teinte " + LAST.support_tone + ")" : ""}" style="background:${LAST.base};outline:2px dashed var(--muted);outline-offset:1px"></span>`);
-  LAST.layers.forEach(L => pal.push(`<span class="sw" title="Couche ${L.index}${L.kind === "outline" ? " (contours)" : ""} ${L.color}" style="background:${L.color};color:${lum(L.color) > 140 ? '#000' : '#fff'}">${L.kind === "outline" ? "✎" : L.index}</span>`));
   renderOutlineSwatches();
-  $("palette").innerHTML = pal.join("");
 
   const tot = LAST.layers.reduce((a, L) => ({ b: a.b + L.bridges, c: a.c + L.cut_length_m }), { b: 0, c: 0 });
   $("metrics").innerHTML = `
@@ -3465,9 +4434,10 @@ function render() {
       ${layerStack(L)}
       <div class="meta">
         <div class="t">${L.kind === "outline"
-          ? `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur du trait des contours${val("outline_auto_color") ? " (automatique)" : " (choisie)"} — cliquer pour changer"></button>`
-          : `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur de la peinture de la couche ${L.index}${layerColors()[L.index] ? " (choisie)" : " (calculée)"} — cliquer pour changer"></button>`}Couche ${L.index}${L.kind === "outline" ? " — contours ✎" : ""} — ${L.color}${customColor(L)
+          ? `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur du trait des contours${groupAuto(L.group || "A") ? " (automatique)" : " (choisie)"} — cliquer pour changer"></button>`
+          : `<button type="button" class="lcolor" data-idx="${L.index}" style="background:${L.color}" aria-haspopup="dialog" title="Couleur de la peinture de la couche ${L.index}${layerColors()[L.index] ? " (choisie)" : " (calculée)"} — cliquer pour changer"></button>`}Couche ${L.index}${L.kind === "outline" ? ` — contours${L.group ? " " + L.group : ""} ✎` : ""} — ${L.color}${customColor(L)
           ? ` <button type="button" class="lcreset" data-idx="${L.index}" title="Revenir à la teinte calculée" aria-label="Revenir à la teinte calculée">${ICO_RESET}</button>` : ""}
+          ${fxBadge(L)}
           <button type="button" class="eye" aria-pressed="${!HIDDEN.has(L.index)}" title="Afficher / masquer dans la prévisualisation" aria-label="Afficher / masquer dans la prévisualisation">${eyeIcon(!HIDDEN.has(L.index))}</button></div>
         ${L.paths} tracés · ${L.nodes} nœuds · ${L.islands} îlot${L.islands > 1 ? "s" : ""} · ${L.bridges} ponts${L.merged ? ` · ${L.merged} fusion${L.merged > 1 ? "s" : ""}` : ""}<br>
         ${L.short_islands ? `<span style="color:#d97706">⚠ ${L.short_islands} îlot(s) sans place pour ${val("min_bridges")} ponts</span><br>` : ""}
@@ -3475,12 +4445,15 @@ function render() {
       </div>
     </div>`).join("");
   $("layers").querySelectorAll(".lcolor").forEach(b => b.onclick = () => openColorPop(b));
+  syncLineSens();
+  renderFx();
   const nOut = LAST.layers.filter(L => L.kind === "outline").length;
   $("layerCount").textContent = LAST.layers.length && nOut === LAST.layers.length
     ? `${nOut} pochoir${nOut > 1 ? "s" : ""} de traits · dans l'ordre`
     : `${LAST.layers.length - nOut} couche${LAST.layers.length - nOut > 1 ? "s" : ""}${nOut ? " + contours" : ""} · dans l'ordre`;
   $("layers").querySelectorAll(".card").forEach(c => c.onclick = e => {
     if (e.target.closest(".eye")) { toggleLayer(+c.dataset.idx); return; }
+    if (e.target.closest(".fxbadge")) { showFxLayer(+e.target.closest(".fxbadge").dataset.idx); return; }
     if (e.target.closest(".lcolor")) return;                       // colour picker: no selection
     if (e.target.closest(".lcreset")) { setLayerColor(+e.target.closest(".lcreset").dataset.idx, null); return; }
     const i = +c.dataset.i; SEL = (SEL === i) ? null : i; render();
@@ -4484,16 +5457,16 @@ function setupColorPop() {
 // Colour chosen by hand? (outline layer: "automatic" unticked in the outline section)
 function customColor(L) {
   if (L && L.sources && L.sources.length) return L.sources.some(s =>
-    s === "details" ? !val("outline_auto_color") : s === "silhouette" ? !!val("line_sil_color")
+    s.startsWith("details") ? !groupAuto(s.split(":")[1] || "A") : s === "silhouette" ? !!val("line_sil_color")
       : s === "zones" ? !!val("line_zones_color") : !!layerColors()[s.replace("tone", "t")]);
-  return L && (L.kind === "outline" ? !val("outline_auto_color") : !!layerColors()[L.index]);
+  return L && (L.kind === "outline" ? !groupAuto(L.group || "A") : !!layerColors()[L.index]);
 }
 function setLayerColor(idx, color) {
   const L = LAST && LAST.layers.find(x => x.index === idx);
   if (L && L.sources && L.sources.length) {   // line style: the colour of each source of this stencil
     const c = color ? color.toLowerCase() : "", m = layerColors();
     L.sources.forEach(s => {
-      if (s === "details") { $("outline_auto_color").checked = !c; $("outline_color").disabled = !c; if (c) $("outline_color").value = c; }
+      if (s.startsWith("details")) setGroupColor(s.split(":")[1] || "A", c);
       else if (s === "silhouette") $("line_sil_color").value = c;
       else if (s === "zones") $("line_zones_color").value = c;
       else if (c) m[s.replace("tone", "t")] = c; else delete m[s.replace("tone", "t")];
@@ -4508,9 +5481,9 @@ function setLayerColor(idx, color) {
     schedule();
     return;
   }
-  if (L && L.kind === "outline") {     // outline stencil: its colour is the outline section's line colour
-    $("outline_auto_color").checked = !color; $("outline_color").disabled = !color;
-    if (color) { $("outline_color").value = color.toLowerCase(); rememberColor(color); }
+  if (L && L.kind === "outline") {     // outline stencil: its colour is the one of its outline layer (A, B…)
+    setGroupColor(L.group || "A", color);
+    if (color) rememberColor(color);
     updateSummaries(); detectPreview();
     status(color ? `Couche ${idx} (contours) : peinture ${color}` : `Couche ${idx} (contours) : couleur automatique`);
     schedule();
@@ -4532,10 +5505,11 @@ function renderOutlineSwatches() {
   $("outlineSwatches").innerHTML = cols.map(c => `<span class="sw pick" title="${c}" data-c="${c}" style="background:${c}"></span>`).join("");
   $("outlineSwatches").querySelectorAll(".sw").forEach(sw => sw.onclick = () => {
     $("outline_auto_color").checked = false; $("outline_color").disabled = false;
-    $("outline_color").value = sw.dataset.c; updateSummaries(); schedule();
+    $("outline_color").value = sw.dataset.c; fieldsToZone(); updateSummaries(); schedule();
   });
-  // In automatic mode, show the colour actually chosen
-  const ol = LAST && LAST.layers.find(L => L.kind === "outline");
+  // In automatic mode, show the colour actually chosen (outline layer of the zone shown)
+  const zs = zState(), g = colourGroup(zs, zCur(zs));
+  const ol = LAST && LAST.layers.find(L => L.kind === "outline" && (L.group === g || (!L.group && (L.sources || []).includes("details:" + g))));
   if (ol && $("outline_auto_color").checked) $("outline_color").value = ol.color;
 }
 function regHint() { $("regHint").textContent = REG_HINT[val("reg_shape")] + (val("reg_corners") === "3" ? " Le coin bas-droit sans repère sert de détrompeur." : ""); }

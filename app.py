@@ -17,6 +17,7 @@ from flask import Flask, jsonify, request, send_file, send_from_directory
 import io
 
 from stencilit import pipeline as pl
+from stencilit import effects as fxmod
 from stencilit import semantic
 from stencilit.svg_export import export_zip
 
@@ -148,6 +149,12 @@ def api_materials():
     return jsonify(materials())
 
 
+@app.get("/api/effects")
+def api_effects():
+    """Catalogue of the layer effects (labels, parameters, limits, defaults)."""
+    return jsonify([{"type": k, **d} for k, d in fxmod.catalogue().items()])
+
+
 @app.post("/api/upload")
 def api_upload():
     f = request.files.get("image")
@@ -204,9 +211,16 @@ def api_mask():
     if not sess:
         return jsonify(error="Session inconnue, rechargez l'image"), 404
     key = MASK_KEYS.get(data.get("kind") or "outline", "mask")
+    zone = str(data.get("zone") or "z1")
+    if key == "mask" and zone != "z1":       # key-detail zone other than the first: own mask
+        if not ZONE_ID.match(zone):
+            return jsonify(error="Zone inconnue"), 400
+        store = sess.setdefault("zmasks", {})
+    else:
+        store, zone = sess, key
     png = data.get("png")
     if not png:
-        sess.pop(key, None)
+        store.pop(zone, None)
         return jsonify(coverage=0.0)
     try:
         raw = base64.b64decode(png.split(",", 1)[-1])
@@ -221,8 +235,27 @@ def api_mask():
         return jsonify(coverage=0.0)
     h, w = sess["img"].shape[:2]
     full = cv2.resize(alpha, (w, h), interpolation=cv2.INTER_LINEAR)
-    sess[key] = np.where(full > 127, 255, 0).astype(np.uint8)
-    return jsonify(coverage=round(100 * float((sess[key] > 0).mean()), 1))
+    store[zone] = np.where(full > 127, 255, 0).astype(np.uint8)
+    return jsonify(coverage=round(100 * float((store[zone] > 0).mean()), 1))
+
+
+ZONE_ID = re.compile(r"^z\d{1,3}$")
+
+
+def zone_masks(sess) -> dict:
+    """Painted masks of the key-detail zones (full source image): the first zone's is `mask`."""
+    out = dict(sess.get("zmasks") or {})
+    if sess.get("mask") is not None:
+        out["z1"] = sess["mask"]
+    return out
+
+
+def zone_regions(sess, lay, shape) -> dict:
+    """Zone masks brought to the computed image area (zones without a mask are absent)."""
+    x0, y0, x1, y1 = lay.src_rect
+    H, W = shape
+    return {zid: cv2.resize(m[y0:y1, x0:x1], (W, H), interpolation=cv2.INTER_NEAREST) > 0
+            for zid, m in zone_masks(sess).items()}
 
 
 def subject_overlay(sess) -> str | None:
@@ -318,17 +351,66 @@ def api_semantic_select():
         w, h = int(data["w"]), int(data["h"])
         points = [(float(x), float(y), int(l)) for x, y, l in data["points"]][:16]
         level = int(data.get("level", 0))
+        sens = float(data.get("sensitivity", 50))
+        grow = grow_args(data.get("grow"))
     except (KeyError, TypeError, ValueError):
         return jsonify(error="Requête de sélection invalide"), 400
     if not points or not (0 < w <= 4096 and 0 < h <= 4096):
         return jsonify(error="Requête de sélection invalide"), 400
     try:
-        m = semantic.select(semantic_state(sess), points, (w, h), level)
+        m = semantic.select(semantic_state(sess), points, (w, h), level, sens)
     except semantic.SemanticError as e:
         return jsonify(error=str(e)), 503
+    if grow:
+        m = grow_on_canvas(sess, m, grow)
     ok, buf = cv2.imencode(".png", m.astype(np.uint8) * 255)
     return jsonify(png="data:image/png;base64," + base64.b64encode(buf.tobytes()).decode(),
                    pct=round(100 * float(m.mean()), 1))
+
+
+def grow_args(g) -> dict | None:
+    """Mask enlargement settings from the browser (distances in pixels of the source image)."""
+    if not g:
+        return None
+    out = dict(rim_px=float(g.get("rim_px", 0)) if g.get("rim") else 0.0,
+               dark_l=min(100.0, max(0.0, float(g.get("dark", 35)))),
+               margin_px=min(200.0, max(0.0, float(g.get("margin_px", 0)))))
+    out["rim_px"] = min(200.0, max(0.0, out["rim_px"]))
+    return out if out["rim_px"] > 0 or out["margin_px"] > 0 else None
+
+
+def grow_on_canvas(sess, m: np.ndarray, g: dict) -> np.ndarray:
+    """Enlarges a mask at the size of the mask canvas (preview of the source image)."""
+    h, w = m.shape
+    k = w / sess["img"].shape[1]                     # canvas pixels per source image pixel
+    img = cv2.resize(sess["img"], (w, h), interpolation=cv2.INTER_AREA if k < 1 else cv2.INTER_LINEAR)
+    return pl.grow_mask(m, img, g["rim_px"] * k, g["dark_l"], g["margin_px"] * k)
+
+
+@app.post("/api/mask/grow")
+def api_mask_grow():
+    """Enlarges the mask shown in the Masks tab (transparent PNG, canvas size): dark outline around
+    the shape and / or margin. Returns the grey mask at the same size."""
+    data = request.get_json(force=True)
+    sess = SESSIONS.get(data.get("id", ""))
+    if not sess:
+        return jsonify(error="Session inconnue, rechargez l'image"), 404
+    try:
+        g = grow_args(data.get("grow"))
+        raw = base64.b64decode(str(data["png"]).split(",", 1)[-1])
+        img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED)
+    except (KeyError, TypeError, ValueError, cv2.error):
+        return jsonify(error="Requête d'agrandissement invalide"), 400
+    if img is None:
+        return jsonify(error="Masque illisible"), 400
+    if not g:
+        return jsonify(error="Rien à agrandir : cochez « Inclure le liseré sombre » ou choisissez une marge"), 400
+    alpha = img[..., 3] if (img.ndim == 3 and img.shape[2] == 4) else (img if img.ndim == 2 else img[..., 2])
+    m0 = alpha > 127
+    m = grow_on_canvas(sess, m0, g)
+    ok, buf = cv2.imencode(".png", m.astype(np.uint8) * 255)
+    return jsonify(png="data:image/png;base64," + base64.b64encode(buf.tobytes()).decode(),
+                   pct=round(100 * float(m.mean()), 1), added=round(100 * float((m & ~m0).mean()), 2))
 
 
 @app.post("/api/prepreview")
@@ -374,7 +456,11 @@ SILHOUETTE_MASK_NAMES = {"subject": "sujet", "outline": "contours (détails clé
 def subject_area(sess, lay, shape, source: str = "subject"):
     """Area whose outline is drawn (option "silhouette"), brought to the computed image area, or None:
     the subject cut-out, the key-detail mask or the dedicated silhouette mask."""
-    src = {"subject": sess.get("fg"), "outline": sess.get("mask"), "silhouette": sess.get("silmask")}.get(source)
+    if source == "outline":            # key-detail mask: every zone painted (union of their masks)
+        zm = [m for m in zone_masks(sess).values() if m is not None]
+        src = np.maximum.reduce(zm) if zm else None
+    else:
+        src = {"subject": sess.get("fg"), "silhouette": sess.get("silmask")}.get(source)
     if src is None:
         return None
     x0, y0, x1, y1 = lay.src_rect
@@ -398,22 +484,19 @@ def api_process():
         sess["prep"] = pl.prepare(sess["img"], p, lay, sess.get("fg") if p.pre_remove_bg else None)
         sess["prep_key"] = key
     # Key-detail mask (painted in the Masks tab, outline mask), brought to the computed image area
-    region = None
-    if p.outline and sess.get("mask") is not None:
-        x0, y0, x1, y1 = lay.src_rect
-        H, W = sess["prep"].labels.shape
-        region = cv2.resize(sess["mask"][y0:y1, x0:x1], (W, H), interpolation=cv2.INTER_NEAREST) > 0
+    regions = zone_regions(sess, lay, sess["prep"].labels.shape) if p.outline else {}
     sess["prep"].subject = subject_area(sess, lay, sess["prep"].labels.shape, p.outline_subject_mask)
     if p.outline_subject and sess["prep"].subject is None:
         warnings.append(f"Silhouette : le masque {SILHOUETTE_MASK_NAMES[p.outline_subject_mask]} est vide "
                         f"(onglet Masques)")
     # Only the paints changed (and they do not change the cut): same geometry, new colours
     geom = ({f.name: getattr(p, f.name) for f in fields(p) if f.name != "layer_colors"},
-            (sess["prep"], sess.get("mask"), sess.get("silmask"), sess.get("fg")))
+            (sess["prep"], sess.get("mask"), sess.get("silmask"), sess.get("fg"),
+             *[m for _, m in sorted((sess.get("zmasks") or {}).items())]))
     old = sess.get("geom")
     recolored = (sess.get("result") is not None and old is not None and pl.colors_only(p)
                  and old[0] == geom[0] and all(a is b for a, b in zip(old[1], geom[1])))
-    res = pl.recolor(sess["result"], p) if recolored else pl.build(sess["prep"], p, region)
+    res = pl.recolor(sess["result"], p) if recolored else pl.build(sess["prep"], p, zone_regions=regions)
     sess["geom"] = geom
     if p.stencil_style == "line" and not res.layers:
         warnings.append("Trait seul : aucun trait (cochez les détails clés, la silhouette ou le coloriage)")
@@ -464,6 +547,7 @@ def api_process():
             "color": pl.bgr_hex(L.color),
             "tone": L.tone,     # tone (index in `palette`) painted by this layer; None for the outline layer
             "sources": list(L.sources),   # line style: where the lines of this stencil come from
+            "group": L.group,             # outline stencil: its outline layer (A, B...)
             # layer view without highlights + bridges and removed details as separate overlays
             # (shown / hidden in the browser)
             "image": cached((L.index, "view", hexc, tuple(sheet)),
@@ -518,6 +602,7 @@ def api_process():
         visible_mm=[round(lay.vis_mm[2] - lay.vis_mm[0], 1), round(lay.vis_mm[3] - lay.vis_mm[1], 1)],
         delta_e=round(pl.delta_e(res, sheet_sim), 1),
         lines_added=res.lines_added,
+        zone_lines={k: list(v) for k, v in res.zone_lines.items()},   # whole lines: kept, detected, steps
         recolored=recolored,     # colours only: the cut of the previous computation was kept
         seconds=round(time.perf_counter() - t0, 2),
     )
@@ -539,9 +624,7 @@ def api_outline_preview():
     lay, _ = pl.resolve_layout(res.params, sess["img"].shape)
     x0, y0, x1, y1 = lay.src_rect
     H, W = res.prepared.labels.shape
-    region = None
-    if sess.get("mask") is not None:
-        region = cv2.resize(sess["mask"][y0:y1, x0:x1], (W, H), interpolation=cv2.INTER_NEAREST) > 0
+    region = zone_regions(sess, lay, (H, W)).get(str(data.get("zone") or "z1"))
     res.prepared.subject = subject_area(sess, lay, (H, W), p.outline_subject_mask)
     st = pl.outline_detection(res, p, region)
     # size of the computed area in the source image preview (same scale as the mask canvas)
@@ -618,11 +701,15 @@ def api_export(sid):
     if sess.get("silmask") is not None:
         ok, buf = cv2.imencode(".png", sess["silmask"])
         sil_png = buf.tobytes()
+    zone_pngs = {}
+    for zid, m in (sess.get("zmasks") or {}).items():
+        ok, buf = cv2.imencode(".png", m)
+        zone_pngs[zid] = buf.tobytes()
     lang = "fr" if request.args.get("lang") == "fr" else "en"
     data = export_zip(sess["result"], sess.get("material"), sess["name"],
                       original=(sess.get("raw"), sess.get("ext", ".png")), mask_png=mask_png,
                       ui=sess.get("ui"), subject_png=subject_png, sil_png=sil_png, lang=lang,
-                      subject_exact=bool(sess.get("subject_exact")))
+                      subject_exact=bool(sess.get("subject_exact")), zone_pngs=zone_pngs)
     return send_file(io.BytesIO(data), mimetype="application/zip", as_attachment=True,
                      download_name=f"{sess['name']}_{'pochoirs' if lang == 'fr' else 'stencils'}.zip")
 
@@ -670,6 +757,19 @@ def api_project():
         return ("data:image/png;base64," + base64.b64encode(buf.tobytes()).decode(),
                 round(100 * float((sess[key] > 0).mean()), 1))
     mask_b64, coverage = read_mask("masque", "mask")
+    zones = {}
+    for zid, z_name in (proj.get("masques_zones") or {}).items():
+        if not (isinstance(zid, str) and ZONE_ID.match(zid) and z_name in names):
+            continue
+        m = cv2.imdecode(np.frombuffer(z.read(z_name), np.uint8), cv2.IMREAD_GRAYSCALE)
+        if m is None or not m.any():
+            continue
+        h, w = img.shape[:2]
+        m = np.where(cv2.resize(m, (w, h), interpolation=cv2.INTER_NEAREST) > 127, 255, 0).astype(np.uint8)
+        sess.setdefault("zmasks", {})[zid] = m
+        ok, buf = cv2.imencode(".png", m)
+        zones[zid] = {"png": "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode(),
+                      "coverage": round(100 * float((m > 0).mean()), 1)}
     sil_b64, sil_coverage = read_mask("masque_silhouette", "silmask")
     subject = None
     s_name = proj.get("masque_sujet")
@@ -682,9 +782,13 @@ def api_project():
             ok, buf = cv2.imencode(".png", m)
             subject["png"] = "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode()
     return jsonify({**out, "info": info, "mask": mask_b64, "mask_coverage": coverage, "subject": subject,
+                    "zone_masks": zones,
                     "silmask": sil_b64, "silmask_coverage": sil_coverage})
 
 
 if __name__ == "__main__":
-    print("StencilIt : http://127.0.0.1:5000")
-    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
+    import os
+    # STENCILIT_PORT: run a second instance (e.g. for tests) next to the usual one on 5000
+    port = int(os.environ.get("STENCILIT_PORT", "5000"))
+    print(f"StencilIt : http://127.0.0.1:{port}")
+    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)

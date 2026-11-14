@@ -97,13 +97,20 @@ def embed(img: np.ndarray) -> dict:
     return {"emb": emb, "shape": (h, w)}
 
 
+def threshold(sensitivity: float) -> float:
+    """Decision threshold on the mask logits for a sensitivity 0..100 (50 = the model's own: 0):
+    higher sensitivity = lower threshold = wider selection, edges included more generously."""
+    return (50.0 - min(100.0, max(0.0, sensitivity))) / 50.0 * 8.0
+
+
 def select(state: dict, points: list[tuple[float, float, int]], out_size: tuple[int, int],
-           level: int = 0) -> np.ndarray:
+           level: int = 0, sensitivity: float = 50.0) -> np.ndarray:
     """Mask (bool, out_size = (w, h)) of the object designated by the points.
 
     points: (x, y, label) in fractions of the image (0..1), label 1 = object, 0 = not the object.
     level: 0 = the candidate the model trusts most, then the larger ones, then the smaller ones (a
     second click on the same spot switches between the cuts: part / object / whole).
+    sensitivity: 0..100, see `threshold`.
     """
     _, dec = _load()
     h, w = state["shape"]
@@ -119,7 +126,7 @@ def select(state: dict, points: list[tuple[float, float, int]], out_size: tuple[
         "has_mask_input": np.zeros(1, np.float32),
         "orig_im_size": np.array([oh, ow], np.float32),
     })
-    cand = masks[0] > 0
+    cand = masks[0] > threshold(sensitivity)
     n = cand.shape[0]
     idx = list(range(1, n)) if n > 1 else [0]           # with several outputs, #0 is the single-mask token
     best = max(idx, key=lambda i: iou[0, i])

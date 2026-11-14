@@ -552,7 +552,7 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
                original: tuple[bytes | None, str] | None = None, mask_png: bytes | None = None,
                sil_png: bytes | None = None,
                ui: dict | None = None, subject_png: bytes | None = None, lang: str = "en",
-               subject_exact: bool = False) -> bytes:
+               subject_exact: bool = False, zone_pngs: dict | None = None) -> bytes:
     """Zip of the stencils + reloadable project (original image, masks, interface settings).
 
     The JSON keys of …_infos.json are a file format and stay unchanged whatever the language
@@ -575,6 +575,11 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
                 z.writestr(subject_file, subject_png)
             if sil_png:
                 z.writestr(sil_file, sil_png)
+            # painted masks of the other key-detail zones (the first zone's is `masque`)
+            zone_files = {}
+            for zid, png in sorted((zone_pngs or {}).items()):
+                zone_files[zid] = f"{name}_{T('outline_mask')}_{zid}.png"
+                z.writestr(zone_files[zid], png)
             n = len(res.layers)
             for L in res.layers:
                 kind = T("_outline") if L.kind == "outline" else ""
@@ -597,6 +602,7 @@ def export_zip(res: Result, material: dict | None, name: str = "stencil",
                     "masque_sujet": subject_file,
                     "masque_sujet_exact": bool(subject_png and subject_exact),
                     "masque_silhouette": sil_file,
+                    "masques_zones": zone_files,
                     "interface": ui,
                 },
                 "format_feuille_mm": [round(v, 1) for v in res.sheet_mm],

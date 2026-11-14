@@ -7,6 +7,7 @@ are not obvious from the code.
 
 - Server: `.venv/Scripts/python app.py` → http://127.0.0.1:5000 (or `lancer.bat`).
 - Restart the server after any Python change (`app.py`, `stencilit/*.py`); `static/` is served live.
+- `STENCILIT_PORT=5001` runs a second instance; tests go there, 5000 is the author's own instance.
 - Layer computation is parallel; `STENCILIT_PARALLEL=thread|process|none` (`none` helps debugging).
 
 ## Translations (main pitfall)

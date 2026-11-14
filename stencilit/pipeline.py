@@ -7,16 +7,23 @@ in mm.
 from __future__ import annotations
 
 import io
+import json
 import math
+import re
 import os
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 
 import cv2
 import numpy as np
 
+from . import effects as fxmod
+
 
 OUTLINE_METHODS = ("canny", "xdog", "ridge")
 OUTLINE_TARGETS = ("stencil", "darkest", "nearest")
+OUTLINE_REFS = ("layers", "effects", "image")
+CLOSE_LINES = ("", "median", "outer", "inner")
+OUTLINE_CHANNELS = ("light", "colour", "both")
 
 
 @dataclass
@@ -68,6 +75,23 @@ class Params:
     outline_sensitivity: float = 50.0   # 0 = only the strongest details .. 100 = many details (progressive)
     outline_width_mm: float = 0.8       # line width (at least the material's minimum opening)
     outline_min_length_mm: float = 4.0  # minimum line length
+    # what the key details are compared with: layers = render of the colour layers before their
+    # effects (the lines stay put when effects change); effects = render after the effects (the lines
+    # make up for what the effects lose); image = the image alone, before the layers are computed
+    # (all the lines of the image, chosen by the sensitivity only)
+    outline_ref: str = "layers"
+    # the sensitivity keeps whole lines (each candidate line kept or left out as a whole) instead of
+    # the most important points (a line whose strength varies along it is then cut into pieces)
+    outline_whole_lines: bool = False
+    # whole lines: detection sensitivity (0..100), how faint a line may be and still count as detected
+    outline_line_sens: float = 50.0
+    # two lines closer than the minimum material strip: "" = left to the material limits (the strip
+    # between them is opened: a black flat area); median = one line in the middle; outer / inner =
+    # only the line farther from / closer to the centre of the zone
+    outline_close_lines: str = ""
+    # what the lines are looked for in: light = lightness (L*); colour = colourfulness (chroma),
+    # where a shadow hardly shows while a black / grey line stays sharp; both = either
+    outline_channel: str = "light"
     outline_subject: bool = False       # also draw the outline of a mask (silhouette of the subject)
     outline_subject_mask: str = "subject"   # mask whose outline is drawn: subject | outline | silhouette
     outline_subject_weak: bool = False      # silhouette only where the edge stands out poorly in the render
@@ -86,6 +110,10 @@ class Params:
     # Paint colours chosen for the layers: "1=#rrggbb;3=#rrggbb" (layer number -> colour).
     # Layers not listed keep their computed tone.
     layer_colors: str = ""
+    # Effects stacks of the colour layers (JSON, see stencilit/effects.py); "" = none
+    layer_effects: str = ""
+    # Key-detail zones (JSON, see outline_plan); "" = one zone from the outline_* settings above
+    outline_zones: str = ""
     # Material constraints
     min_opening_mm: float = 0.8    # minimum width of an opening
     min_strip_mm: float = 1.0      # minimum width of a material strip
@@ -180,6 +208,10 @@ class Params:
         p.outline_sensitivity = float(np.clip(p.outline_sensitivity, 0, 100))
         p.outline_method = p.outline_method if p.outline_method in OUTLINE_METHODS else "canny"
         p.outline_target = p.outline_target if p.outline_target in OUTLINE_TARGETS else "stencil"
+        p.outline_ref = p.outline_ref if p.outline_ref in OUTLINE_REFS else "layers"
+        p.outline_close_lines = p.outline_close_lines if p.outline_close_lines in CLOSE_LINES else ""
+        p.outline_channel = p.outline_channel if p.outline_channel in OUTLINE_CHANNELS else "light"
+        p.outline_line_sens = float(np.clip(p.outline_line_sens, 0, 100))
         p.pre_clahe = float(np.clip(p.pre_clahe, 0, 100))
         p.pre_gamma = float(np.clip(p.pre_gamma, 0.3, 3.0))
         p.pre_saturation = float(np.clip(p.pre_saturation, 0, 300))
@@ -453,6 +485,32 @@ def preprocess_image(img: np.ndarray, p: Params, px_per_mm: float | None = None)
         ab = lab[..., 1:].astype(np.float32) - 128.0
         lab[..., 1:] = np.clip(ab * (p.pre_saturation / 100.0) + 128.0, 0, 255).astype(np.uint8)
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+
+def grow_mask(mask: np.ndarray, img: np.ndarray, rim_px: float = 0.0, dark_l: float = 35.0,
+              margin_px: float = 0.0) -> np.ndarray:
+    """Enlarges a mask (bool, same size as `img`, BGR).
+    rim_px > 0: the dark outline around the shape (e.g. the black line around a drawn subject, left
+    out by the object selection) is added: pixels with L* <= dark_l reached from the mask through
+    dark pixels only, at most rim_px away. Then margin_px: plain enlargement all around."""
+    m = mask.astype(bool)
+    if rim_px >= 0.5 and m.any():
+        L = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[..., 0].astype(np.float32) * (100.0 / 255.0)
+        reach = cv2.dilate(m.astype(np.uint8), disk(rim_px)) > 0
+        allowed = (reach & (L <= dark_l)) | m
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        cur = m.astype(np.uint8)
+        for _ in range(int(math.ceil(rim_px)) + 1):        # geodesic growth through the dark pixels
+            nxt = cv2.dilate(cur, k) & allowed.astype(np.uint8)
+            if np.array_equal(nxt, cur):
+                break
+            cur = nxt
+        # pinholes left in the line (light pixels of anti-aliasing or texture) are filled
+        added = cv2.morphologyEx(cur & ~m.astype(np.uint8) & 1, cv2.MORPH_CLOSE, k)
+        m = m | (added > 0)
+    if margin_px >= 0.5 and m.any():
+        m = cv2.dilate(m.astype(np.uint8), disk(margin_px)) > 0
+    return m
 
 
 def grabcut_subject(img: np.ndarray, painted: np.ndarray, max_side: int = 700) -> np.ndarray:
@@ -1190,7 +1248,8 @@ class Layer:
     merged: np.ndarray | None = None   # areas changed by merges instead of bridges (whole sheet)
     n_merged: int = 0        # number of merges (closed channels + removed islands)
     tone: int | None = None  # index of the tone it paints in prepared.palette (colour layers)
-    sources: tuple = ()      # line stencils of the "line" style: details | silhouette | zones | tone<n>
+    sources: tuple = ()      # line stencils of the "line" style: details:<group> | silhouette | zones | tone<n>
+    group: str = ""          # outline stencil: key of its outline layer (A, B...)
 
 
 @dataclass
@@ -1209,7 +1268,9 @@ class Result:
     sheet_rect_mm: tuple = (0.0, 0.0, 0.0, 0.0)  # sheet in support coordinates (x0, y0, x1, y1)
     detect_sim: np.ndarray | None = None  # simulated render the key-detail search compared against
     lines_added: int = 0         # key-detail lines merged into the colour layers
+    zone_lines: dict = field(default_factory=dict)   # whole lines: {zone id: (lines kept, lines detected)}
     detect_painted: np.ndarray | None = None  # layer painting each pixel before the lines were merged
+    detect_sim_pre: np.ndarray | None = None  # same render without the layer effects (None = no effect)
 
     @property
     def sup_off_mm(self) -> tuple:
@@ -1274,7 +1335,30 @@ def _pool():
     return _POOL
 
 
-def run_layer_jobs(jobs: list) -> list:
+# Results of the last layer jobs, by content of their inputs: a change that leaves a layer as it
+# was (e.g. an effect of another layer) does not recompute its merges, bridges and paths.
+_JOB_CACHE: dict = {}
+_JOB_CACHE_MAX = 24
+# fields with no influence on layer_job (or already reflected in its masks)
+_JOB_KEY_SKIP = {"layer_colors", "layer_effects", "spray_mm"}
+
+
+def _job_key(job) -> bytes:
+    import hashlib
+    opening, hidden, p, weight, protect = job
+    h = hashlib.blake2b(digest_size=20)
+    for a in (opening, hidden, protect):
+        if a is None:
+            h.update(b"-")
+        else:
+            h.update(repr((a.shape, a.dtype.str)).encode())
+            h.update(np.ascontiguousarray(a).tobytes())
+    h.update(repr((round(weight, 6), [(f.name, getattr(p, f.name)) for f in fields(p)
+                                      if f.name not in _JOB_KEY_SKIP])).encode())
+    return h.digest()
+
+
+def _run_jobs(jobs: list) -> list:
     if PARALLEL == "none" or len(jobs) < 2:
         return [layer_job(j) for j in jobs]
     try:
@@ -1283,9 +1367,24 @@ def run_layer_jobs(jobs: list) -> list:
         return [layer_job(j) for j in jobs]
 
 
-def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -> Result:
-    """`outline_region`: boolean mask (image area) limiting the key-detail search of the
-    outline stencil; None = whole image."""
+def run_layer_jobs(jobs: list) -> list:
+    keys = [_job_key(j) for j in jobs]
+    todo = [i for i, k in enumerate(keys) if k not in _JOB_CACHE]
+    done = _run_jobs([jobs[i] for i in todo])
+    for i, r in zip(todo, done):
+        _JOB_CACHE[keys[i]] = r
+    out = [_JOB_CACHE[k] for k in keys]
+    for k in keys:                     # most recently used last
+        _JOB_CACHE[k] = _JOB_CACHE.pop(k)
+    while len(_JOB_CACHE) > _JOB_CACHE_MAX:
+        _JOB_CACHE.pop(next(iter(_JOB_CACHE)))
+    return out
+
+
+def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None,
+          zone_regions: dict | None = None) -> Result:
+    """`zone_regions`: {zone id: boolean mask (image area) limiting the key-detail search of the
+    zone, or None = whole image}; without it, `outline_region` is the first zone's."""
     labels = prep.labels
     H, W = labels.shape
     ppm = p.px_per_mm
@@ -1327,6 +1426,15 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
         targets.append(t)
         cleaned_all.append(clean_mask(t, p, extra_area))
 
+    # Effects of the layers (each layer its own stack), applied before lines, merges and bridges
+    fx = fxmod.parse(p.layer_effects) if color_ids else {}
+    pre_fx = list(cleaned_all)            # without effects: what the "removed details" are compared to
+    base_masks = list(cleaned_all)        # colour layers before their effects (key details "before effects")
+    if fx:
+        limit = None if prep.fg is None else np.where(prep.fg, 255, 0).astype(np.uint8)
+        cleaned_all = fxmod.apply_all(cleaned_all, fx, p, prep.resized, prep.off_px, limit,
+                                      fxmod.options(p.layer_effects))
+
     paints = parse_layer_colors(p.layer_colors)
     colors = [paints.get(li + 1, prep.palette[ci]) for li, ci in enumerate(color_ids)]
 
@@ -1337,30 +1445,50 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
                       support_px=(SW, SH), img_off_px=(X0, Y0), sup_off_px=(ox, oy),
                       sheet_rect_mm=(sx0, sy0, sx0 + sheet_shape[1] / ppm, sy0 + sheet_shape[0] / ppm), **kw)
 
-    region = outline_region
-    if prep.fg is not None and p.outline:
-        region = prep.fg if region is None else (region.astype(bool) & prep.fg)
+    # Lines: key-detail zones (`outline`) and/or silhouette (`outline_subject`), each can be on
+    # without the other; each one goes to an outline layer or into the colour layers.
+    entries, groups = outline_entries(p, prep, zone_regions, outline_region)
     if p.stencil_style == "line":
-        return make_result(line_stencils(prep, p, region, support, place))
+        return make_result(line_stencils(prep, p, entries, groups, support, place),
+                           zone_lines=_zone_lines(entries))
 
-    # Lines of the fill style: key details (`outline`) and/or silhouette (`outline_subject`), each
-    # can be on without the other.
-    lines_on = p.outline or p.outline_subject
     # Key-detail lines merged into the colour layers (instead of a separate outline stencil):
     # searched against the render of the layers before bridges, then added to the chosen layer.
     detect_sim, detect_painted, lines_added, strokes = None, None, 0, {}
-    if lines_on and p.outline_target != "stencil" and color_ids:
-        draft = make_result([Layer(index=li + 1, color=colors[li], target=targets[li], opening=place(c),
-                                   lost=c, bridges=[], paths=[]) for li, c in enumerate(cleaned_all)])
-        detect_sim = image_sim(draft)
+    into = [e for e in entries if e[2] in ("darkest", "nearest")]
+    # render of the colour layers before their effects, for the zones that search "before effects"
+    need_pre = bool(fx) and any(e[0].outline_ref == "layers" for e in entries)
+    flat = np.empty((H, W, 3), np.uint8)       # "image alone": compared with the bare support
+    flat[:] = np.asarray(support, np.uint8)
+
+    def ref_sim(pe, post, pre):
+        if pe.outline_ref == "image":
+            return flat
+        return pre if (pe.outline_ref == "layers" and pre is not None) else post
+    detect_sim_pre = None
+
+    def render(masks):
+        return image_sim(make_result([Layer(index=li + 1, color=colors[li], target=targets[li], opening=place(c),
+                                            lost=c, bridges=[], paths=[]) for li, c in enumerate(masks)]))
+    if into and color_ids:
+        detect_sim = render(cleaned_all)
+        if need_pre:
+            detect_sim_pre = render(base_masks)
         painted = np.full((H, W), -1, np.int32)      # last layer painting each pixel (-1 = support)
         for li, c in enumerate(cleaned_all):
             painted[c > 0] = li
-        strokes, lines_added = lines_into_layers(prep, detect_sim, p, region, color_ids, painted)
+        for pe, reg, _, _ in into:
+            sim_e = ref_sim(pe, detect_sim, detect_sim_pre)
+            s, n_added = lines_into_layers(prep, sim_e, pe, reg, color_ids, painted)
+            lines_added += n_added
+            for li, stroke in s.items():
+                strokes[li] = stroke if li not in strokes else (strokes[li] | stroke)
         detect_painted = painted
         for li, stroke in strokes.items():
             targets[li] = targets[li] | stroke
             cleaned_all[li] = clean_mask(cleaned_all[li] | clean_mask(stroke, p), p)
+            if li + 1 in fx:
+                pre_fx[li] = pre_fx[li] | clean_mask(stroke, p)
 
     # Each layer (bridges + vectorisation) is independent of the others: computed in parallel
     jobs = []
@@ -1383,16 +1511,37 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
         opening, bridges, n_isl, n_short, paths, merged, n_merged = results[li]
         target, cleaned = targets[li], cleaned_all[li]
         layers.append(Layer(index=li + 1, color=colors[li], target=target,
-                            opening=opening, lost=cv2.bitwise_xor(cleaned, target), bridges=bridges, paths=paths,
+                            opening=opening, lost=cv2.bitwise_xor(pre_fx[li] if li + 1 in fx else cleaned, target),
+                            bridges=bridges, paths=paths,
                             islands=n_isl, short_islands=n_short, merged=merged, n_merged=n_merged, tone=ci))
-    res = make_result(layers, detect_sim=detect_sim, detect_painted=detect_painted, lines_added=lines_added)
+    res = make_result(layers, detect_sim=detect_sim, detect_painted=detect_painted, lines_added=lines_added,
+                      detect_sim_pre=detect_sim_pre, zone_lines=_zone_lines(entries))
 
-    # Outline stencil: painted last, above all layers
-    if lines_on and p.outline_target == "stencil":
-        sim = res.detect_sim = image_sim(res)
-        color = outline_color(prep, support, p)
-        target = detect_key_details(prep, sim, p, region, outline_is_dark(color, support))
-        if target.any():
+    # Outline stencils, painted last, above all layers: one per outline layer (A, B...), made of
+    # the zones (and silhouette) sent to it
+    order = [g for g in groups if any(e[2] == g for e in entries)]
+    sim = sim_pre = None
+    for g in order:
+        if sim is None:
+            sim = res.detect_sim = image_sim(res)
+            if need_pre:           # same render (lines added to the layers included), effects left out
+                pre = [base_masks[li] | strokes[li] if li in strokes else base_masks[li] for li in range(len(base_masks))]
+                sim_pre = res.detect_sim_pre = render(pre)
+        color = outline_color(prep, support, group_params(p, groups[g]))
+        dark = outline_is_dark(color, support)
+        target, gap_zones, w_sil = None, None, 0.0
+        for pe, reg, dest, is_sil in entries:
+            if dest != g:
+                continue
+            sim_e = ref_sim(pe, sim, sim_pre)
+            t = detect_key_details(prep, sim_e, pe, reg, dark)
+            target = t if target is None else (target | t)
+            if is_sil:
+                _, gap_zones = subject_silhouette(prep, pe, sim_e, gaps=True)
+                w_sil = max(pe.outline_width_mm, pe.min_opening_mm * 1.05)
+        if gap_zones is not None:          # interruptions of the silhouette: no other line there either
+            target[cv2.dilate(gap_zones.astype(np.uint8), disk(w_sil * ppm / 2)) > 0] = 0
+        if target is not None and target.any():
             cleaned = clean_mask(target, p)
             lost = cv2.bitwise_xor(cleaned, target)
             opening = place(cleaned)
@@ -1401,8 +1550,119 @@ def build(prep: Prepared, p: Params, outline_region: np.ndarray | None = None) -
             layers.append(Layer(index=len(layers) + 1, color=color, target=target, opening=opening,
                                 lost=lost, bridges=bridges, paths=vectorize(opening, p),
                                 islands=n_isl, short_islands=n_short, merged=merged, n_merged=n_merged,
-                                kind="outline"))
+                                kind="outline", group=g))
+    res.zone_lines = _zone_lines(entries)       # counted once every zone has been searched
     return res
+
+
+# --------------------------------------------------------------------------
+# Key-detail zones: each zone (painted area, or the whole image) has its own detection settings and
+# a destination: an outline layer (A, B... several zones sent to the same one are merged into one
+# stencil) or the colour layers (darkest / nearest). The colour belongs to the outline layer.
+#   {"zones": [{"id": "z1", "name": "Zone 1", "on": true, "method": "canny", "sensitivity": 50,
+#               "width_mm": 0.8, "min_length_mm": 4, "dest": "A"}],
+#    "groups": {"A": {"auto": true, "color": "#1e1e1e"}}, "sil_dest": "A"}
+# --------------------------------------------------------------------------
+_ZONE_ID = re.compile(r"^z\d{1,3}$")
+_GROUP = re.compile(r"^[A-Z]$")
+
+
+def _hex(v, default):
+    v = str(v or "").strip().lower()
+    return v if len(v) == 7 and v.startswith("#") and all(c in "0123456789abcdef" for c in v[1:]) else default
+
+
+def outline_plan(p: Params) -> tuple[list, dict, str]:
+    """(zones, groups, silhouette destination). Without `outline_zones`: one zone made of the
+    outline_* settings (projects of earlier versions), its destination from `outline_target`."""
+    legacy = "A" if p.outline_target == "stencil" else p.outline_target
+    groups = {"A": {"auto": bool(p.outline_auto_color), "color": _hex(p.outline_color, "#1e1e1e")}}
+    zones = [dict(id="z1", name="Zone 1", on=True, method=p.outline_method, sensitivity=p.outline_sensitivity,
+                  width_mm=p.outline_width_mm, min_length_mm=p.outline_min_length_mm, dest=legacy,
+                  ref=p.outline_ref, whole=bool(p.outline_whole_lines), line_sens=p.outline_line_sens,
+                  close=p.outline_close_lines, channel=p.outline_channel)]
+    sil = legacy
+    try:
+        data = json.loads(p.outline_zones) if p.outline_zones else None
+    except (ValueError, TypeError):
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("zones"), list) or not data["zones"]:
+        return zones, groups, sil
+    ok_dest = lambda d: d in ("darkest", "nearest") or (isinstance(d, str) and bool(_GROUP.match(d)))
+    groups = {}
+    for k, g in (data.get("groups") or {}).items():
+        if isinstance(k, str) and _GROUP.match(k) and isinstance(g, dict):
+            groups[k] = {"auto": g.get("auto") is not False, "color": _hex(g.get("color"), "#1e1e1e")}
+    zones = []
+    seen = set()
+    for z in data["zones"][:20]:
+        if not isinstance(z, dict) or not _ZONE_ID.match(str(z.get("id", ""))) or z["id"] in seen:
+            continue
+        seen.add(z["id"])
+
+        def num(k, lo, hi, d):
+            try:
+                v = float(z.get(k, d))
+            except (TypeError, ValueError):
+                v = d
+            return float(np.clip(v, lo, hi)) if math.isfinite(v) else d
+        dest = z.get("dest") if ok_dest(z.get("dest")) else "A"
+        zones.append(dict(id=z["id"], name=str(z.get("name") or z["id"])[:40], on=z.get("on") is not False,
+                          method=z.get("method") if z.get("method") in OUTLINE_METHODS else "canny",
+                          sensitivity=num("sensitivity", 0, 100, 50.0),
+                          width_mm=num("width_mm", 0.2, 10, 0.8), min_length_mm=num("min_length_mm", 0, 200, 4.0),
+                          dest=dest, ref=z.get("ref") if z.get("ref") in OUTLINE_REFS else "layers",
+                          close=z.get("close") if z.get("close") in CLOSE_LINES else "",
+                          channel=z.get("channel") if z.get("channel") in OUTLINE_CHANNELS else "light",
+                          whole=z.get("whole") is True, line_sens=num("line_sens", 0, 100, 50.0)))
+    if not zones:
+        return outline_plan(replace(p, outline_zones=""))
+    sil = data.get("sil_dest") if ok_dest(data.get("sil_dest")) else zones[0]["dest"]
+    for d in [z["dest"] for z in zones] + [sil]:
+        if _GROUP.match(d) and d not in groups:
+            groups[d] = {"auto": True, "color": "#1e1e1e"}
+    groups = dict(sorted(groups.items()))
+    return zones, groups, sil
+
+
+def zone_params(p: Params, z: dict) -> Params:
+    """Settings of the key-detail search of one zone (the silhouette is a separate entry)."""
+    return replace(p, outline=True, outline_subject=False, outline_method=z["method"],
+                   outline_sensitivity=z["sensitivity"], outline_width_mm=z["width_mm"],
+                   outline_min_length_mm=z["min_length_mm"], outline_ref=z["ref"], outline_whole_lines=z["whole"],
+                   outline_line_sens=z["line_sens"], outline_close_lines=z["close"], outline_channel=z["channel"],
+                   outline_target="stencil" if _GROUP.match(z["dest"]) else z["dest"])
+
+
+def group_params(p: Params, g: dict) -> Params:
+    return replace(p, outline_auto_color=g["auto"], outline_color=g["color"])
+
+
+def outline_entries(p: Params, prep: "Prepared", zone_regions: dict | None,
+                    outline_region: np.ndarray | None) -> tuple[list, dict]:
+    """Searches to run: [(params, region, destination, is_silhouette)] + groups. Region of a zone:
+    its painted mask (`zone_regions`; without it, `outline_region` for the first zone), limited to
+    the subject when the background is removed."""
+    zones, groups, sil_dest = outline_plan(p)
+    entries = []
+    if p.outline:
+        for z in zones:
+            if not z["on"]:
+                continue
+            if zone_regions is not None:
+                r = zone_regions.get(z["id"])
+            else:
+                r = outline_region if z["id"] == "z1" else None
+            if prep.fg is not None:
+                r = prep.fg if r is None else (r.astype(bool) & prep.fg)
+            pz = zone_params(p, z)
+            object.__setattr__(pz, "_zone", z["id"])          # to report its line counts
+            entries.append((pz, r, z["dest"], False))
+    if p.outline_subject:
+        entries.append((replace(p, outline=False, outline_subject=True, outline_ref="layers",
+                                outline_target="stencil" if _GROUP.match(sil_dest) else sil_dest),
+                        None, sil_dest, True))
+    return entries, groups
 
 
 def outline_color(prep: Prepared, support: np.ndarray, p: Params) -> np.ndarray:
@@ -1632,7 +1892,7 @@ def zone_limits(prep: Prepared, p: Params) -> tuple[np.ndarray, np.ndarray]:
     return keep[lab_c], darker
 
 
-def line_stencils(prep: Prepared, p: Params, region: np.ndarray | None, support: np.ndarray,
+def line_stencils(prep: Prepared, p: Params, entries: list, groups: dict, support: np.ndarray,
                   place) -> list:
     """Stencils of the "line" style: no flat colour, only lines, one stencil per line colour
     (sprayed from the lightest to the darkest). Sources: key details found against the bare
@@ -1641,24 +1901,33 @@ def line_stencils(prep: Prepared, p: Params, region: np.ndarray | None, support:
     ppm = p.px_per_mm
     flat = np.empty((H, W, 3), np.uint8)
     flat[:] = np.asarray(support, np.uint8)
-    base = np.asarray(outline_color(prep, support, p), np.uint8)
+    def gcol(g):                        # colour of an outline layer (no colour layers here:
+        g = g if g in groups else next(iter(groups), None)   # darkest / nearest = the first one)
+        pg = group_params(p, groups[g]) if g else p
+        return g or "A", np.asarray(outline_color(prep, support, pg), np.uint8)
+
+    sil = [e for e in entries if e[3]]
+    _, base = gcol(sil[0][2] if sil else next(iter(groups), "A"))
 
     def colour(h):
         return hex_to_bgr(h).astype(np.uint8) if h.startswith("#") else base
 
-    parts = []                          # (one-pixel line, colour, source)
+    width0 = max(p.outline_width_mm, p.min_opening_mm * 1.05)
+    parts = []                          # (one-pixel line, colour, source, line width mm)
     zones = np.zeros((H, W), bool)
-    if p.outline:
-        st = detect_key_details(prep, flat, replace(p, outline_subject=False), region,
-                                outline_is_dark(base, support), stages=True)
-        ln, z = gap_lines(st["kept"], p)
-        parts.append((ln, base, "details"))
+    for pe, reg, dest, is_sil in entries:
+        if is_sil:
+            continue
+        g, c = gcol(dest)
+        st = detect_key_details(prep, flat, pe, reg, outline_is_dark(c, support), stages=True)
+        ln, z = gap_lines(st["kept"], pe)
+        parts.append((ln, c, "details:" + g, max(pe.outline_width_mm, p.min_opening_mm * 1.05)))
         if z is not None:
             zones |= z
     if p.outline_subject:
         ln, z = subject_silhouette(prep, p, None, gaps=True)
         if ln is not None:
-            parts.append((ln, colour(p.line_sil_color), "silhouette"))
+            parts.append((ln, colour(p.line_sil_color), "silhouette", width0))
             if z is not None:
                 zones |= z
     if p.line_zones:
@@ -1671,25 +1940,24 @@ def line_stencils(prep: Prepared, p: Params, region: np.ndarray | None, support:
             for t in np.unique(darker[ln]).tolist():
                 if t >= 0:
                     c = paints.get(t, prep.palette[t].astype(np.uint8))
-                    parts.append((ln & (darker == t), c, f"tone{t}"))
+                    parts.append((ln & (darker == t), c, f"tone{t}", width0))
         else:
-            parts.append((ln, colour(p.line_zones_color), "zones"))
-    width = max(p.outline_width_mm, p.min_opening_mm * 1.05)
-    k = disk(width * ppm / 2)
+            parts.append((ln, colour(p.line_zones_color), "zones", width0))
+    wmax = max([w for *_, w in parts] + [width0])
     # the interruptions of a line stay free of every other line
-    free = ~(cv2.dilate(zones.astype(np.uint8), k) > 0)
-    groups: dict[str, list] = {}
-    for ln, c, src in parts:
+    free = ~(cv2.dilate(zones.astype(np.uint8), disk(wmax * ppm / 2)) > 0)
+    by_colour: dict[str, list] = {}
+    for ln, c, src, w in parts:
         ln = ln & free
         if not ln.any():
             continue
-        g = groups.setdefault(bgr_hex(c), [np.zeros((H, W), bool), [], np.asarray(c, np.uint8)])
-        g[0] |= ln
-        g[1].append(src)
-    order = sorted(groups.values(), key=lambda g: -float(_lab(g[2].reshape(1, 3))[0, 0]))  # light first
+        g = by_colour.setdefault(bgr_hex(c), [np.zeros((H, W), np.uint8), [], np.asarray(c, np.uint8)])
+        g[0] |= cv2.dilate(ln.astype(np.uint8) * 255, disk(w * ppm / 2))   # each line its own width
+        if src not in g[1]:
+            g[1].append(src)
+    order = sorted(by_colour.values(), key=lambda g: -float(_lab(g[2].reshape(1, 3))[0, 0]))  # light first
     layers = []
-    for i, (ln, srcs, c) in enumerate(order):
-        target = cv2.dilate(ln.astype(np.uint8) * 255, k)
+    for i, (target, srcs, c) in enumerate(order):
         cleaned = clean_mask(target, p)
         opening = place(cleaned)
         merged, n_merged = merge_line_islands(opening, p, c, support)
@@ -1789,6 +2057,146 @@ def subject_silhouette(prep: Prepared, p: Params, sim: np.ndarray | None = None,
     return line if line.any() else None
 
 
+def _zone_lines(entries: list) -> dict:
+    """Line counts of the whole-line zones of the last search: {zone id: (kept, detected)}."""
+    out = {}
+    for pe, *_ in entries:
+        c = getattr(pe, "_line_counts", None)
+        if c is not None and getattr(pe, "_zone", None):
+            out[pe._zone] = c
+    return out
+
+
+LINE_FLOOR = 0.05      # whole lines: weakest relative mark reached at sensitivity 100
+
+
+def line_threshold(sens: float) -> float:
+    """Whole lines: minimum mark of a line, as a share of the mark of the most marked lines of the
+    zone (90th percentile of the line marks), for a detection sensitivity 0..100. Logarithmic
+    (contrast is perceived as ratios): 100 % at 0, ~22 % at 50, 5 % at 100."""
+    return LINE_FLOOR ** (float(np.clip(sens, 0, 100)) / 100.0)
+
+
+def line_sensitivity(rel: np.ndarray) -> np.ndarray:
+    """Inverse of line_threshold: sensitivity from which a line of relative mark `rel` is kept."""
+    return np.clip(100.0 * np.log(np.maximum(rel, 1e-9)) / np.log(LINE_FLOOR), 0, 100)
+
+
+def _line_marks(cand: np.ndarray, score: np.ndarray, ppm: float, min_len_mm: float):
+    """Candidate points grouped into lines (small gaps rejoined): (labels, ids of the lines long
+    enough, mark of each line = median importance of its points)."""
+    joined = cv2.morphologyEx(cand.astype(np.uint8), cv2.MORPH_CLOSE, disk(max(1.0, 0.3 * ppm)))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(joined, connectivity=8)
+    if n <= 1:
+        return lab, np.zeros(0, np.int64), np.zeros(max(n, 1))
+    lab_c = lab[cand]
+    cnt = np.bincount(lab_c, minlength=n)
+    order = np.argsort(lab_c, kind="stable")
+    labs, vals = lab_c[order], score[cand][order]
+    starts = np.searchsorted(labs, np.arange(n))
+    ends = np.searchsorted(labs, np.arange(n), side="right")
+    med = np.zeros(n)
+    for i in range(1, n):
+        if ends[i] > starts[i]:
+            med[i] = float(np.median(vals[starts[i]:ends[i]]))
+    length = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
+    ok = (length >= max(2, int(min_len_mm * ppm))) & (cnt > 0)
+    ok[0] = False
+    return lab, np.flatnonzero(ok), med
+
+
+def _whole_lines(cand: np.ndarray, score: np.ndarray, sens: float, ppm: float,
+                 min_len_mm: float) -> tuple[np.ndarray, tuple]:
+    """Selection by whole lines in the zone: each line whose mark reaches the detection threshold
+    (`line_threshold(sens)` x the mark of the most marked lines of the zone) is kept, whole. Lines
+    shorter than the minimum length are not candidates. Returns (points, (kept, detected, steps))."""
+    lab, ids, med = _line_marks(cand, score, ppm, min_len_mm)
+    if not len(ids):
+        return np.zeros(cand.shape, bool), (0, 0, [])
+    ref = float(np.percentile(med[ids], 90))
+    keep = np.zeros(len(med), bool)
+    keep[ids[med[ids] >= line_threshold(sens) * ref]] = True
+    # sensitivity from which each line appears (marks on the slider)
+    steps = sorted(round(float(x), 1) for x in line_sensitivity(med[ids] / max(ref, 1e-9)))
+    return cand & keep[lab], (int(keep.sum()), len(ids), steps)
+
+
+def _thin(m: np.ndarray) -> np.ndarray:
+    """One-pixel centre lines of a mask (Zhang-Suen thinning)."""
+    img = m.astype(np.uint8)
+    while True:
+        changed = False
+        for step in (0, 1):
+            P = np.pad(img, 1)
+            p2, p3, p4, p5 = P[:-2, 1:-1], P[:-2, 2:], P[1:-1, 2:], P[2:, 2:]
+            p6, p7, p8, p9 = P[2:, 1:-1], P[2:, :-2], P[1:-1, :-2], P[:-2, :-2]
+            nb = [p2, p3, p4, p5, p6, p7, p8, p9, p2]
+            B = sum(x.astype(np.int16) for x in nb[:8])
+            A = sum(((nb[i] == 0) & (nb[i + 1] == 1)).astype(np.int16) for i in range(8))
+            if step == 0:
+                c1, c2 = p2 * p4 * p6, p4 * p6 * p8
+            else:
+                c1, c2 = p2 * p4 * p8, p2 * p6 * p8
+            rm = (img == 1) & (B >= 2) & (B <= 6) & (A == 1) & (c1 == 0) & (c2 == 0)
+            if rm.any():
+                img[rm] = 0
+                changed = True
+        if not changed:
+            return img > 0
+
+
+def _close_lines(lines: np.ndarray, stroke: np.ndarray, p: Params, region: np.ndarray | None):
+    """Lines of a zone closer to each other than the minimum material strip: the material limits
+    would open the strip between them (a flat area). Strip by strip, the two pieces of line along
+    it are replaced by one: their median line (`median`), or the piece farther from / closer to
+    the centre of the zone (`outer` / `inner`); the other lines are left alone.
+    Returns (lines, stroke)."""
+    ppm = p.px_per_mm
+    r_close = p.min_strip_mm * ppm / 2
+    if r_close < 0.5 or not stroke.any():
+        return lines, stroke
+    closed = cv2.morphologyEx(stroke, cv2.MORPH_CLOSE, disk(r_close)) > 0
+    fill = closed & (stroke == 0)
+    if not fill.any():
+        return lines, stroke
+    w_px = max(p.outline_width_mm, p.min_opening_mm * 1.05) * ppm
+    mode = p.outline_close_lines
+    ref = region if region is not None and region.any() else lines
+    cy, cx = (float(v.mean()) for v in np.nonzero(ref))       # centre of the zone
+    out = lines.copy()
+    H, W = lines.shape
+    m = int(np.ceil(w_px + 4))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(fill.astype(np.uint8), connectivity=8)
+    for i in range(1, n):
+        x, y, w, h, a = stats[i]
+        if a < 3:
+            continue
+        ya, yb, xa, xb = max(0, y - m), min(H, y + h + m), max(0, x - m), min(W, x + w + m)
+        strip = (lab[ya:yb, xa:xb] == i).astype(np.uint8)
+        along = cv2.dilate(strip, disk(w_px / 2 + 2)) > 0          # the strip and the two strokes beside it
+        sides = lines[ya:yb, xa:xb] & along                        # the pieces of line along the strip
+        if not sides.any():
+            continue
+        if mode == "median":
+            band = (closed[ya:yb, xa:xb] & along) | (strip > 0)
+            centre = _thin(band)
+            out[ya:yb, xa:xb] = (out[ya:yb, xa:xb] & ~sides) | centre
+            continue
+        k, pl_ = cv2.connectedComponents(sides.astype(np.uint8), connectivity=8)
+        if k <= 2:                       # a single piece (the two lines join here): left as is
+            continue
+        py, px = np.nonzero(sides)
+        dist = np.hypot(px + xa - cx, py + ya - cy)
+        lbl = pl_[py, px]
+        mean = np.bincount(lbl, dist, minlength=k) / np.maximum(np.bincount(lbl, minlength=k), 1)
+        cand = np.arange(1, k)
+        keep = cand[np.argmax(mean[1:])] if mode == "outer" else cand[np.argmin(mean[1:])]
+        drop = sides & (pl_ != keep)
+        out[ya:yb, xa:xb] &= ~drop
+    stroke = cv2.dilate(out.astype(np.uint8) * 255, disk(w_px / 2))
+    return out, stroke
+
+
 def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
                        region: np.ndarray | None = None, dark: bool = True,
                        stages: bool = False):
@@ -1833,14 +2241,29 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
         strength = g_ref
     elif method == "canny":
         # Canny on the luminance AND on the colour channels (a, b), to also catch details as
-        # bright as their surroundings.
+        # bright as their surroundings; "colour" only: on a and b (a shadow mostly changes L*).
         lab8 = cv2.cvtColor(cv2.bilateralFilter(ref, 7, 40, 5), cv2.COLOR_BGR2LAB)
         edges = np.zeros(ref.shape[:2], bool)
+        chans = (1, 2) if p.outline_channel == "colour" else (0, 1, 2)
         for c, (lo, hi) in enumerate(((12, 32), (8, 20), (8, 20))):
-            edges |= cv2.Canny(lab8[..., c], lo, hi, L2gradient=True) > 0
-        strength = g_ref
+            if c in chans:
+                edges |= cv2.Canny(lab8[..., c], lo, hi, L2gradient=True) > 0
+        if p.outline_channel == "colour":
+            g_ab = lab_ref.copy(); g_ab[..., 0] = 0
+            strength = grad(g_ab)
+        else:
+            strength = g_ref
     else:
-        strength = _line_response(lab_ref[..., 0], ppm, method, dark)
+        # chroma (C*): a black / grey line is a low-chroma line on coloured areas, whatever the
+        # lighting, while the edge of a shadow over a colour is weak in it
+        chroma = np.hypot(lab_ref[..., 1], lab_ref[..., 2]).astype(np.float32)
+        if p.outline_channel == "colour":
+            strength = _line_response(chroma, ppm, method, dark)
+        elif p.outline_channel == "both":
+            strength = np.maximum(_line_response(lab_ref[..., 0], ppm, method, dark),
+                                  _line_response(chroma, ppm, method, dark))
+        else:
+            strength = _line_response(lab_ref[..., 0], ppm, method, dark)
         edges = _crest(strength, _LINE_FLOOR[method])
     b = max(2, int(round(0.5 * ppm)))   # no line on the edge of the image itself
     edges[:b, :] = False; edges[-b:, :] = False; edges[:, :b] = False; edges[:, -b:] = False
@@ -1886,6 +2309,11 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
         if np.array_equal(grown, sel):
             break
         sel = grown
+    if p.outline_whole_lines:
+        # whole lines: their own detection sensitivity, a minimum mark measured against the most
+        # marked lines of the zone
+        sel, counts = _whole_lines(cand, score, p.outline_line_sens, ppm, p.outline_min_length_mm)
+        object.__setattr__(p, "_line_counts", counts)
     # rejoin small gaps along a same line, then remove pieces that are too short
     e8 = cv2.morphologyEx(sel.astype(np.uint8) * 255, cv2.MORPH_CLOSE, disk(max(1.0, 0.3 * ppm)))
     n, lab_e, stats, _ = cv2.connectedComponentsWithStats(e8, connectivity=8)
@@ -1901,6 +2329,14 @@ def detect_key_details(prep: Prepared, sim: np.ndarray, p: Params,
     if sil is not None:
         e8[sil] = 255
     stroke = cv2.dilate(e8, disk(width * ppm / 2))
+    if p.outline_close_lines:
+        lines_1px = e8 > 0
+        for _ in range(3):              # three lines close together need more than one pass
+            before = int(lines_1px.sum())
+            lines_1px, stroke = _close_lines(lines_1px, stroke, p, region)
+            if int(lines_1px.sum()) == before:
+                break
+        e8 = lines_1px.astype(np.uint8) * 255
     return result(sel, e8 > 0, short, stroke)
 
 
@@ -1912,9 +2348,12 @@ def outline_detection(res: Result, p: Params, region: np.ndarray | None = None) 
     prep = res.prepared
     if prep.fg is not None:
         region = prep.fg if region is None else (region.astype(bool) & prep.fg)
-    sim = res.detect_sim
+    sim = res.detect_sim_pre if (p.outline_ref == "layers" and res.detect_sim_pre is not None) else res.detect_sim
     if sim is None:      # outline off in the last computation: render of its colour layers
         sim = image_sim(replace(res, layers=[L for L in res.layers if L.kind != "outline"]))
+    if p.outline_ref == "image":       # the image alone: compared with the bare support
+        sim = np.empty(sim.shape, np.uint8)
+        sim[:] = np.asarray(res.support_color, np.uint8)
     if p.outline_target == "stencil" or p.stencil_style == "line":
         if p.stencil_style == "line":   # lines searched against the bare support
             sim = np.empty(sim.shape, np.uint8)

@@ -245,8 +245,10 @@ it, with the layer number (**S** = tone left to the support).
 
 ### 5.6 Masks: background removal, key details and silhouette
 
-The **Masks** tab lets you paint on the image with a brush, or select objects with a click. Choose
-which mask you edit in the drop-down list:
+The **Masks** tab lets you paint on the image with a brush, or select objects with a click. Its bar
+has two lines: the mask edited, the tool and its settings first, then the display (show, colour,
+opacity) and the actions (*Clear all*, *Copy to…*). Choose which mask you edit with the three
+icons (key details, subject, silhouette; the bar under each one is its display colour):
 
 - **Subject mask** (background removal) – roughly paint over the subject, overflowing a little.
   StencilIt finds the exact edge by itself (GrabCut): outside the painted area = background,
@@ -254,32 +256,71 @@ which mask you edit in the drop-down list:
   no longer influences the choice of tones. Painting the subject turns on *Remove the background*.
   Or use the **Object** tool (below): the selected outline is then used as is, without GrabCut.
 - **Outline mask** (key details) – paint where the outline stencil should look for details
-  (eyes, mouth, lettering…). Without a painted area, the whole image is searched. Painting turns on
-  the outline stencil.
+  (eyes, mouth, lettering…). Each **key-detail zone** has its own outline mask: the chips next to
+  the mask icons (*Zone 1*, *Zone 2*… **+**) choose the zone painted. Without a painted area, a zone
+  searches the whole image. Painting turns on the outline stencil.
 - **Silhouette mask** – paint (or select with the Object tool) the area whose **outline** the
-  outline stencil draws (see *Draw the silhouette* below). Painting turns this option on.
+  outline stencil draws (see *Silhouette* below). Painting turns this option on.
 
 **Object** tool (semantic selection, Segment Anything / MobileSAM) – click an object to add it to the
 current mask; click other objects one after the other to add them too. Clicking again inside the
 object just added switches to another cut of it (a part, the object, the whole); **Alt + click**
 removes an object. The image is analysed once when the tool is chosen (well under a second), then
-each click takes a few hundredths of a second. The brush and eraser still touch the mask up
-afterwards. It works for every mask.
+each click takes a few hundredths of a second. The brush still touches the mask up afterwards
+(Shift + click erases). It works for every mask.
 
-Keyboard shortcuts: **B** brush, **E** eraser, **S** object, **[** and **]** brush size. *Clear all*
+Options of the Object tool (shown while it is selected, remembered):
+- **Sensitivity** – higher = wider selection (edges included more generously), lower = tighter.
+  Changing it redoes the last selection with the same cut.
+- **Include the dark outline** – each selected object automatically gets the dark line around it
+  (the black outline of a drawing, often left out by the selection): dark pixels (*threshold*,
+  L* 0 = black) reached from the object, *up to* the given width in pixels of the original image.
+- **Margin** – each selected object is also enlarged by this many pixels all around.
+- **Enlarge the mask** applies the dark outline and the margin to the whole mask shown (a mask
+  painted with the brush, or made before).
+
+**Smart mode** (*Smart* button, **M**) – the brush then only paints (or, with Shift, erases) the
+colour area under the brush centre and stop at its limits. The colour is compared continuously
+with the one around the brush centre, so the stroke follows the zone it is moved over. Its
+**Sensitivity** sets how small a change of colour stops it (higher = tighter). A subject mask
+painted in smart mode is used as is, without GrabCut, like an object selection.
+
+**Shift + left click** with the brush erases (smart or not, as the brush): there is no separate
+eraser. Holding Shift turns the brush circle into the eraser one (red, dashed); a dot in its centre
+marks the smart mode. **Ctrl + mouse wheel** over the view changes the brush size (instead of zooming).
+
+Keyboard shortcuts: **B** brush, **M** smart mode, **S** object, **[** and **]** brush size. *Clear all*
 erases the mask. **Copy to…** copies the shown mask into another one (its content is replaced), for
 example the outline mask into the subject mask; a subject roughly painted gives its cut-out.
+The colour list sets the display colour of the mask shown (each mask keeps its own) and
+**Opacity** how much it covers the image; both are remembered and change only the display.
 
-![Masks tab: the silhouette mask (blue) selected on the dancer; on the left, Draw the silhouette uses it](docs/screenshots/masks.jpg)
+![Masks tab: the silhouette mask (blue) selected on the dancer; on the left, the Silhouette option uses it](docs/screenshots/masks.jpg)
 
-**Key-detail outlines** section: *Redraw the faded key details* compares the original image with
+**Key-detail outlines** section: *Faded key details* compares the original image with
 the simulated render of the layers, and keeps the lines whose contrast has been lost.
-**Where the lines go**:
 
-- **Separate outline stencil** – one more stencil, painted last, in the chosen line colour;
-- **In the darkest layer** – no extra stencil: the lines are cut into the last layer;
-- **In the layer of the nearest tone** – no extra stencil: each line goes into the layer whose tone
+**Key-detail zones** – the search can be split into zones, each with its own painted area (outline
+mask of the zone, Masks tab), its own settings (method, sensitivity, whole lines, line width, minimum length,
+what it compares with) and its own **destination**. The chips at the top of the section (*Zone 1*, *Zone 2*… **+**) choose the
+zone whose settings are shown; **+** adds a zone with a copy of the settings of the zone shown;
+*Zone enabled*, *Rename…* and *Delete* act on the zone shown (the first zone cannot be deleted).
+For example: the eyes in thin black lines, the clothes in a thicker brown line on their own
+stencil, the rest of the image with a low sensitivity into the darkest layer.
+
+**Destination of the zone**:
+
+- **Outline A, B…** – an outline stencil, painted after the colours, in the line colour of that
+  outline layer. Zones sent to the same outline layer are **merged** into one stencil; a zone alone
+  on its outline layer gets a **dedicated** stencil. *+ new outline layer* creates the next one;
+- **Into the darkest layer** – no extra stencil: the lines are cut into the last layer;
+- **Into the layer of the nearest tone** – no extra stencil: each line goes into the layer whose tone
   is closest to its own, among those darker than the area it crosses.
+
+The **line colour belongs to the outline layer** (zones merged together are painted together): the
+section shows the colour of the outline layer of the zone shown, and the card of each outline
+stencil (*Layer 4 — outline A ✎*) has the same colour picker. Projects of earlier versions open with
+one zone made of their settings and their outline mask.
 
 In a layer, a line is always darker than the area it crosses (otherwise its paint would not show),
 and that layer gets more islands and bridges. **Detection method**:
@@ -290,17 +331,36 @@ and that layer gets more islands and bridges. **Detection method**:
 | **Drawn line (DoG)** | one line along each contour, on its dark side, like a pen drawing | graphic, clean line art |
 | **Thin lines (ridges)** | the centre line of thin strokes | lashes, eyebrows, wrinkles, hair strands |
 
-**Sensitivity** controls how many details are kept, on a progressive scale (1 % of the candidate
-lines at 0, about 10 % at 50, 95 % at 100: fine control when you want only a few lines); **Line width** sets the thickness of the line
-(never less than the material's minimum opening). The line colour is automatic (the most
-contrasting tone) or chosen (separate stencil only); with a line lighter than the support, DoG and
-ridges look for light lines.
+**Detect on** (each zone): **lightness** (default; the edge of a shadow is a line too),
+**colour** – the colourfulness (chroma), where a shadow over a colour hardly shows while a black or
+grey line stays sharp: useful when a shadow covers the drawing – or **both**.
 
-**Draw the silhouette (outline of a mask)** draws the outline of a mask, whatever its contrast, with
-or without the key details (it works on its own when *Redraw the faded key details* is unticked):
+**Compare with** (each zone): what the image is compared with to find the lines –
+the **render of the layers before their effects** (default: the lines do not move when a layer
+effect is added or changed), the **render after their effects** (the lines make up for what the
+effects remove), or the **image alone, before the layers are computed** (all the lines of the image,
+chosen by the sensitivity only, whatever the layers).
+
+**Keep whole lines** (each zone): each detected line is kept or left out as a whole, instead of
+keeping the most marked points – which can cut a line into pieces where it gets weaker (frequent
+with *image alone*). The sensitivity is then replaced by a **Detection sensitivity** of its own:
+the contrast from which a line counts as detected, measured against the most marked lines of the
+zone, on a logarithmic scale (low = only very marked lines, high = faint lines too). Each line
+detected is kept whole. Marks on the slider show the sensitivities where a line of the zone
+appears, and the label gives the lines kept / detected and the next step (e.g. *21 · 4 / 8 · 52 ▸*).
+Lines shorter than the minimum length do not count.
+
+**Sensitivity** controls how many details are kept, on a progressive scale (1 % of the candidate
+lines at 0, about 10 % at 50, 95 % at 100: fine control when you want only a few lines); **Width** sets the thickness of the line
+(never less than the material's minimum opening). The line colour is automatic (the most
+contrasting tone) or chosen; with a line lighter than the support, DoG and ridges look for light
+lines.
+
+**Silhouette (outline of a mask)** draws the outline of a mask, whatever its contrast, with
+or without the key details, to its own **destination** (an outline layer or a colour layer) (it works on its own when *Faded key details* is unticked):
 useful when the subject does not stand out from the background, since the detection mostly reinforces details inside it. **Silhouette mask** chooses
 which one: the subject mask (selected object or cut-out area), the dedicated silhouette mask, or the
-key-detail mask; **Paint…** opens it in the Masks tab. The image's own edge is not drawn.
+key-detail mask (all the zones together); **Paint…** opens it in the Masks tab. The image's own edge is not drawn.
 A closed silhouette would cut the whole subject out as one big island, held by a few bridges only.
 Two options open it:
 - **Only where the edge stands out poorly**: the line is drawn only where the simulated render of
@@ -314,7 +374,7 @@ Two options open it:
 sources, which can be combined:
 - the **key details** (*Retrace the faded key details*), searched against the bare support: the
   strongest edges of the image, as many as the sensitivity allows;
-- the **silhouette** (*Draw the silhouette*), with **Own colour for the silhouette** if wanted;
+- the **silhouette** (*Silhouette*), with **Own colour for the silhouette** if wanted;
 - the **colouring book** (*Draw the limits between the tone zones*): the limits between the computed
   tones, like a colouring book. **Colour of the limits**: same as the key details, a chosen colour,
   or the **tone of the darker zone** – one stencil per tone, for a coloured line drawing.
@@ -386,7 +446,62 @@ Choose how the stencil sheet relates to the support:
   large enclosed areas; to hold big loops, prefer the interruptions (*Interrupt every … mm*).
 - Blade, force, speed and passes can be noted with the material preset for your own reference.
 
-### 5.10 Check the result
+### 5.10 Layer effects
+
+The **Layer effects** section changes the shape of the computed layers (not the image): each
+colour layer has its own stack of effects, all visible at once, one block per layer.
+
+The effects are grouped by category in the **+ Add…** list.
+
+| Category | Effect | What it does |
+|---|---|---|
+| Outline | **Smoothing** | Rounds the corners and softens the outlines (radius in mm). |
+| | **Polygonal outline** | Simplifies the outlines into straight lines: faceted, low-poly look. |
+| | **Angular outline** | Segments at set angles only (90° steps, 45° or 30°): geometric, Art Deco look. |
+| | **Rough edges** | Distorts the outlines with random noise (amplitude, scale, seed). The same seed on several layers keeps them registered. |
+| | **Wavy edges** | Regular waves, saw teeth or scallops along the outlines (amplitude, period). |
+| | **Grow / shrink** | Moves the whole outline outwards (thicker) or inwards (thinner). |
+| Fill | **Halftone dots** | Round holes on a grid (pitch, min / max diameter, angle); dot size constant, growing with the distance to the edge, or following the tones of the original image (halftone gradient). |
+| | **Hatching** | Parallel bands, single or crossed (pitch, width, angle). Crossed hatching leaves squares of material held by bridges. |
+| | **Contour lines** | Bands following the outline, further and further inside (topographic / op art). |
+| | **Pattern** | Repeated diamonds, hexagons, bricks or stars, cut by the shape (size, joint). |
+| Structure | **Outline only** | Keeps a band along the edge of each shape: a flat area becomes an outlined stroke. |
+| | **Drop shadow** | Adds a shifted copy of the layer to another layer (0 = the darkest). |
+| | **Halo / border** | Band around the shapes, at a given distance: left as bare support (layer 0, white sticker border) or painted by another layer. |
+| | **Mosaic / stained glass** | Cuts the openings into irregular shards separated by material joints; a large stencil gets stiffer. |
+| | **Decorative bridges** | Strips of material forming parallel lines, a grid or rays: the bridges become part of the style. |
+| Practical | **Overlap** | Extends the layer under the following (darker) layers, so a slight registration offset leaves no thin line of bare support. |
+| | **Merge small openings** | Joins openings closer than a distance and removes the smallest ones: fewer tiny cuts. |
+
+Patterns (halftone, hatching, pattern, decorative bridges, mosaic) are anchored to the support, so
+the same settings line up from one layer to the next.
+
+- **+ Add…** adds an effect at the end of the layer's stack; click its name to show its settings.
+- Effects are applied **from top to bottom**: drag the **≡** handle to change the order, or onto
+  another layer to move the effect there (**Ctrl** while dropping: copy). With the keyboard, focus
+  the handle and use the up / down arrows.
+- One checkbox per effect, one per layer and **Apply the effects** for all of them: compare with
+  and without them, the settings are kept. **⧉ Copy to…** replaces another layer's stack with this one.
+- Layers are processed in spraying order: an effect sees the final shape of the lighter layers and
+  the raw shape of the darker ones (drop shadow and halo also change another layer). After the
+  effects, every changed layer is checked again against the material limits (minimum opening and
+  strip), then gets its merges and bridges as usual.
+- **Exclusive stacking** (each layer only paints its own tone) – two options at the top of the
+  section pass the changes made by the effects on to the other layers:
+  - *What an effect adds goes in front of the darker layers* (on by default): what an effect adds
+    to a layer (grow, drop shadow, painted halo…) is removed from the darker layers, which would
+    otherwise paint over it. Overlap is not concerned, it goes under on purpose.
+  - *Areas removed by an effect*: **bare support** (default), **layer surrounding the area** (each
+    area of the layer gives what was freed in it to the tone found most along its border, or
+    leaves it bare when the support surrounds it) or
+    **previous (lighter) layer** (e.g. orange halftone dots on the lighter tone, as in cumulative
+    stacking but only where the effect removed material).
+  Both have no effect in cumulative stacking, where the layers already overlap.
+- A layer card shows **✦ n** when the layer has active effects; click it to reach its settings.
+- The effects are saved with the settings and in the project. If the number of stencils drops,
+  the effects of the missing layers are kept (marked *absent*) and come back with the layer.
+
+### 5.11 Check the result
 
 - **Preview** – the real stencils (with cutting constraints and bridges) stacked on the support
   colour in spraying order. Tick **Simulated render** to add the soft airbrush blur, and **Without
@@ -405,7 +520,7 @@ Choose how the stencil sheet relates to the support:
 If many details are removed, increase the size of the image, lower the level of detail or choose a
 finer material; if there are too many bridges, lower the level of detail or the number of stencils.
 
-### 5.11 Paint colours and palettes
+### 5.12 Paint colours and palettes
 
 By default each layer gets the tone computed from the image. To paint with your own colours:
 
@@ -416,7 +531,7 @@ By default each layer gets the tone computed from the image. To paint with your 
   click a pixel of any image of the page (stage, preview, layer cards), with a loupe showing the
   image's own pixels around the cursor (Escape cancels). Every other colour field (support, line,
   silhouette, palette editor) opens the same picker. **Auto (computed tone)** goes back to the image
-  tone. The outline stencil's card has the same picker (it sets the line colour of the *Key-detail outlines* section). Choosing a colour of the
+  tone. The card of an outline stencil has the same picker (it sets the line colour of its outline layer, A, B…). Choosing a colour of the
   current palette keeps that palette shown in the menu;
 - or use the **Colour palette…** menu at the top of the stencil column: 91 harmonious palettes in 10
   families (Classics, Vivid, Modern vivid, Soft, Modern soft, Trending, Cold, Warm, Nature,
@@ -451,7 +566,7 @@ computation is kept and only the colours, previews and simulated render are upda
 
 ![Layer 2 shown alone, with its colour picker open](docs/screenshots/colors.jpg)
 
-### 5.12 Export
+### 5.13 Export
 
 Click **Export the project (.zip)**, next to *Open a project…* under the image box. The zip contains:
 
@@ -539,7 +654,7 @@ squares with their hex codes, placed left of the page, to prepare your paints.
 | Two colours merge into one tone | Increase the saturation, add a stencil, or set manual thresholds. |
 | Flat-looking face | Increase the local contrast (CLAHE) or adjust the midtones. |
 | The background gets painted | Use *Remove the background* with the subject mask. |
-| The subject does not stand out from the background | Tick *Draw the silhouette* (Key-detail outlines) and select the subject, or paint the silhouette mask. |
+| The subject does not stand out from the background | Tick *Silhouette* (Key-detail outlines) and select the subject, or paint the silhouette mask. |
 | The computed colours look dull | Raise *Colour vividness*, or pick a palette (*Closest* finds the best one). |
 | Two colours of similar lightness end up in one layer | Raise the *Hue weight*. |
 | Computing is slow | Untick *Auto compute* and use **Ctrl + Enter**. |
@@ -570,6 +685,8 @@ in `app.py` (Flask) and the interface in `static/index.html` (+ `static/i18n.js`
    outline of a mask (silhouette). Optionally, thin strokes found by a Hessian ridge filter escape
    the majority filter of the simplification.
 5. **Material constraints** – morphological opening and closing, removal of tiny pieces.
+   Then the optional **layer effects** (`stencilit/effects.py`) reshape each layer mask, in
+   spraying order, before the material limits are checked again.
 6. **Merges and bridges** – optionally, islands are first held by merging zones (morphological
    closing of narrow channels, removal of small islands), cheapest visible change first; each
    remaining island is linked to the frame (or to a neighbouring island, in a chain) by short
@@ -586,6 +703,7 @@ StencilIt/
 ├── requirements.txt
 ├── stencilit/
 │   ├── pipeline.py        image → layers → bridges → paths
+│   ├── effects.py         layer effects (outline, fill, structure, practical)
 │   ├── svg_export.py      SVG / Inkscape / PDF sheet / zip export
 │   ├── pdf_sheet.py       minimal PDF writer (spraying sheet)
 │   ├── semantic.py        object selection (MobileSAM, ONNX)
